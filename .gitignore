@@ -1,0 +1,15 @@
+editor_build/
+.vscode/
+.vs/
+.hatch_binaries/
+*.exp
+*.exe
+*.pdb
+*.idb
+*.obj
+*.c_run
+*.ilk
+*.sln
+*.vcxproj
+*vcxproj.filters
+*vcxproj.user
