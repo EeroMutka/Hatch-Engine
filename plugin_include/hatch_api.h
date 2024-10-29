@@ -14,6 +14,12 @@ typedef int16_t   i16;
 typedef int32_t   i32;
 typedef int64_t   i64;
 
+#ifdef __cplusplus
+#define HT_LangAgnosticLiteral(T) T   // in C++, struct and union literals are of the form MyStructType{...}
+#else
+#define HT_LangAgnosticLiteral(T) (T) // in C, struct and union literals are of the form (MyStructType){...}
+#endif
+
 typedef union vec2 {
 	struct { float x, y; };
 	float _[2];
@@ -70,14 +76,16 @@ typedef struct string {
 typedef struct HT_Color {
 	u8 r, g, b, a;
 } HT_Color;
+#define HT_COLOR HT_LangAgnosticLiteral(HT_Color)
 
 typedef struct HT_DrawVertex {
 	vec2 position;
 	vec2 uv;
 	HT_Color color;
 } HT_DrawVertex;
+#define HT_DRAW_VERTEX HT_LangAgnosticLiteral(HT_DrawVertex)
 
-typedef struct { i64 id; } HT_TextureID; // 0 is invalid
+typedef struct HT_Texture HT_Texture;
 
 struct HT_API {
 	void (*DebugPrint)(const char* str);
@@ -94,7 +102,18 @@ struct HT_API {
 	// For example, Arenas could be implemented on the user / utility side.
 	// The API could provide malloc/free.
 	
-	// UI functions
-	HT_DrawVertex* (*AddVertices)(int count, int* out_first_index);
-	int* (*AddIndices)(int count, HT_TextureID texture);
+	// RESTRICTIONS:
+	// I think we should artificially limit the plugin to only drawing in special plugin-defined tabs.
+	// There should be sane default restrictions to make sure the user of Hatch always has a sane time and won't lose control.
+	// The user should always be in control.
+	
+	// -- UI functions --------------------------------
+	
+	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);
+	
+	// texture may be NULL
+	u32* (*AddIndices)(int count, HT_Texture* texture);
+	
+	// ------------------------------------------------
+	
 };

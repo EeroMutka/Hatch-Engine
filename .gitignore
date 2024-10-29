@@ -7,7 +7,6 @@ editor_build/
 *.pdb
 *.idb
 *.obj
-*.c_run
 *.ilk
 *.sln
 *.vcxproj

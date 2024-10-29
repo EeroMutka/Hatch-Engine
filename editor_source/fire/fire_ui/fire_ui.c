@@ -1,5 +1,18 @@
 #include "fire_ui.h"
 
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype.h"
+
+typedef struct UI_FontData {
+	const uint8_t* data; // NULL if the font is deinitialized
+	float y_offset;
+
+	DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) glyph_map;
+	DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) glyph_map_old;
+
+	stbtt_fontinfo font_info;
+} UI_FontData;
+
 // -- Global state ---------
 UI_API UI_State UI_STATE;
 // -------------------------
@@ -1341,8 +1354,9 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_FontV
 	UI_STATE.draw_next_index = 0;
 	UI_STATE.draw_vertices = (UI_DrawVertex*)UI_STATE.backend.map_vertex_buffer();
 	UI_STATE.draw_indices = (uint32_t*)UI_STATE.backend.map_index_buffer();
-	UI_STATE.draw_active_texture = UI_STATE.atlases[0];
-	UI_ASSERT(UI_STATE.draw_active_texture != UI_TEXTURE_ID_NIL);
+	UI_STATE.draw_active_texture = UI_STATE.atlas;
+	UI_STATE.atlas_mapped_ptr = NULL;
+	UI_ASSERT(UI_STATE.draw_active_texture != NULL);
 	UI_ASSERT(UI_STATE.draw_vertices != NULL);
 	UI_ASSERT(UI_STATE.draw_indices != NULL);
 
@@ -1399,9 +1413,10 @@ UI_API void UI_Deinit(void) {
 
 	UI_STATE.backend.resize_index_buffer(0);
 	UI_STATE.backend.resize_vertex_buffer(0);
-	UI_STATE.backend.resize_atlas(0, 0);
+	
+	UI_AtlasAllocatorDeinit(&UI_STATE.atlas_allocator);
 
-	DS_MemFree(UI_STATE.allocator, UI_STATE.atlas_buffer_grayscale);
+	//DS_MemFree(UI_STATE.allocator, UI_STATE.atlas_buffer_grayscale);
 
 	UI_ProfExit();
 }
@@ -1417,33 +1432,31 @@ UI_API void UI_Init(DS_Allocator* allocator, const UI_Backend* backend) {
 	DS_ArenaInit(&UI_STATE.frame_arena, DS_KIB(4), allocator);
 	DS_ArrInit(&UI_STATE.fonts, allocator);
 	
-	stbtt_PackBegin(&UI_STATE.pack_context, NULL, UI_GLYPH_MAP_SIZE, UI_GLYPH_MAP_SIZE, 0, UI_GLYPH_PADDING, NULL);
+	//stbtt_PackBegin(&UI_STATE.pack_context, NULL, UI_GLYPH_MAP_SIZE, UI_GLYPH_MAP_SIZE, 0, UI_GLYPH_PADDING, NULL);
 
-	// init atlas
-	{
-		UI_TextureID atlas = backend->resize_atlas(UI_GLYPH_MAP_SIZE, UI_GLYPH_MAP_SIZE);
-		UI_ASSERT(atlas != UI_TEXTURE_ID_NIL);
-		UI_STATE.atlases[0] = atlas;
+	UI_AtlasAllocatorInit(&UI_STATE.atlas_allocator, allocator);
 
-		// pack a white rectangle into the atlas. See UI_WHITE_PIXEL_UV
+	UI_STATE.atlas = backend->create_atlas(UI_STATE.atlas_allocator.tex_width, UI_STATE.atlas_allocator.tex_height);
+	UI_ASSERT(UI_STATE.atlas != NULL);
 
-		stbrp_rect rect = {0};
-		rect.w = 1;
-		rect.h = 1;
-		stbtt_PackFontRangesPackRects(&UI_STATE.pack_context, &rect, 1);
-		UI_ASSERT(rect.was_packed);
-		UI_ASSERT(rect.x == 0 && rect.y == 0);
+	// pack a white rectangle into the atlas. See {0, 0}
 
-		uint32_t* data = (uint32_t*)backend->map_atlas();
-		data[0] = 0xFFFFFFFF;
-	}
+	//stbrp_rect rect = {0};
+	//rect.w = 1;
+	//rect.h = 1;
+	//stbtt_PackFontRangesPackRects(&UI_STATE.pack_context, &rect, 1);
+	//UI_ASSERT(rect.was_packed);
+	//UI_ASSERT(rect.x == 0 && rect.y == 0);
+
+	//uint32_t* data = (uint32_t*)backend->map_atlas();
+	//data[0] = 0xFFFFFFFF;
 
 	backend->resize_vertex_buffer(sizeof(UI_DrawVertex) * UI_MAX_VERTEX_COUNT);
 	backend->resize_index_buffer(sizeof(uint32_t) * UI_MAX_INDEX_COUNT);
 
-	UI_STATE.atlas_buffer_grayscale = (uint8_t*)DS_MemAlloc(UI_STATE.allocator, sizeof(uint8_t) * UI_GLYPH_MAP_SIZE * UI_GLYPH_MAP_SIZE);
-	memset(UI_STATE.atlas_buffer_grayscale, 0, UI_GLYPH_MAP_SIZE * UI_GLYPH_MAP_SIZE);
-	UI_STATE.pack_context.pixels = UI_STATE.atlas_buffer_grayscale;
+	//UI_STATE.atlas_buffer_grayscale = (uint8_t*)DS_MemAlloc(UI_STATE.allocator, sizeof(uint8_t) * UI_GLYPH_MAP_SIZE * UI_GLYPH_MAP_SIZE);
+	//memset(UI_STATE.atlas_buffer_grayscale, 0, UI_GLYPH_MAP_SIZE * UI_GLYPH_MAP_SIZE);
+	//UI_STATE.pack_context.pixels = UI_STATE.atlas_buffer_grayscale;
 
 	DS_ArrInit(&UI_STATE.box_stack, &UI_STATE.persistent_arena);
 	DS_ArrPush(&UI_STATE.box_stack, NULL);
@@ -1789,7 +1802,7 @@ UI_API UI_FontIndex UI_FontInit(const void* ttf_data, float y_offset) {
 		DS_ArrResizeUndef(&UI_STATE.fonts, UI_STATE.fonts.count + 1);
 	}
 
-	UI_Font* font = &UI_STATE.fonts.data[idx];
+	UI_FontData* font = &UI_STATE.fonts.data[idx];
 	memset(font, 0, sizeof(*font));
 	DS_MapInit(&font->glyph_map, UI_STATE.allocator);
 
@@ -1804,7 +1817,7 @@ UI_API UI_FontIndex UI_FontInit(const void* ttf_data, float y_offset) {
 }
 
 UI_API void UI_FontDeinit(UI_FontIndex font_idx) {
-	UI_Font* font = DS_ArrGetPtr(UI_STATE.fonts, font_idx);
+	UI_FontData* font = DS_ArrGetPtr(UI_STATE.fonts, font_idx);
 	UI_ASSERT(font->data);
 	DS_MapDeinit(&font->glyph_map);
 	font->data = NULL;
@@ -1815,65 +1828,49 @@ static UI_CachedGlyph UI_GetCachedGlyph(uint32_t codepoint, UI_FontView font, in
 	int atlas_index = 0;
 	UI_CachedGlyphKey key = { codepoint, font.size };
 
-	UI_Font* font_data = DS_ArrGetPtr(UI_STATE.fonts, font.font);
+	UI_FontData* font_data = DS_ArrGetPtr(UI_STATE.fonts, font.font);
 
 	UI_CachedGlyph* glyph = NULL;
 	if (DS_MapGetOrAddPtr(&font_data->glyph_map, key, &glyph)) {
-		stbrp_rect rect = {0};
-		stbtt_packedchar packed_char;
-		stbtt_pack_range pack_range = {0};
-		pack_range.font_size = (float)font.size;
-		pack_range.first_unicode_codepoint_in_range = 0;
-		pack_range.array_of_unicode_codepoints = (int*)&codepoint;
-		pack_range.num_chars = 1;
-		pack_range.chardata_for_range = &packed_char;
+		int glyph_index = stbtt_FindGlyphIndex(&font_data->font_info, codepoint);
+		float scale = stbtt_ScaleForPixelHeight(&font_data->font_info, (float)font.size);
 
-		// GatherRects fills width & height fields of `rect`
-		if (stbtt_PackFontRangesGatherRects(&UI_STATE.pack_context, &font_data->font_info, &pack_range, 1, &rect) == 0) {
-			UI_TODO(); // glyph is not found in the font
-		}
-		UI_ASSERT(rect.h >= 0);
+		int x0, y0, x1, y1;
+		stbtt_GetGlyphBitmapBox(&font_data->font_info, glyph_index, scale, scale, &x0, &y0, &x1, &y1);
 
-		stbtt_PackFontRangesPackRects(&UI_STATE.pack_context, &rect, 1);
-		if (!rect.was_packed) {
-			UI_TODO(); // ran out of space in the atlas, we need to start using a new atlas
-		}
+		int glyph_w = x1 - x0;
+		int glyph_h = y1 - y0;
+		
+		UI_AtlasSlotIndex atlas_slot = UI_AtlasAllocateSlot(&UI_STATE.atlas_allocator, UI_Max(glyph_w, glyph_h));
 
-		UI_ASSERT(stbtt_PackFontRangesRenderIntoRects(&UI_STATE.pack_context, &font_data->font_info, &pack_range, 1, &rect));
-
-		// The glyph will be now rasterized into UI_.atlas_buffer_grayscale. Let's convert it into RGBA8.
-
-		uint32_t* atlas_data = (uint32_t*)UI_STATE.backend.map_atlas();
+		char* glyph_data = DS_ArenaPush(&UI_STATE.frame_arena, glyph_w*glyph_h);
+		memset(glyph_data, 0, glyph_w*glyph_h);
+		stbtt_MakeGlyphBitmapSubpixel(&font_data->font_info, glyph_data, glyph_w, glyph_h, glyph_w, scale, scale, 0.f, 0.f, glyph_index);
+		
+		uint32_t* atlas_data = (uint32_t*)(UI_STATE.atlas_mapped_ptr ? UI_STATE.atlas_mapped_ptr : UI_STATE.backend.map_atlas());
+		UI_STATE.atlas_mapped_ptr = atlas_data;
 		UI_ASSERT(atlas_data);
 
-		for (int y = packed_char.y0; y < packed_char.y1; y++) {
-			uint8_t* src_row = UI_STATE.atlas_buffer_grayscale + y * UI_GLYPH_MAP_SIZE;
-			uint32_t* dst_row = atlas_data + y * UI_GLYPH_MAP_SIZE;
-
-			for (int x = packed_char.x0; x < packed_char.x1; x++) {
+		for (int y = 0; y < glyph_h; y++) {
+			uint8_t* src_row = glyph_data + y*glyph_w;
+			uint32_t* dst_row = atlas_data + (atlas_slot.y0 + y)*UI_STATE.atlas_allocator.tex_width + atlas_slot.x0;
+		
+			for (int x = 0; x < glyph_w; x++) {
 				dst_row[x] = ((uint32_t)src_row[x] << 24) | 0x00FFFFFF;
-				//dst_row[x] = ((uint32_t)src_row[x] << 24) | 0x00FFFFFF;
-				// Aha! Blending modes!
-				//dst_row[x] = 0x01010101;//((uint32_t)src_row[x] << 0) | 0xFFFFFF00;
 			}
 		}
 
-		UI_ASSERT(packed_char.x0 == rect.x);
-		UI_ASSERT(packed_char.y0 == rect.y);
-		UI_ASSERT(packed_char.y1 - packed_char.y0 == rect.h);
-		UI_ASSERT(packed_char.x1 - packed_char.x0 == rect.w);
+		int x_advance;
+		int left_side_bearing;
+		stbtt_GetGlyphHMetrics(&font_data->font_info, glyph_index, &x_advance, &left_side_bearing);
 
-		int w = packed_char.x1 - packed_char.x0;
-		int h = packed_char.y1 - packed_char.y0;
-		glyph->origin_uv.x = (float)packed_char.x0 / (float)UI_GLYPH_MAP_SIZE;
-		glyph->origin_uv.y = (float)packed_char.y0 / (float)UI_GLYPH_MAP_SIZE;
-		glyph->size_pixels.x = (float)w;
-		glyph->size_pixels.y = (float)h;
-		glyph->offset_pixels.x = packed_char.xoff;
-		glyph->offset_pixels.y = packed_char.yoff + font.size + font_data->y_offset;
-		glyph->x_advance = (float)(int)(packed_char.xadvance + 0.5f); // round to integer
-
-		// UI_.atlas_needs_reupload = true;
+		glyph->origin_uv.x = (float)atlas_slot.x0 / (float)UI_STATE.atlas_allocator.tex_width;
+		glyph->origin_uv.y = (float)atlas_slot.y0 / (float)UI_STATE.atlas_allocator.tex_height;
+		glyph->size_pixels.x = (float)glyph_w;
+		glyph->size_pixels.y = (float)glyph_h;
+		glyph->offset_pixels.x = (float)x0;
+		glyph->offset_pixels.y = (float)y0 + (float)font.size + font_data->y_offset;
+		glyph->x_advance = (float)(int)((float)x_advance*scale + 0.5f); // round to integer
 	}
 
 	if (out_atlas_index) *out_atlas_index = atlas_index;
@@ -1911,11 +1908,11 @@ UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index) {
 	return v;
 }
 
-UI_API uint32_t* UI_AddIndices(int count, UI_TextureID texture) {
+UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture) {
 	UI_ProfEnter();
 	// Set active texture
-	if (texture != UI_TEXTURE_ID_NIL && texture != UI_STATE.draw_active_texture) {
-		if (UI_STATE.draw_active_texture != UI_TEXTURE_ID_NIL) {
+	if (texture != NULL && texture != UI_STATE.draw_active_texture) {
+		if (UI_STATE.draw_active_texture != NULL) {
 			UI_FinalizeDrawBatch();
 		}
 		UI_STATE.draw_active_texture = texture;
@@ -1928,7 +1925,7 @@ UI_API uint32_t* UI_AddIndices(int count, UI_TextureID texture) {
 	return i;
 }
 
-UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_TextureID texture) {
+UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture* texture) {
 	UI_ProfEnter();
 	uint32_t* indices = UI_AddIndices(3, texture);
 	indices[0] = a;
@@ -1937,7 +1934,7 @@ UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture
 	UI_ProfExit();
 }
 
-UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_TextureID texture) {
+UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_Texture* texture) {
 	UI_ProfEnter();
 	uint32_t* indices = UI_AddIndices(6, texture);
 	indices[0] = a; indices[1] = b; indices[2] = c;
@@ -1954,12 +1951,12 @@ UI_API void UI_DrawConvexPolygon(const UI_Vec2* points, int points_count, UI_Col
 		vertices[i] = UI_DRAW_VERTEX{ {p.x, p.y}, {0, 0}, color };
 	}
 	for (int i = 2; i < points_count; i++) {
-		UI_AddTriangleIndices(first_vertex, first_vertex + i - 1, first_vertex + i, UI_TEXTURE_ID_NIL);
+		UI_AddTriangleIndices(first_vertex, first_vertex + i - 1, first_vertex + i, NULL);
 	}
 	UI_ProfExit();
 }
 
-UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_TextureID texture, UI_ScissorRect scissor) {
+UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_Texture* texture, UI_ScissorRect scissor) {
 	UI_ProfEnter();
 	if (scissor == NULL || !UI_ClipRect(&rect, &uv_rect, scissor)) {
 		uint32_t first_vertex;
@@ -2066,8 +2063,8 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 
 		// Generate edge quads
 		for (uint32_t base = edge_verts; base < edge_verts + 16; base += 4) {
-			UI_AddTriangleIndices(base + 0, base + 2, base + 3, UI_TEXTURE_ID_NIL);
-			UI_AddTriangleIndices(base + 0, base + 3, base + 1, UI_TEXTURE_ID_NIL);
+			UI_AddTriangleIndices(base + 0, base + 2, base + 3, NULL);
+			UI_AddTriangleIndices(base + 0, base + 3, base + 1, NULL);
 		}
 
 		const int end_corner_vertex = 2;
@@ -2097,14 +2094,14 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 				new_verts[0] = UI_DRAW_VERTEX{ outer_pos, {0.f, 0.f}, corners->color[corner] };
 				new_verts[1] = UI_DRAW_VERTEX{ mid_pos, {0.f, 0.f}, corners->color[corner] };
 
-				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 0, new_verts_first + 1, UI_TEXTURE_ID_NIL);
-				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 1, prev_verts_first + 1, UI_TEXTURE_ID_NIL);
+				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 0, new_verts_first + 1, NULL);
+				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 1, prev_verts_first + 1, NULL);
 				prev_verts_first = new_verts_first;
 			}
 
 			uint32_t new_verts_first = edge_verts + 4 * corner;
-			UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 0, new_verts_first + 1, UI_TEXTURE_ID_NIL);
-			UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 1, prev_verts_first + 1, UI_TEXTURE_ID_NIL);
+			UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 0, new_verts_first + 1, NULL);
+			UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 1, prev_verts_first + 1, NULL);
 		}
 	}
 	UI_ProfExit();
@@ -2120,7 +2117,7 @@ UI_API void UI_DrawCircle(UI_Vec2 p, float radius, int segments, UI_Color color)
 		vertices[i] = UI_DRAW_VERTEX{ {v.x, v.y}, {0, 0}, color };
 	}
 	for (int i = 2; i < segments; i++) {
-		UI_AddTriangleIndices(first_vertex, first_vertex + i - 1, first_vertex + i, UI_TEXTURE_ID_NIL);
+		UI_AddTriangleIndices(first_vertex, first_vertex + i - 1, first_vertex + i, NULL);
 	}
 	UI_ProfExit();
 }
@@ -2129,10 +2126,10 @@ UI_API void UI_DrawTriangle(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Color color) {
 	UI_ProfEnter();
 	uint32_t first_vert;
 	UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-	v[0] = UI_DRAW_VERTEX{a, UI_WHITE_PIXEL_UV, color};
-	v[1] = UI_DRAW_VERTEX{b, UI_WHITE_PIXEL_UV, color};
-	v[2] = UI_DRAW_VERTEX{c, UI_WHITE_PIXEL_UV, color};
-	UI_AddTriangleIndices(first_vert, first_vert + 1, first_vert + 2, UI_TEXTURE_ID_NIL);
+	v[0] = UI_DRAW_VERTEX{a, {0, 0}, color};
+	v[1] = UI_DRAW_VERTEX{b, {0, 0}, color};
+	v[2] = UI_DRAW_VERTEX{c, {0, 0}, color};
+	UI_AddTriangleIndices(first_vert, first_vert + 1, first_vert + 2, NULL);
 	UI_ProfExit();
 }
 
@@ -2140,11 +2137,11 @@ UI_API void UI_DrawQuad(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Vec2 d, UI_Color col
 	UI_ProfEnter();
 	uint32_t first_vert;
 	UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-	v[0] = UI_DRAW_VERTEX{a, UI_WHITE_PIXEL_UV, color};
-	v[1] = UI_DRAW_VERTEX{b, UI_WHITE_PIXEL_UV, color};
-	v[2] = UI_DRAW_VERTEX{c, UI_WHITE_PIXEL_UV, color};
-	v[3] = UI_DRAW_VERTEX{d, UI_WHITE_PIXEL_UV, color};
-	UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, UI_TEXTURE_ID_NIL);
+	v[0] = UI_DRAW_VERTEX{a, {0, 0}, color};
+	v[1] = UI_DRAW_VERTEX{b, {0, 0}, color};
+	v[2] = UI_DRAW_VERTEX{c, {0, 0}, color};
+	v[3] = UI_DRAW_VERTEX{d, {0, 0}, color};
+	UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, NULL);
 	UI_ProfExit();
 }
 
@@ -2153,11 +2150,11 @@ UI_API void UI_DrawRect(UI_Rect rect, UI_Color color) {
 	if (rect.max.x > rect.min.x && rect.max.y > rect.min.y) {
 		uint32_t first_vert;
 		UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-		v[0] = UI_DRAW_VERTEX{{rect.min.x, rect.min.y}, UI_WHITE_PIXEL_UV, color};
-		v[1] = UI_DRAW_VERTEX{{rect.max.x, rect.min.y}, UI_WHITE_PIXEL_UV, color};
-		v[2] = UI_DRAW_VERTEX{{rect.max.x, rect.max.y}, UI_WHITE_PIXEL_UV, color};
-		v[3] = UI_DRAW_VERTEX{{rect.min.x, rect.max.y}, UI_WHITE_PIXEL_UV, color};
-		UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, UI_TEXTURE_ID_NIL);
+		v[0] = UI_DRAW_VERTEX{{rect.min.x, rect.min.y}, {0, 0}, color};
+		v[1] = UI_DRAW_VERTEX{{rect.max.x, rect.min.y}, {0, 0}, color};
+		v[2] = UI_DRAW_VERTEX{{rect.max.x, rect.max.y}, {0, 0}, color};
+		v[3] = UI_DRAW_VERTEX{{rect.min.x, rect.max.y}, {0, 0}, color};
+		UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, NULL);
 	}
 	UI_ProfExit();
 }
@@ -2192,26 +2189,26 @@ UI_API void UI_DrawRectEx(UI_Rect rect, const UI_DrawRectCorners* corners, int n
 		
 		uint32_t inset_corner_verts;
 		UI_DrawVertex* v = UI_AddVertices(12, &inset_corner_verts);
-		v[0] = UI_DRAW_VERTEX{ inset_corners[0], UI_WHITE_PIXEL_UV, corners->color[0] };
-		v[1] = UI_DRAW_VERTEX{ inset_corners[1], UI_WHITE_PIXEL_UV, corners->color[1] };
-		v[2] = UI_DRAW_VERTEX{ inset_corners[2], UI_WHITE_PIXEL_UV, corners->color[2] };
-		v[3] = UI_DRAW_VERTEX{ inset_corners[3], UI_WHITE_PIXEL_UV, corners->color[3] };
+		v[0] = UI_DRAW_VERTEX{ inset_corners[0], {0, 0}, corners->color[0] };
+		v[1] = UI_DRAW_VERTEX{ inset_corners[1], {0, 0}, corners->color[1] };
+		v[2] = UI_DRAW_VERTEX{ inset_corners[2], {0, 0}, corners->color[2] };
+		v[3] = UI_DRAW_VERTEX{ inset_corners[3], {0, 0}, corners->color[3] };
 
 		uint32_t border_verts = inset_corner_verts + 4;
-		v[4] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[0].y}, UI_WHITE_PIXEL_UV, corners->outer_color[0] };
-		v[5] = UI_DRAW_VERTEX{ {inset_corners[0].x, rect.min.y}, UI_WHITE_PIXEL_UV, corners->outer_color[0] };
-		v[6] = UI_DRAW_VERTEX{ {inset_corners[1].x, rect.min.y}, UI_WHITE_PIXEL_UV, corners->outer_color[1] };
-		v[7] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[1].y}, UI_WHITE_PIXEL_UV, corners->outer_color[1] };
-		v[8] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[2].y}, UI_WHITE_PIXEL_UV, corners->outer_color[2] };
-		v[9] = UI_DRAW_VERTEX{ {inset_corners[2].x, rect.max.y}, UI_WHITE_PIXEL_UV, corners->outer_color[2] };
-		v[10] = UI_DRAW_VERTEX{ {inset_corners[3].x, rect.max.y}, UI_WHITE_PIXEL_UV, corners->outer_color[3] };
-		v[11] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[3].y}, UI_WHITE_PIXEL_UV, corners->outer_color[3] };
+		v[4] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[0].y}, {0, 0}, corners->outer_color[0] };
+		v[5] = UI_DRAW_VERTEX{ {inset_corners[0].x, rect.min.y}, {0, 0}, corners->outer_color[0] };
+		v[6] = UI_DRAW_VERTEX{ {inset_corners[1].x, rect.min.y}, {0, 0}, corners->outer_color[1] };
+		v[7] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[1].y}, {0, 0}, corners->outer_color[1] };
+		v[8] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[2].y}, {0, 0}, corners->outer_color[2] };
+		v[9] = UI_DRAW_VERTEX{ {inset_corners[2].x, rect.max.y}, {0, 0}, corners->outer_color[2] };
+		v[10] = UI_DRAW_VERTEX{ {inset_corners[3].x, rect.max.y}, {0, 0}, corners->outer_color[3] };
+		v[11] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[3].y}, {0, 0}, corners->outer_color[3] };
 
 		// edge quads
-		UI_AddQuadIndices(border_verts + 1, border_verts + 2, inset_corner_verts + 1, inset_corner_verts + 0, UI_TEXTURE_ID_NIL); // top edge
-		UI_AddQuadIndices(border_verts + 3, border_verts + 4, inset_corner_verts + 2, inset_corner_verts + 1, UI_TEXTURE_ID_NIL); // right edge
-		UI_AddQuadIndices(border_verts + 5, border_verts + 6, inset_corner_verts + 3, inset_corner_verts + 2, UI_TEXTURE_ID_NIL); // bottom edge
-		UI_AddQuadIndices(border_verts + 7, border_verts + 0, inset_corner_verts + 0, inset_corner_verts + 3, UI_TEXTURE_ID_NIL); // left edge
+		UI_AddQuadIndices(border_verts + 1, border_verts + 2, inset_corner_verts + 1, inset_corner_verts + 0, NULL); // top edge
+		UI_AddQuadIndices(border_verts + 3, border_verts + 4, inset_corner_verts + 2, inset_corner_verts + 1, NULL); // right edge
+		UI_AddQuadIndices(border_verts + 5, border_verts + 6, inset_corner_verts + 3, inset_corner_verts + 2, NULL); // bottom edge
+		UI_AddQuadIndices(border_verts + 7, border_verts + 0, inset_corner_verts + 0, inset_corner_verts + 3, NULL); // left edge
 
 		for (int corner_i = 0; corner_i < 4; corner_i++) {
 			float r = -corners->roundness[corner_i];
@@ -2224,16 +2221,16 @@ UI_API void UI_DrawRectEx(UI_Rect rect, const UI_DrawRectCorners* corners, int n
 				
 				uint32_t new_vert_idx;
 				UI_DrawVertex* new_vert = UI_AddVertices(1, &new_vert_idx);
-				new_vert[0] = UI_DRAW_VERTEX{ {inset_corners[corner_i].x + r*c.x, inset_corners[corner_i].y + r*c.y}, UI_WHITE_PIXEL_UV, corners->outer_color[corner_i] };
+				new_vert[0] = UI_DRAW_VERTEX{ {inset_corners[corner_i].x + r*c.x, inset_corners[corner_i].y + r*c.y}, {0, 0}, corners->outer_color[corner_i] };
 
-				UI_AddTriangleIndices(inset_corner_verts + corner_i, prev_vert_idx, new_vert_idx, UI_TEXTURE_ID_NIL);
+				UI_AddTriangleIndices(inset_corner_verts + corner_i, prev_vert_idx, new_vert_idx, NULL);
 				prev_vert_idx = new_vert_idx;
 			}
 
-			UI_AddTriangleIndices(inset_corner_verts + corner_i, prev_vert_idx, border_verts + corner_i * 2 + 1, UI_TEXTURE_ID_NIL);
+			UI_AddTriangleIndices(inset_corner_verts + corner_i, prev_vert_idx, border_verts + corner_i * 2 + 1, NULL);
 		}
 
-		UI_AddQuadIndices(inset_corner_verts, inset_corner_verts + 1, inset_corner_verts + 2, inset_corner_verts + 3, UI_TEXTURE_ID_NIL);
+		UI_AddQuadIndices(inset_corner_verts, inset_corner_verts + 1, inset_corner_verts + 2, inset_corner_verts + 3, NULL);
 	}
 	UI_ProfExit();
 }
@@ -2321,11 +2318,11 @@ UI_API void UI_DrawPolylineEx(const UI_Vec2* points, const UI_Color* colors, int
 				v[3] = UI_DRAW_VERTEX{{p.x - n_post.x*half_thickness, p.y - n_post.y*half_thickness}, {0.f, 0.f}, color};
 
 				if (loop || (i != 0 && i != last)) {
-					UI_AddQuadIndices(new_vertices+0, new_vertices+1, new_vertices+3, new_vertices+2, UI_TEXTURE_ID_NIL);
+					UI_AddQuadIndices(new_vertices+0, new_vertices+1, new_vertices+3, new_vertices+2, NULL);
 				}
 
 				if (i > 0) {
-					UI_AddQuadIndices(prev_idx[0], prev_idx[1], new_vertices + 1, new_vertices + 0, UI_TEXTURE_ID_NIL);
+					UI_AddQuadIndices(prev_idx[0], prev_idx[1], new_vertices + 1, new_vertices + 0, NULL);
 				} else {
 					first_idx[0] = new_vertices + 0;
 					first_idx[1] = new_vertices + 1;
@@ -2344,7 +2341,7 @@ UI_API void UI_DrawPolylineEx(const UI_Vec2* points, const UI_Color* colors, int
 				v[1] = UI_DRAW_VERTEX{{p.x - n.x*t, p.y - n.y*t}, {0.f, 0.f}, color};
 
 				if (i > 0) {
-					UI_AddQuadIndices(prev_idx[0], prev_idx[1], new_vertices + 1, new_vertices + 0, UI_TEXTURE_ID_NIL);
+					UI_AddQuadIndices(prev_idx[0], prev_idx[1], new_vertices + 1, new_vertices + 0, NULL);
 				} else {
 					first_idx[0] = new_vertices + 0;
 					first_idx[1] = new_vertices + 1;
@@ -2355,7 +2352,7 @@ UI_API void UI_DrawPolylineEx(const UI_Vec2* points, const UI_Color* colors, int
 		}
 
 		if (loop) {
-			UI_AddQuadIndices(prev_idx[0], prev_idx[1], first_idx[1], first_idx[0], UI_TEXTURE_ID_NIL);
+			UI_AddQuadIndices(prev_idx[0], prev_idx[1], first_idx[1], first_idx[0], NULL);
 		}
 	}
 	UI_ProfExit();
@@ -2403,10 +2400,10 @@ UI_API UI_Vec2 UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 origin, UI_A
 		UI_Rect glyph_uv_rect;
 		glyph_uv_rect.min = glyph.origin_uv;
 		glyph_uv_rect.max = glyph_uv_rect.min;
-		glyph_uv_rect.max.x += glyph.size_pixels.x / (float)UI_GLYPH_MAP_SIZE;
-		glyph_uv_rect.max.y += glyph.size_pixels.y / (float)UI_GLYPH_MAP_SIZE;
+		glyph_uv_rect.max.x += glyph.size_pixels.x / (float)UI_STATE.atlas_allocator.tex_width; // TODO: store the inverse tex width as well and multiply
+		glyph_uv_rect.max.y += glyph.size_pixels.y / (float)UI_STATE.atlas_allocator.tex_height;
 
-		UI_DrawSprite(glyph_rect, color, glyph_uv_rect, UI_STATE.atlases[atlas_index], scissor);
+		UI_DrawSprite(glyph_rect, color, glyph_uv_rect, UI_STATE.atlas, scissor);
 		origin.x += glyph.x_advance;
 	}
 
@@ -2552,3 +2549,103 @@ UI_API void UI_AddArranger(UI_Box* box, UI_Size w, UI_Size h) {
 	}
 	UI_ProfExit();
 }
+
+// -- Atlas allocator -------------------------------------------------
+
+UI_API void UI_AtlasAllocatorInit(UI_AtlasAllocator* atlas, DS_Allocator* allocator) {
+	// hard-code the parameters for now
+	//atlas->level0_num_slots_x = 16;
+	//atlas->level0_num_slots_y = 8;
+	//atlas->level0_slot_size = 128;
+	//atlas->level_count = 3;
+
+	atlas->level0_num_slots_x = 16;
+	atlas->level0_num_slots_y = 16;
+	atlas->level0_slot_size = 128;
+	atlas->level_count = 1;
+
+	atlas->allocator = allocator;
+
+	int width = atlas->level0_slot_size;
+	int num_slots_y = atlas->level0_num_slots_y;
+	int num_slots_x = atlas->level0_num_slots_x;
+	int tex_size_y = 0;
+	int num_slots_total = 0;
+	
+	for (int l = 0; l < atlas->level_count; l++) {
+		tex_size_y += width * num_slots_y;
+		width /= 2;
+		num_slots_total += num_slots_x * num_slots_y;
+		num_slots_x *= 2;
+	}
+	
+	atlas->slots = (UI_AtlasSlot*)DS_MemAlloc(atlas->allocator, sizeof(UI_AtlasSlot) * num_slots_total);
+	memset(atlas->slots, 0, sizeof(UI_AtlasSlot) * num_slots_total);
+	
+	atlas->tex_width = atlas->level0_slot_size * atlas->level0_num_slots_x;
+	atlas->tex_height = tex_size_y;
+}
+
+UI_API void UI_AtlasAllocatorDeinit(UI_AtlasAllocator* atlas) {
+	DS_MemFree(atlas->allocator, atlas->slots);
+	DS_DebugFillGarbage(atlas, sizeof(*atlas));
+}
+
+UI_API UI_AtlasSlotIndex UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width) {
+	int width = atlas->level0_slot_size;
+	
+	int first_slot = 0;
+	int num_slots_x = atlas->level0_num_slots_x;
+	int num_slots_y = atlas->level0_num_slots_y;
+
+	assert(required_width <= width);
+
+	UI_AtlasSlotIndex result = {0};
+
+	int base_texspace_x = 0;
+	int base_texspace_y = 0;
+
+	for (int l = 0; l < atlas->level_count; l++) {
+		int next_width = width / 2;
+
+		// Can fit into the next smaller level?
+
+		if (required_width <= next_width && l + 1 < atlas->level_count) {
+			base_texspace_y += width * num_slots_y;
+			width = next_width;
+			first_slot += num_slots_x * num_slots_y;
+			num_slots_x *= 2;
+			continue;
+		}
+
+		// Find a slot in this level.
+
+		int i = first_slot;
+		for (int y = 0; y < num_slots_y; y++) {
+			for (int x = 0; x < num_slots_x; x++) {
+				if (!atlas->slots[i].is_taken) {
+					// Take this slot!
+					atlas->slots[i].is_taken = true;
+					
+					result.x0 = base_texspace_x + x * width;
+					result.y0 = base_texspace_y + y * width;
+					result.x1 = result.x0 + width;
+					result.y1 = result.y0 + width;
+					result.slot_index = i;
+					
+					return result;
+				}
+				i++;
+			}
+		}
+		
+		UI_ASSERT(0); // We didn't find a slot.
+	}
+	
+	return result;
+}
+
+//UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, UI_AtlasSlotIndex slot) {
+//	// slot is marked for free
+//	UI_TODO();
+//}

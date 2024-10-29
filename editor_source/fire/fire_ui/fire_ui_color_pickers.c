@@ -82,7 +82,7 @@ static void UI_DrawHueSaturationCircle(UI_Box* box) {
 
 			if (i > 0) {
 				int j_next = (j + 1) % UI_COLOR_WHEEL_NUM_COLUMNS;
-				UI_AddQuadIndices(prev_wheel_first_vertex + j, prev_wheel_first_vertex + j_next, wheel_first_vertex + j_next, wheel_first_vertex + j, UI_TEXTURE_ID_NIL);
+				UI_AddQuadIndices(prev_wheel_first_vertex + j, prev_wheel_first_vertex + j_next, wheel_first_vertex + j_next, wheel_first_vertex + j, NULL);
 			}
 		}
 		prev_wheel_first_vertex = wheel_first_vertex;
@@ -146,7 +146,7 @@ static void UI_ColorPickerSaturationSliderDraw(UI_Box* box) {
 		vertices[i*2+0] = UI_DRAW_VERTEX{{rect.min.x, y}, {0, 0}, color};
 		vertices[i*2+1] = UI_DRAW_VERTEX{{rect.max.x, y}, {0, 0}, color};
 		if (i > 0) {
-			UI_AddQuadIndices(first_vertex + i*2, first_vertex + i*2+1, first_vertex + i*2-1, first_vertex + i*2-2, UI_TEXTURE_ID_NIL);
+			UI_AddQuadIndices(first_vertex + i*2, first_vertex + i*2+1, first_vertex + i*2-1, first_vertex + i*2-2, NULL);
 		}
 	}
 
@@ -173,7 +173,7 @@ static void UI_ColorPickerValueSliderDraw(UI_Box* box) {
 		vertices[i*2+0] = UI_DRAW_VERTEX{{rect.min.x, y}, {0, 0}, color};
 		vertices[i*2+1] = UI_DRAW_VERTEX{{rect.max.x, y}, {0, 0}, color};
 		if (i > 0) {
-			UI_AddQuadIndices(first_vertex + i*2, first_vertex + i*2+1, first_vertex + i*2-1, first_vertex + i*2-2, UI_TEXTURE_ID_NIL);
+			UI_AddQuadIndices(first_vertex + i*2, first_vertex + i*2+1, first_vertex + i*2-1, first_vertex + i*2-2, NULL);
 		}
 	}
 

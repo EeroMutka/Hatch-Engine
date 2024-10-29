@@ -9,8 +9,6 @@
 
 #include "../fire_ds.h"
 #include "../fire_string.h"
-#include "stb_rect_pack.h"
-#include "stb_truetype.h"
 
 #ifndef UI_ASSERT_OVERRIDE
 #include <assert.h>
@@ -125,16 +123,6 @@ typedef struct UI_CachedGlyph {
 
 typedef int32_t UI_FontIndex;
 
-typedef struct UI_Font {
-	const uint8_t* data; // NULL if the font is deinitialized
-	float y_offset;
-
-	DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) glyph_map;
-	DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) glyph_map_old;
-
-	stbtt_fontinfo font_info;
-} UI_Font;
-
 typedef struct UI_FontView {
 	UI_FontIndex font;
 	int32_t size;
@@ -231,20 +219,12 @@ typedef uint16_t UI_ScissorID;
 typedef enum UI_AlignV { UI_AlignV_Upper, UI_AlignV_Middle, UI_AlignV_Lower } UI_AlignV;
 typedef enum UI_AlignH { UI_AlignH_Left, UI_AlignH_Middle, UI_AlignH_Right } UI_AlignH;
 
-#define UI_TEXTURE_ID_NIL ((UI_TextureID)0)
-//#define UI_BUFFER_ID_NIL ((UI_BufferID)0)
-
-#ifndef UI_MAX_BACKEND_BUFFERS
-#define UI_MAX_BACKEND_BUFFERS 16
-#endif
-
-typedef uint64_t UI_TextureID; // UI_TEXTURE_ID_NIL is a reserved value
-// typedef uint64_t UI_BufferID;  // UI_BUFFER_ID_NIL is a reserved value
+typedef struct UI_Texture UI_Texture; // user-defined structure
 
 typedef struct UI_DrawCall {
 	int vertex_buffer_id;
 	int index_buffer_id;
-	UI_TextureID texture;
+	UI_Texture* texture;
 	uint32_t first_index;
 	uint32_t index_count;
 } UI_DrawCall;
@@ -297,10 +277,11 @@ typedef struct UI_Backend {
 	// - A vertex buffer
 	// - An index buffer
 	// - An atlas texture
-	// The resize_ functions are used for creating, resizing and destroying them. A resource should be destroyed when size=0 (or width=0 and height=0).
+	// The resize_ functions are used for creating, resizing and destroying them. A resource should be destroyed when size=0.
 	void (*resize_vertex_buffer)(uint32_t size);
 	void (*resize_index_buffer)(uint32_t size);
-	UI_TextureID (*resize_atlas)(uint32_t width, uint32_t height);
+
+	UI_Texture* (*create_atlas)(uint32_t width, uint32_t height);
 
 	// When mapping a resource, the returned pointer must stay valid until UI_EndFrame or resize_* is called.
 	void* (*map_atlas)();
@@ -344,6 +325,32 @@ typedef struct UI_Outputs {
 
 typedef DS_Map(UI_Key, void*) UI_PtrFromKeyMap;
 
+typedef struct UI_AtlasSlot {
+	bool is_taken;
+} UI_AtlasSlot;
+
+typedef struct UI_AtlasAllocator {
+	// Parameters
+	int level0_slot_size; // Describes the slot width and height in pixels
+	int level0_num_slots_x;
+	int level0_num_slots_y;
+	int level_count;
+
+	// State
+	DS_Allocator* allocator;
+	UI_AtlasSlot* slots; // first big slots, then smaller slots, then smaller slots, etc...
+	int tex_width;
+	int tex_height;
+} UI_AtlasAllocator;
+
+typedef struct UI_AtlasSlotIndex {
+	int x0;
+	int y0;
+	int x1;
+	int y1;
+	int slot_index;
+} UI_AtlasSlotIndex;
+
 typedef struct UI_State {
 	DS_Allocator* allocator;
 	DS_Arena persistent_arena;
@@ -364,13 +371,16 @@ typedef struct UI_State {
 
 	float time_since_pressed_lmb;
 
-	DS_DynArray(UI_Font) fonts;
+	DS_DynArray(struct UI_FontData) fonts;
 
+	UI_AtlasAllocator atlas_allocator;
+	UI_Texture* atlas;
+	void* atlas_mapped_ptr;
 	// atlas
-	stbtt_pack_context pack_context;
+	//stbtt_pack_context pack_context;
 	//bool atlas_needs_reupload;
-	UI_TextureID atlases[2]; // 0 is the current atlas, 1 is NULL or the old atlas
-	uint8_t* atlas_buffer_grayscale; // stb rect pack works with grayscale, but we want to convert to RGBA8 on the fly.
+	//UI_Texture* atlases[2]; // 0 is the current atlas, 1 is NULL or the old atlas
+	//uint8_t* atlas_buffer_grayscale; // stb truetype works with grayscale, but we want to convert to RGBA8 on the fly.
 
 	// Mouse position in screen space coordinates, snapped to the pixel center. Placing it at the pixel center means we don't
 	// need to worry about dUI_enerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
@@ -399,11 +409,10 @@ typedef struct UI_State {
 	UI_DrawVertex* draw_vertices; // NULL by default
 	uint32_t draw_next_vertex;
 	uint32_t draw_next_index;
-	UI_TextureID draw_active_texture;
+	UI_Texture* draw_active_texture;
 	DS_DynArray(UI_DrawCall) draw_calls;
 } UI_State;
 
-// The color palette here is the same as in Raylib
 #define UI_LIGHTGRAY  UI_COLOR{200, 200, 200, 255}
 #define UI_GRAY       UI_COLOR{130, 130, 130, 255}
 #define UI_DARKGRAY   UI_COLOR{80, 80, 80, 255}
@@ -459,13 +468,10 @@ typedef struct UI_SplittersState {
 	int panel_count;
 } UI_SplittersState;
 
+// TODO: resizable vertex / index buffers
 #define UI_MAX_VERTEX_COUNT 65536*2
-#define UI_MAX_INDEX_COUNT  UI_MAX_VERTEX_COUNT*2
+#define UI_MAX_INDEX_COUNT  65536*4
 
-#define UI_GLYPH_PADDING 1
-#define UI_GLYPH_MAP_SIZE 1024
-
-static const UI_Vec2 UI_WHITE_PIXEL_UV = { 0.5f / (float)UI_GLYPH_MAP_SIZE, 0.5f / (float)UI_GLYPH_MAP_SIZE };
 static const UI_Vec2 UI_DEFAULT_TEXT_PADDING = { 10.f, 5.f };
 
 // -- Global state -------
@@ -500,6 +506,12 @@ UI_API UI_Key UI_HashInt(UI_Key a, int b);
 UI_API void UI_SelectionFixOrder(UI_Selection* sel);
 
 UI_API void UI_RectPad(UI_Rect* rect, float pad);
+
+UI_API void UI_AtlasAllocatorInit(UI_AtlasAllocator* atlas, DS_Allocator* allocator);
+UI_API void UI_AtlasAllocatorDeinit(UI_AtlasAllocator* atlas);
+
+UI_API UI_AtlasSlotIndex UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width);
+//UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, UI_AtlasSlotIndex slot);
 
 /*
  `resources_directory` is the path of the `resources` folder that is shipped with FUI.
@@ -637,9 +649,9 @@ UI_API void UI_FontDeinit(UI_FontIndex font_idx);
 UI_API bool UI_ClipRect(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
 
 UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index);
-UI_API uint32_t* UI_AddIndices(int count, UI_TextureID texture);
-UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_TextureID texture);
-UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_TextureID texture);
+UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture);
+UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture* texture);
+UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_Texture* texture);
 
 UI_API void UI_DrawRect(UI_Rect rect, UI_Color color);
 UI_API void UI_DrawRectRounded(UI_Rect rect, float roundness, UI_Color color, int num_corner_segments);
@@ -653,7 +665,7 @@ UI_API void UI_DrawQuad(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Vec2 d, UI_Color col
 
 UI_API UI_Vec2 UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 origin, UI_AlignH align_h, UI_AlignV align_v, UI_Color color, UI_ScissorRect scissor);
 
-UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_TextureID texture, UI_ScissorRect scissor);
+UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_Texture* texture, UI_ScissorRect scissor);
 
 UI_API void UI_DrawCircle(UI_Vec2 p, float radius, int segments, UI_Color color);
 

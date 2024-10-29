@@ -29,84 +29,73 @@ UI_API UI_DX12_State UI_DX12_STATE;
 
 // ---------------------
 
-static UI_TextureID UI_DX12_ResizeAtlas(uint32_t width, uint32_t height) {
-	if (width == 0 && height == 0) {
-		UI_DX12_STATE.atlas_staging_buffer->Release();
-		UI_DX12_STATE.atlas->Release();
-		return UI_TEXTURE_ID_NIL;
-	}
-	else {
-		UI_ASSERT(UI_DX12_STATE.atlas == NULL); // TODO
+static UI_Texture* UI_DX12_CreateAtlas(uint32_t width, uint32_t height) {
+	UI_ASSERT(UI_DX12_STATE.atlas == NULL); // TODO
 
-		// Create the GPU-local texture
-		ID3D12Resource* texture;
-		{
-			D3D12_RESOURCE_DESC desc = {};
-			desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-			desc.Alignment = 0;
-			desc.Width = width;
-			desc.Height = height;
-			desc.DepthOrArraySize = 1;
-			desc.MipLevels = 1;
-			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-			desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	// Create the GPU-local texture
+	ID3D12Resource* texture;
+	{
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+		desc.Alignment = 0;
+		desc.Width = width;
+		desc.Height = height;
+		desc.DepthOrArraySize = 1;
+		desc.MipLevels = 1;
+		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 		
-			D3D12_HEAP_PROPERTIES props = {};
-			props.Type = D3D12_HEAP_TYPE_DEFAULT;
-			props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-			props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		D3D12_HEAP_PROPERTIES props = {};
+		props.Type = D3D12_HEAP_TYPE_DEFAULT;
+		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
 
-			bool ok = UI_DX12_STATE.device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, NULL, IID_PPV_ARGS(&texture)) == S_OK;
-			UI_ASSERT(ok);
-			UI_DX12_STATE.atlas = texture;
-			UI_DX12_STATE.atlas_width = width;
-			UI_DX12_STATE.atlas_height = height;
-		}
-
-		// Create the staging buffer
-		{
-			D3D12_RESOURCE_DESC desc = {};
-			desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-			desc.Alignment = 0;
-			desc.Width = height * (width * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
-			desc.Height = 1;
-			desc.DepthOrArraySize = 1;
-			desc.MipLevels = 1;
-			desc.Format = DXGI_FORMAT_UNKNOWN;
-			desc.SampleDesc.Count = 1;
-			desc.SampleDesc.Quality = 0;
-			desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-			desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-			D3D12_HEAP_PROPERTIES props = {};
-			props.Type = D3D12_HEAP_TYPE_UPLOAD;
-			props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-			props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-			bool ok = UI_DX12_STATE.device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-				D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&UI_DX12_STATE.atlas_staging_buffer)) == S_OK;
-			UI_ASSERT(ok);
-		}
-
-		// Create texture view
-		{
-			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-			desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			desc.Texture2D.MipLevels = 1;
-			UI_DX12_STATE.device->CreateShaderResourceView(texture, &desc, UI_DX12_STATE.atlas_cpu_descriptor);
-		}
-
-		return (UI_TextureID)UI_DX12_STATE.atlas_gpu_descriptor.ptr;
+		bool ok = UI_DX12_STATE.device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, NULL, IID_PPV_ARGS(&texture)) == S_OK;
+		UI_ASSERT(ok);
+		UI_DX12_STATE.atlas = texture;
+		UI_DX12_STATE.atlas_width = width;
+		UI_DX12_STATE.atlas_height = height;
 	}
-}
 
-static void UI_DX12_DestroyAtlas(int atlas_id) {
-	__debugbreak(); //TODO
+	// Create the staging buffer
+	{
+		D3D12_RESOURCE_DESC desc = {};
+		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		desc.Alignment = 0;
+		desc.Width = height * (width * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
+		desc.Height = 1;
+		desc.DepthOrArraySize = 1;
+		desc.MipLevels = 1;
+		desc.Format = DXGI_FORMAT_UNKNOWN;
+		desc.SampleDesc.Count = 1;
+		desc.SampleDesc.Quality = 0;
+		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+		D3D12_HEAP_PROPERTIES props = {};
+		props.Type = D3D12_HEAP_TYPE_UPLOAD;
+		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+
+		bool ok = UI_DX12_STATE.device->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
+			D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&UI_DX12_STATE.atlas_staging_buffer)) == S_OK;
+		UI_ASSERT(ok);
+	}
+
+	// Create texture view
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
+		desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		desc.Texture2D.MipLevels = 1;
+		UI_DX12_STATE.device->CreateShaderResourceView(texture, &desc, UI_DX12_STATE.atlas_cpu_descriptor);
+	}
+
+	return (UI_Texture*)UI_DX12_STATE.atlas_gpu_descriptor.ptr;
 }
 
 static void* UI_DX12_MapAtlas() {
@@ -183,7 +172,7 @@ static void UI_DX12_Init(UI_Backend* backend, ID3D12Device* device, D3D12_CPU_DE
 
 	backend->resize_vertex_buffer = UI_DX12_ResizeVertexBuffer;
 	backend->resize_index_buffer = UI_DX12_ResizeIndexBuffer;
-	backend->resize_atlas = UI_DX12_ResizeAtlas;
+	backend->create_atlas = UI_DX12_CreateAtlas;
 
 	backend->map_vertex_buffer = UI_DX12_MapVertexBuffer;
 	backend->map_index_buffer = UI_DX12_MapIndexBuffer;
@@ -339,6 +328,11 @@ static void UI_DX12_Init(UI_Backend* backend, ID3D12Device* device, D3D12_CPU_DE
 }
 
 static void UI_DX12_Deinit(void) {
+	if (UI_DX12_STATE.atlas) {
+		UI_DX12_STATE.atlas_staging_buffer->Release();
+		UI_DX12_STATE.atlas->Release();
+	}
+
 	UI_DX12_STATE.pipeline_state->Release();
 	UI_DX12_STATE.root_signature->Release();
 }

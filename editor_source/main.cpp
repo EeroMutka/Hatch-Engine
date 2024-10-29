@@ -2,8 +2,9 @@
 #define FIRE_BUILD_IMPLEMENTATION
 #define FIRE_OS_CLIPBOARD_IMPLEMENTATION
 #define FIRE_OS_WINDOW_IMPLEMENTATION
-#define STB_RECT_PACK_IMPLEMENTATION
-#define STB_TRUETYPE_IMPLEMENTATION
+
+//#define STB_RECT_PACK_IMPLEMENTATION
+//#define STB_TRUETYPE_IMPLEMENTATION
 
 #include "include/ht_internal.h"
 #include "include/ht_editor_render.h"
@@ -161,6 +162,8 @@ static void DebugPrint(const char* str) {
 static void UpdatePlugins(EditorState* s) {
 	HT_API api = {0};
 	api.DebugPrint = DebugPrint;
+	*(void**)&api.AddVertices = UI_AddVertices;
+	*(void**)&api.AddIndices = UI_AddIndices;
 
 	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
 		Asset* plugin = IT.elem;
