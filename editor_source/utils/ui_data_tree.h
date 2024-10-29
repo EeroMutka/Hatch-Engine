@@ -14,18 +14,18 @@
 // I think that's fine. Either that, or we have a "basic tree" header which contains just regular tree relations and user data.
 // That way we can have a hatch plugin that doesn't touch "UI code" still iterate through the data tree. I think in this case we just want duplicate data. OR: we have like a function pointer for querying things!
 
-struct UI_DataTreeNode {
-	UI_DataTreeNode* parent;
-	UI_DataTreeNode* prev;
-	UI_DataTreeNode* next;
-	UI_DataTreeNode* first_child;
-	UI_DataTreeNode* last_child;
+typedef struct UI_DataTreeNode {
+	struct UI_DataTreeNode* parent;
+	struct UI_DataTreeNode* prev;
+	struct UI_DataTreeNode* next;
+	struct UI_DataTreeNode* first_child;
+	struct UI_DataTreeNode* last_child;
 	
 	UI_Key key;
 	bool* is_open_ptr;
-};
+} UI_DataTreeNode;
 
-struct UI_DataTreeState {
+typedef struct UI_DataTreeState {
 	UI_Key selection;
 	UI_Key pressing;
 	bool moved_this_frame;
@@ -36,15 +36,15 @@ struct UI_DataTreeState {
 	UI_Key drag_n_dropping_new;
 	
 	UI_Vec2 mouse_travel_after_press;
-};
+} UI_DataTreeState;
 
-struct UI_DataTree {
+typedef struct UI_DataTree {
 	int num_columns;
 	UI_DataTreeNode* root;
 	bool allow_selection;
 	bool allow_drag_n_drop;
 
-	void (*AddValueUI)(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column);
+	void (*AddValueUI)(struct UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column);
 	
 	void* user_data; // unused by the library
 
@@ -53,7 +53,7 @@ struct UI_DataTree {
 	// TODO: function pointer for add-full-custom-UI. This would mean not displaying the name or splitters. This could be used for embedding custom UI, e.g. an image viewer
 
 	// UI-state -- keep it here for now, but really we might want multiple UI tree instances showing the same tree
-};
+} UI_DataTree;
 
 UI_API void UI_AddDataTree(UI_Box* box, UI_Size w, UI_Size h, UI_DataTree* tree, UI_DataTreeState* state);
 

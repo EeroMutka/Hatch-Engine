@@ -804,3 +804,30 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 		UI_DrawBox(box);
 	}
 }
+
+static void DebugPrint(const char* str) {
+	TODO();
+	//printf("DEBUG PRINT: %s\n", str);
+}
+
+static void DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
+	UI_DrawText(text, {UI_STATE.base_font.font, font_size}, pos, align_h, color, NULL);
+}
+
+EXPORT void UpdatePlugins(EditorState* s) {
+	HT_API api = {0};
+	api.DebugPrint = DebugPrint;
+	*(void**)&api.AddVertices = UI_AddVertices;
+	*(void**)&api.AddIndices = UI_AddIndices;
+	*(void**)&api.DrawText = DrawText;
+
+	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
+		Asset* plugin = IT.elem;
+		if (AssetSlotIsEmpty(plugin)) continue;
+		if (plugin->kind != AssetKind_Plugin) continue;
+
+		if (plugin->plugin.dll_handle) {
+			plugin->plugin.dll_UpdatePlugin(&api);
+		}
+	}
+}

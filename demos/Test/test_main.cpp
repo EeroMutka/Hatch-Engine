@@ -1,4 +1,9 @@
+#define _CRT_SECURE_NO_WARNINGS  // TODO: find a way to get rid of this
+
 #include "test_plugin.hatch_generated.h"
+
+// this should be in the utility libraries...
+// #include "../editor_source/fire/fire_ui/fire_ui.c"
 
 #include "utility_libraries/hatch_ui.h"
 
@@ -13,25 +18,10 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// So in the hatch API we need to provide access to the fonts atlas and the default font. And we should let
 	// you easily allocate and free atlas texture regions.
 	
-	
-	
-	
-	
 	// Ok, so can we make a fire UI button using a local copy of the fire-UI library?
 	// maybe we should first solve the atlas thing yeah...
 	
-	
-	
-	// We always try to allocate from the top.
-	
-	// Potential growth/shrink strategy for the future: always calculate how many "height units" the texture needs to be
-	// and crudely resize to fit that. Any cached glyphs that fall out of that is bye bye.
-	
-	// So, we can ask the user for "max slot size", "min slot size", "largest slot X count", "largest slot Y count".
-	// Additionally, we can ask for "per-level X percentage". By default it's 50, thus each level gets 2x the previous level slot count.
-	// If it's 100, then each level gets 4x the previous level slot count.
-	
 	UI_DrawRect(ht, {{200, 50}, {230, 600}}, UI_RED);
 	
-	
+	ht->DrawText("Hello!", {200, 500}, HT_AlignH_Left, HT_AlignV_Top, 200, UI_BLUE);
 }

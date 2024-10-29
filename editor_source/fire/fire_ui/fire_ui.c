@@ -991,7 +991,7 @@ UI_API void UI_DrawBoxDefault(UI_Box* box) {
 
 	if (box->flags & UI_BoxFlag_HasText) {
 		UI_Vec2 text_pos = UI_AddV2(box->computed_position, box->inner_padding);
-		UI_DrawText(box->text, box->font, text_pos, UI_AlignH_Left, UI_AlignV_Upper, args->text_color, &box_rect);
+		UI_DrawText(box->text, box->font, text_pos, UI_AlignH_Left, args->text_color, &box_rect);
 	}
 
 	UI_ProfExit();
@@ -1831,7 +1831,7 @@ UI_API void UI_FontDeinit(UI_FontIndex font_idx) {
 static UI_CachedGlyph UI_GetCachedGlyph(uint32_t codepoint, UI_FontView font, int* out_atlas_index) {
 	UI_ProfEnter();
 	int atlas_index = 0;
-	UI_CachedGlyphKey key = { codepoint, font.font, font.size };
+	UI_CachedGlyphKey key = { codepoint, font.font, (uint16_t)font.size };
 
 	UI_CachedGlyph* glyph = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&UI_STATE.glyph_map, key, &glyph);
@@ -1849,7 +1849,7 @@ static UI_CachedGlyph UI_GetCachedGlyph(uint32_t codepoint, UI_FontView font, in
 
 		UI_AtlasSlotInfo atlas_slot = UI_AtlasAllocateSlot(&UI_STATE.atlas_allocator, UI_Max(glyph_w, glyph_h));
 
-		char* glyph_data = DS_ArenaPush(&UI_STATE.frame_arena, glyph_w*glyph_h);
+		uint8_t* glyph_data = (uint8_t*)DS_ArenaPush(&UI_STATE.frame_arena, glyph_w*glyph_h);
 		memset(glyph_data, 0, glyph_w*glyph_h);
 		stbtt_MakeGlyphBitmapSubpixel(&font_data->font_info, glyph_data, glyph_w, glyph_h, glyph_w, scale, scale, 0.f, 0.f, glyph_index);
 
@@ -2373,34 +2373,25 @@ UI_API void UI_DrawPolylineLoop(const UI_Vec2* points, const UI_Color* colors, i
 	UI_DrawPolylineEx(points, colors, points_count, thickness, true, 0.7f);
 }
 
-UI_API UI_Vec2 UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 origin, UI_AlignH align_h, UI_AlignV align_v, UI_Color color, UI_ScissorRect scissor) {
+UI_API void UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 pos, UI_AlignH align, UI_Color color, UI_ScissorRect scissor) {
 	UI_ProfEnter();
-	UI_Vec2 s = { UI_TextWidth(text, font), (float)font.size };
-
-	if (align_h == UI_AlignH_Middle) {
-		origin.x -= s.x * 0.5f;
+	
+	if (align == UI_AlignH_Middle) {
+		pos.x -= UI_TextWidth(text, font) * 0.5f;
 	}
-	else if (align_h == UI_AlignH_Right) {
-		origin.x -= s.x;
-	}
-
-	if (align_v == UI_AlignV_Middle) {
-		origin.y -= s.y * 0.5f;
-	}
-	else if (align_v == UI_AlignV_Lower) {
-		origin.y -= s.y;
+	else if (align == UI_AlignH_Right) {
+		pos.x -= UI_TextWidth(text, font);
 	}
 
-	origin.x = (float)(int)(origin.x + 0.5f); // round to integer
-	origin.y = (float)(int)(origin.y + 0.5f); // round to integer
+	pos.x = (float)(int)(pos.x + 0.5f); // round to integer
 
 	for STR_Each(text, r, i) {
 		int atlas_index = 0;
 		UI_CachedGlyph glyph = UI_GetCachedGlyph(r, font, &atlas_index);
 
 		UI_Rect glyph_rect;
-		glyph_rect.min.x = origin.x + glyph.offset_pixels.x;
-		glyph_rect.min.y = origin.y + glyph.offset_pixels.y;
+		glyph_rect.min.x = pos.x + glyph.offset_pixels.x;
+		glyph_rect.min.y = pos.y + glyph.offset_pixels.y;
 		glyph_rect.max.x = glyph_rect.min.x + glyph.size_pixels.x;
 		glyph_rect.max.y = glyph_rect.min.y + glyph.size_pixels.y;
 
@@ -2411,11 +2402,10 @@ UI_API UI_Vec2 UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 origin, UI_A
 		glyph_uv_rect.max.y += glyph.size_pixels.y / (float)UI_STATE.atlas_allocator.tex_height;
 
 		UI_DrawSprite(glyph_rect, color, glyph_uv_rect, NULL, scissor);
-		origin.x += glyph.x_advance;
+		pos.x += glyph.x_advance;
 	}
 
 	UI_ProfExit();
-	return s;
 }
 
 static UI_Key UI_ArrangerSetVarKey() { return UI_KEY(); }

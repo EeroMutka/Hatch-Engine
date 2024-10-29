@@ -10,10 +10,13 @@
 typedef vec2 UI_Vec2;
 #include "../fire/fire_ui/fire_ui.h"
 
+#define OS_WINDOW_API extern "C"
 #include "../fire/fire_os_window.h"
+
+#define OS_CLIPBOARD_API extern "C"
 #include "../fire/fire_os_clipboard.h"
 
-#define BUILD_API
+#define BUILD_API extern "C"
 #define FIRE_BUILD_NO_IMPLEMENTATION
 #include "../fire/fire_build.h"
 
@@ -21,6 +24,8 @@ typedef vec2 UI_Vec2;
 #include "../fire/fire_string.h"
 
 #include "../utils/ui_data_tree.h"
+
+#define OS_API extern "C"
 #include "../utils/os_misc.h"
 #include "../utils/os_directory_watch.h"
 
@@ -369,5 +374,7 @@ EXPORT void AddTopBar(EditorState* s);
 EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 EXPORT void UILogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
+
+EXPORT void UpdatePlugins(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);

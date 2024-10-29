@@ -14,7 +14,7 @@
 #include <stdbool.h>
 
 #ifndef BUILD_API
-#define BUILD_API static
+#define BUILD_API
 #endif
 
 #ifndef FIRE_BUILD_NO_IMPLEMENTATION
@@ -117,7 +117,7 @@ struct BUILD_Project {
 #include <assert.h>
 #include <stdlib.h> // for realloc / free
 
-#define WIN32_LEAN_AND_MEAN
+// TODO: manual windows function prototypes
 #include <Windows.h>
 
 #define BUILD_ArrayReserve(ARR, CAPACITY) \

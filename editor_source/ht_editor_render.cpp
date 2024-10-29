@@ -26,7 +26,9 @@ static void CreateRenderTargets(RenderState* s) {
 }
 
 EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_WINDOW window) {
+    
 //#ifdef UI_DX12_DEBUG_MODE
+
     ID3D12Debug* debug_interface = NULL;
     if (D3D12GetDebugInterface(IID_PPV_ARGS(&debug_interface)) == S_OK) {
         debug_interface->EnableDebugLayer();

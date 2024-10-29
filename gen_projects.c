@@ -14,6 +14,7 @@ int main() {
 	// BUILD_AddIncludeDir(&hatch, ".."); // Repository root
 	
 	BUILD_AddSourceFile(&hatch, "../editor_source/main.cpp");
+	BUILD_AddSourceFile(&hatch, "../editor_source/ht_libs_impl.c");
 	BUILD_AddSourceFile(&hatch, "../editor_source/ht_data_model.cpp");
 	BUILD_AddSourceFile(&hatch, "../editor_source/ht_ui.cpp");
 	BUILD_AddSourceFile(&hatch, "../editor_source/ht_editor.cpp");
@@ -22,9 +23,10 @@ int main() {
 	BUILD_AddSourceFile(&hatch, "../editor_source/ht_plugin_compiler.cpp");
 	BUILD_AddSourceFile(&hatch, "../editor_source/ht_editor_render.cpp");
 	
-	BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui.c");
-	BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui_color_pickers.c");
-	BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui_extras.c");
+	// BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui.c");
+	// BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui_color_pickers.c");
+	// BUILD_AddSourceFile(&hatch, "../editor_source/fire/fire_ui/fire_ui_extras.c");
+	
 	BUILD_AddVisualStudioNatvisFile(&hatch, "../editor_source/fire/fire.natstepfilter");
 	BUILD_AddVisualStudioNatvisFile(&hatch, "../editor_source/fire/fire.natvis");
 

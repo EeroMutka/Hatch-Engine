@@ -1,10 +1,10 @@
+#include "os_misc.h"
+
 #include <shobjidl_core.h> // required for OS_FolderPicker
 
-// OS functions should be coded in a way where they depend on fire_ds.h, but not really anything more
-
-EXPORT STR_View OS_ReadEntireFile(DS_MemScope* m, const char* file) {
+OS_API void OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data) {
 	FILE* f = fopen(file, "rb");
-	assert(f);
+	assert(f); // TODO
 
 	fseek(f, 0, SEEK_END);
 	long fsize = ftell(f);
@@ -15,14 +15,14 @@ EXPORT STR_View OS_ReadEntireFile(DS_MemScope* m, const char* file) {
 
 	fclose(f);
 	STR_View result = {data, fsize};
-	return result;
+	*out_data = result;
 }
 
-EXPORT bool OS_PathIsAbsolute(STR_View path) {
+OS_API bool OS_PathIsAbsolute(STR_View path) {
 	return path.size > 2 && path.data[1] == ':';
 }
 
-EXPORT wchar_t* OS_UTF8ToWide(DS_MemScope* m, STR_View str, int null_terminations) {
+OS_API wchar_t* OS_UTF8ToWide(DS_MemScope* m, STR_View str, int null_terminations) {
 	if (str.size == 0) return L""; // MultiByteToWideChar does not accept 0-length strings
 
 	int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data, str.size, NULL, 0);
@@ -35,25 +35,28 @@ EXPORT wchar_t* OS_UTF8ToWide(DS_MemScope* m, STR_View str, int null_termination
 	return result;
 }
 
-EXPORT STR_View OS_WideToUTF8(DS_MemScope* m, const wchar_t* wstr) {
-	if (*wstr == 0) return STR_V(""); // MultiByteToWideChar does not accept 0-length strings
+OS_API void OS_WideToUTF8(DS_MemScope* m, const wchar_t* wstr, STR_View* out_string) {
+	if (*wstr == 0) {
+		*out_string = STR_V(""); // MultiByteToWideChar does not accept 0-length strings
+		return;
+	}
 
 	int buffer_size = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
 	char* new_data = DS_ArenaPush(m->arena, buffer_size);
 	WideCharToMultiByte(CP_UTF8, 0, wstr, -1, new_data, buffer_size, NULL, NULL);
 	
 	STR_View result = {new_data, buffer_size - 1};
-	return result;
+	*out_string = result;
 }
 
-EXPORT bool OS_DeleteFile(DS_MemTemp* m, STR_View file_path) {
+OS_API bool OS_DeleteFile(DS_MemTemp* m, STR_View file_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	bool ok = DeleteFileW(OS_UTF8ToWide(&temp, file_path, 1)) == 1;
 	DS_ScopeEnd(&temp);
 	return ok;
 }
 
-EXPORT bool OS_FileGetModtime(DS_MemTemp* m, STR_View file_path, uint64_t* out_modtime) {
+OS_API bool OS_FileGetModtime(DS_MemTemp* m, STR_View file_path, uint64_t* out_modtime) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* file_path_wide = OS_UTF8ToWide(&temp, file_path, 1);
 
@@ -68,7 +71,7 @@ EXPORT bool OS_FileGetModtime(DS_MemTemp* m, STR_View file_path, uint64_t* out_m
 	return h != INVALID_HANDLE_VALUE;
 }
 
-EXPORT void OS_DeleteDirectory(DS_MemTemp* m, STR_View directory_path) {
+OS_API void OS_DeleteDirectory(DS_MemTemp* m, STR_View directory_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 
 	SHFILEOPSTRUCTW file_op = {0};
@@ -85,7 +88,7 @@ EXPORT void OS_DeleteDirectory(DS_MemTemp* m, STR_View directory_path) {
 	DS_ScopeEnd(&temp);
 }
 
-EXPORT bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path) {
+OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path) {
 	// https://pdh11.blogspot.com/2009/05/pathcanonicalize-versus-what-it-says-on.html
 	// https://stackoverflow.com/questions/10198420/open-directory-using-createfile
 
@@ -109,14 +112,14 @@ EXPORT bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path
 
 	if (ok) {
 		wchar_t* result_wide_cut = result_wide + 4; // strings returned have `\\?\` - prefix that we want to get rid of
-		*out_path = OS_WideToUTF8(m, result_wide_cut);
+		OS_WideToUTF8(m, result_wide_cut, out_path);
 	}
 
 	DS_ScopeEnd(&temp);
 	return ok;
 }
 
-EXPORT bool OS_MakeDirectory(DS_MemTemp* m, STR_View directory) {
+OS_API bool OS_MakeDirectory(DS_MemTemp* m, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* dir_wide = OS_UTF8ToWide(&temp, directory, 1);
 	bool created = CreateDirectoryW(dir_wide, NULL);
@@ -124,7 +127,7 @@ EXPORT bool OS_MakeDirectory(DS_MemTemp* m, STR_View directory) {
 	return created || GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
-EXPORT bool OS_SetWorkingDir(DS_MemTemp* m, STR_View directory) {
+OS_API bool OS_SetWorkingDir(DS_MemTemp* m, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* dir_wide = OS_UTF8ToWide(&temp, directory, 1);
 	bool ok = SetCurrentDirectoryW(dir_wide) != 0;
@@ -132,7 +135,7 @@ EXPORT bool OS_SetWorkingDir(DS_MemTemp* m, STR_View directory) {
 	return ok;
 }
 
-EXPORT bool OS_FileLastModificationTime(DS_MemTemp* m, STR_View filepath, uint64_t* out_modtime) {
+OS_API bool OS_FileLastModificationTime(DS_MemTemp* m, STR_View filepath, uint64_t* out_modtime) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* filepath_wide = OS_UTF8ToWide(&temp, filepath, 1);
 
@@ -153,7 +156,7 @@ EXPORT bool OS_FileLastModificationTime(DS_MemTemp* m, STR_View filepath, uint64
 #define OS_COM_PTR_CALL(OBJECT, FN, ...) OBJECT->lpVtbl->FN(OBJECT, __VA_ARGS__)
 #endif
 
-EXPORT bool OS_FolderPicker(DS_MemScope* m, STR_View* out_path) {
+OS_API bool OS_FolderPicker(DS_MemScope* m, STR_View* out_path) {
 	bool ok = false;
 	if (SUCCEEDED(CoInitialize(NULL))) {
 		IFileDialog* dialog;
@@ -176,7 +179,7 @@ EXPORT bool OS_FolderPicker(DS_MemScope* m, STR_View* out_path) {
 				if (SUCCEEDED(OS_COM_PTR_CALL(dialog_result, GetDisplayName, SIGDN_FILESYSPATH, &path_wide))) {
 					ok = true;
 
-					*out_path = OS_WideToUTF8(m, path_wide);
+					OS_WideToUTF8(m, path_wide, out_path);
 
 					char* data = (char*)out_path->data;
 					for (int i = 0; i < out_path->size; i++) {
@@ -194,7 +197,7 @@ EXPORT bool OS_FolderPicker(DS_MemScope* m, STR_View* out_path) {
 	return ok;
 }
 
-EXPORT bool OS_GetAllFilesInDirectory(DS_MemScope* m, STR_View directory, OS_FileInfoArray* out_files) {
+OS_API bool OS_GetAllFilesInDirectory(DS_MemScope* m, STR_View directory, OS_FileInfoArray* out_files) {
 	DS_MemScope temp = DS_ScopeBegin(m);
 
 	char* match_str_data = DS_ArenaPush(temp.arena, directory.size + 2);
@@ -213,7 +216,7 @@ EXPORT bool OS_GetAllFilesInDirectory(DS_MemScope* m, STR_View directory, OS_Fil
 	if (ok) {
 		for (; FindNextFileW(handle, &find_info);) {
 			OS_FileInfo info = {0};
-			info.name = OS_WideToUTF8(m, find_info.cFileName);
+			OS_WideToUTF8(m, find_info.cFileName, &info.name);
 			info.is_directory = find_info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 			info.last_write_time = *(uint64_t*)&find_info.ftLastWriteTime;
 			if (info.name.size == 2 && info.name.data[0] == '.' && info.name.data[1] == '.') continue;
@@ -231,7 +234,7 @@ EXPORT bool OS_GetAllFilesInDirectory(DS_MemScope* m, STR_View directory, OS_Fil
 	return ok;
 }
 
-EXPORT bool OS_FilePicker(DS_MemScope* m, STR_View* out_path) {
+OS_API bool OS_FilePicker(DS_MemScope* m, STR_View* out_path) {
 	wchar_t buffer[MAX_PATH];
 	buffer[0] = 0;
 
@@ -248,23 +251,23 @@ EXPORT bool OS_FilePicker(DS_MemScope* m, STR_View* out_path) {
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 	GetOpenFileNameW(&ofn);
 	
-	*out_path = OS_WideToUTF8(m, buffer);
+	OS_WideToUTF8(m, buffer, out_path);
 	return out_path->size > 0;
 }
 
-EXPORT STR_View OS_GetThisExecutablePath(DS_MemScope* m) {
+OS_API void OS_GetThisExecutablePath(DS_MemScope* m, STR_View* out_path) {
 	wchar_t buf[MAX_PATH];
 	uint32_t n = GetModuleFileNameW(NULL, buf, MAX_PATH);
 	assert(n > 0 && n < MAX_PATH);
-	return OS_WideToUTF8(m, buf);
+	OS_WideToUTF8(m, buf, out_path);
 }
 
-EXPORT void OS_UnloadDLL(OS_DLL* dll) {
+OS_API void OS_UnloadDLL(OS_DLL* dll) {
 	bool ok = FreeLibrary((HINSTANCE)dll);
 	assert(ok);
 }
 
-EXPORT OS_DLL* OS_LoadDLL(DS_MemTemp* m, STR_View dll_path) {
+OS_API OS_DLL* OS_LoadDLL(DS_MemTemp* m, STR_View dll_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	
 	wchar_t* dll_path_wide = OS_UTF8ToWide(&temp, dll_path, 1);
@@ -274,6 +277,6 @@ EXPORT OS_DLL* OS_LoadDLL(DS_MemTemp* m, STR_View dll_path) {
 	return (OS_DLL*)handle;
 }
 
-EXPORT void* OS_GetProcAddress(OS_DLL* dll, const char* name) {
+OS_API void* OS_GetProcAddress(OS_DLL* dll, const char* name) {
 	return GetProcAddress((HMODULE)dll, name);
 }

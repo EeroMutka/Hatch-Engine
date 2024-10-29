@@ -1,20 +1,8 @@
-
-#define FIRE_BUILD_IMPLEMENTATION
-#define FIRE_OS_CLIPBOARD_IMPLEMENTATION
-#define FIRE_OS_WINDOW_IMPLEMENTATION
-
-//#define STB_RECT_PACK_IMPLEMENTATION
-//#define STB_TRUETYPE_IMPLEMENTATION
-
 #include "include/ht_internal.h"
 #include "include/ht_editor_render.h"
 
 #include "fire/fire_ui/fire_ui_backend_fire_os.h"
 #include "fire/fire_ui/fire_ui_backend_dx12.h"
-
-#include "utils/os_misc.c"
-#include "utils/os_directory_watch.c"
-#include "utils/ui_data_tree.c"
 
 // -- Globals -----------------------------
 
@@ -64,15 +52,18 @@ static void AppInit(EditorState* s) {
 	UI_Init(DS_HEAP, &ui_backend);
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
-	STR_View roboto_mono_ttf = OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/roboto_mono.ttf");
-	STR_View icons_ttf = OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/fontello/font/fontello.ttf");
+	STR_View roboto_mono_ttf, icons_ttf;
+	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
+	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
 	s->base_font = UI_FontInit(roboto_mono_ttf.data, -4.f);
 	s->icons_font = UI_FontInit(icons_ttf.data, -2.f);
 
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
-	s->hatch_install_directory = STR_BeforeLast(STR_BeforeLast(OS_GetThisExecutablePath(MEM_SCOPE(persist)), '\\'), '\\');
+	STR_View exe_path;
+	OS_GetThisExecutablePath(MEM_SCOPE(persist), &exe_path);
+	s->hatch_install_directory = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
 	
 	UI_PanelTreeInit(&s->panel_tree, DS_HEAP);
 	s->panel_tree.query_tab_name = QueryTabName;
@@ -152,27 +143,6 @@ static void AppInit(EditorState* s) {
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
 		
 		ComputeStructLayout(s->asset_tree.plugin_options_struct_type);
-	}
-}
-
-static void DebugPrint(const char* str) {
-	printf("DEBUG PRINT: %s\n", str);
-}
-
-static void UpdatePlugins(EditorState* s) {
-	HT_API api = {0};
-	api.DebugPrint = DebugPrint;
-	*(void**)&api.AddVertices = UI_AddVertices;
-	*(void**)&api.AddIndices = UI_AddIndices;
-
-	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
-		Asset* plugin = IT.elem;
-		if (AssetSlotIsEmpty(plugin)) continue;
-		if (plugin->kind != AssetKind_Plugin) continue;
-
-		if (plugin->plugin.dll_handle) {
-			plugin->plugin.dll_UpdatePlugin(&api);
-		}
 	}
 }
 

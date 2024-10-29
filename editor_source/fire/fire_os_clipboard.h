@@ -11,7 +11,7 @@
 #define FIRE_OS_CLIPBOARD_INCLUDED
 
 #ifndef OS_CLIPBOARD_API
-#define OS_CLIPBOARD_API static
+#define OS_CLIPBOARD_API
 #endif
 
 typedef void* (*OS_CLIPBOARD_AllocFn)(int size, void* alloc_data);

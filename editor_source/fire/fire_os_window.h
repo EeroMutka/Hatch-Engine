@@ -11,7 +11,7 @@
 #define FIRE_OS_WINDOW_INCLUDED
 
 #ifndef OS_WINDOW_API
-#define OS_WINDOW_API static
+#define OS_WINDOW_API
 #endif
 
 #include <stdint.h>
@@ -245,6 +245,7 @@ OS_WINDOW_API void OS_WINDOW_SetMouseCursorLockAndHide(OS_WINDOW* window, bool l
 
 #pragma comment(lib, "User32.lib")
 
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 OS_WINDOW_API OS_WINDOW OS_WINDOW_Create(uint32_t width, uint32_t height, const char* name) {

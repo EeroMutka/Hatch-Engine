@@ -1,5 +1,6 @@
+#include "os_directory_watch.h"
 
-static bool OS_InitDirectoryWatch(DS_MemTemp* m, OS_DirectoryWatch* watch, STR_View directory) {
+OS_API bool OS_InitDirectoryWatch(DS_MemTemp* m, OS_DirectoryWatch* watch, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* directory_wide = OS_UTF8ToWide(&temp, directory, 1);
 
@@ -11,7 +12,7 @@ static bool OS_InitDirectoryWatch(DS_MemTemp* m, OS_DirectoryWatch* watch, STR_V
 	return handle != INVALID_HANDLE_VALUE;
 }
 
-static void OS_DeinitDirectoryWatch(OS_DirectoryWatch* watch) {
+OS_API void OS_DeinitDirectoryWatch(OS_DirectoryWatch* watch) {
 	if (watch->handle) {
 		bool ok = FindCloseChangeNotification(watch->handle);
 		assert(ok);
@@ -19,7 +20,7 @@ static void OS_DeinitDirectoryWatch(OS_DirectoryWatch* watch) {
 	}
 }
 
-static bool OS_DirectoryWatchHasChanges(OS_DirectoryWatch* watch) {
+OS_API bool OS_DirectoryWatchHasChanges(OS_DirectoryWatch* watch) {
 	DWORD wait = WaitForSingleObject((HANDLE)watch->handle, 0);
 	if (wait == WAIT_OBJECT_0) {
 		bool ok = FindNextChangeNotification((HANDLE)watch->handle);

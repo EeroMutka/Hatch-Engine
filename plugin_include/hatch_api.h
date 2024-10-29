@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 
 typedef uint8_t   u8;
 typedef uint16_t  u16;
@@ -63,15 +64,14 @@ typedef union ivec4 {
 } ivec4;
 
 typedef struct string {
-	const char* data;
+	char* data;
 	int size;
-} string;
-
 #ifdef __cplusplus
-#define HT_EXPORT extern "C" __declspec(dllexport)
-#else
-#define HT_EXPORT __declspec(dllexport)
+	string() : data(0), size(0) {}
+	string(const char* _data, int _size) : data((char*)_data), size(_size) {}
+	string(const char* _cstr) : data((char*)_cstr), size(_cstr ? (int)strlen(_cstr) : 0) {}
 #endif
+} string;
 
 typedef struct HT_Color {
 	u8 r, g, b, a;
@@ -80,12 +80,20 @@ typedef struct HT_Color {
 
 typedef struct HT_DrawVertex {
 	vec2 position;
-	vec2 uv;
+	vec2 uv; // When no texture is used, the uv must be {0, 0}
 	HT_Color color;
 } HT_DrawVertex;
 #define HT_DRAW_VERTEX HT_LangAgnosticLiteral(HT_DrawVertex)
 
 typedef struct HT_Texture HT_Texture;
+
+typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
+
+#ifdef __cplusplus
+#define HT_EXPORT extern "C" __declspec(dllexport)
+#else
+#define HT_EXPORT __declspec(dllexport)
+#endif
 
 struct HT_API {
 	void (*DebugPrint)(const char* str);
@@ -111,8 +119,10 @@ struct HT_API {
 	
 	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);
 	
-	// texture may be NULL
+	// Texture may be NULL, in which case the DrawVertex uv's must be {0, 0}
 	u32* (*AddIndices)(int count, HT_Texture* texture);
+	
+	void (*DrawText)(string text, vec2 pos, HT_AlignH align, int font_size, HT_Color color);
 	
 	// ------------------------------------------------
 	

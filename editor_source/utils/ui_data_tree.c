@@ -1,3 +1,4 @@
+#include "ui_data_tree.h"
 
 static const float ARROW_AREA_WIDTH = 25.f;
 
@@ -50,16 +51,16 @@ static const float ARROW_AREA_WIDTH = 25.f;
 	return last_node;
 }*/
 
-struct UI_DataTreeDrawData {
+typedef struct UI_DataTreeDrawData {
 	int highlight_row_idx;
 	int half_highlight_row_idx;
 	bool selection_is_alive; // this shouldn't really be here...
-};
+} UI_DataTreeDrawData;
 
-struct UI_DataTreeRowDrawData {
+typedef struct UI_DataTreeRowDrawData {
 	bool has_arrow;
 	bool arrow_is_open;
-};
+} UI_DataTreeRowDrawData;
 
 static inline UI_Key UI_DataTreeSplittersKey() { return UI_KEY(); }
 static inline UI_Key UI_DataTreeDrawDataKey() { return UI_KEY(); }
@@ -104,7 +105,7 @@ static void UI_DataTreeComputeUnexpandedSize(UI_Box* box, UI_Axis axis, int pass
 				UI_BoxComputeUnexpandedSizeDefault(child, UI_Axis_X, 0, NULL);
 				UI_BoxComputeExpandedSize(child, UI_Axis_X, column_width);
 				
-				child->offset = {x, y};
+				child->offset = UI_VEC2{x, y};
 
 				UI_BoxComputeUnexpandedSizeDefault(child, UI_Axis_Y, 0, NULL);
 				row_height = UI_Max(row_height, child->computed_unexpanded_size.y);
@@ -157,12 +158,12 @@ static void UI_DataTreeDraw(UI_Box* box) {
 		// draw arrow
 		// TODO: I think we should do the arrows as button boxes.
 		if (row_draw_data.has_arrow) {
-			UI_DrawText(row_draw_data.arrow_is_open ? "\x44" : "\x46", UI_STATE.icons_font,
-				{
+			UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), UI_STATE.icons_font,
+				UI_VEC2{
 					child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
 					child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
 				},
-				UI_AlignH_Left, UI_AlignV_Upper, UI_WHITE, NULL);
+				UI_AlignH_Left, UI_WHITE, NULL);
 		}
 		
 		child = iter;
@@ -218,7 +219,7 @@ static void UI_AddDataTreeNode(UI_Key parent_key, UI_Box* root, UI_DataTree* tre
 		if (i == 0) {
 			if (tree->allow_selection) {
 				if (UI_InputWasPressed(UI_Input_MouseLeft)/* || UI_InputWasPressed(UI_Input_MouseRight)*/) {
-					UI_Rect first_node_rect = node_box->prev_frame ? node_box->prev_frame->computed_rect : UI_Rect{};
+					UI_Rect first_node_rect = node_box->prev_frame ? node_box->prev_frame->computed_rect : UI_RECT{0};
 					UI_Rect row_rect = {{-10000000.f, first_node_rect.min.y}, {10000000.f, first_node_rect.max.y}};
 					if (UI_IsHoveredIdle(root) && UI_PointIsInRect(row_rect, UI_STATE.mouse_pos)) {
 						state->pressing = node->key;
@@ -275,7 +276,7 @@ UI_API void UI_AddDataTree(UI_Box* box, UI_Size w, UI_Size h, UI_DataTree* tree,
 
 	UI_AddBox(box, w, h, 0);
 
-	UI_Rect inputs_rect = box->prev_frame ? box->prev_frame->computed_rect : UI_Rect{};
+	UI_Rect inputs_rect = box->prev_frame ? box->prev_frame->computed_rect : UI_RECT{0};
 	UI_SplittersState* splitters = UI_Splitters(UI_BKEY(box), inputs_rect, UI_Axis_X, tree->num_columns, 6.f);
 	
 	//for (int i = 1; i < tree->num_columns; i++) {
@@ -289,7 +290,7 @@ UI_API void UI_AddDataTree(UI_Box* box, UI_Size w, UI_Size h, UI_DataTree* tree,
 	UI_DataTreeNode* prev_elem = NULL;
 	//state->moved_this_frame = false;
 
-	UI_DataTreeDrawData draw_data = {};
+	UI_DataTreeDrawData draw_data = {0};
 	draw_data.highlight_row_idx = -1;
 	draw_data.half_highlight_row_idx = -1;
 
@@ -339,7 +340,7 @@ UI_API void UI_AddDataTree(UI_Box* box, UI_Size w, UI_Size h, UI_DataTree* tree,
 
 			state->drag_n_dropping_new = 0;
 			state->pressing = 0;
-			state->mouse_travel_after_press = {};
+			state->mouse_travel_after_press = UI_VEC2{0};
 		}
 	}
 
