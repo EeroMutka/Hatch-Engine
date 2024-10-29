@@ -109,23 +109,26 @@ typedef struct UI_Text {
 #define UI_TextToStr(TEXT) UI_LangAgnosticLiteral(STR_View){(const char*)(TEXT).text.data, (TEXT).text.count}
 
 typedef struct UI_CachedGlyphKey {
-	// !!! memcmp is used on this struct, so it must be manually padded for 0-initialized padding.
+	// !!! memcmp is used on this struct, so it must not have any compiler-generated padding.
 	uint32_t codepoint;
-	int size;
+	uint16_t font_index;
+	uint16_t font_size;
 } UI_CachedGlyphKey;
 
 typedef struct UI_CachedGlyph {
+	uint32_t atlas_slot_index : 31;
+	uint32_t used_this_frame : 1;
 	UI_Vec2 origin_uv;     // in UV coordinates
 	UI_Vec2 size_pixels;   // in pixel coordinates
 	UI_Vec2 offset_pixels; // in pixel coordinates
 	float x_advance;      // advance to the next character in pixel coordinates
 } UI_CachedGlyph;
 
-typedef int32_t UI_FontIndex;
+typedef uint16_t UI_FontIndex;
 
 typedef struct UI_FontView {
 	UI_FontIndex font;
-	int32_t size;
+	int size;
 } UI_FontView;
 
 typedef struct UI_ArrangerSet {
@@ -324,9 +327,10 @@ typedef struct UI_Outputs {
 } UI_Outputs;
 
 typedef DS_Map(UI_Key, void*) UI_PtrFromKeyMap;
+typedef DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) UI_GlyphMap;
 
 typedef struct UI_AtlasSlot {
-	bool is_taken;
+	bool occupied;
 } UI_AtlasSlot;
 
 typedef struct UI_AtlasAllocator {
@@ -343,13 +347,13 @@ typedef struct UI_AtlasAllocator {
 	int tex_height;
 } UI_AtlasAllocator;
 
-typedef struct UI_AtlasSlotIndex {
+typedef struct UI_AtlasSlotInfo {
 	int x0;
 	int y0;
 	int x1;
 	int y1;
 	int slot_index;
-} UI_AtlasSlotIndex;
+} UI_AtlasSlotInfo;
 
 typedef struct UI_State {
 	DS_Allocator* allocator;
@@ -376,12 +380,9 @@ typedef struct UI_State {
 	UI_AtlasAllocator atlas_allocator;
 	UI_Texture* atlas;
 	void* atlas_mapped_ptr;
-	// atlas
-	//stbtt_pack_context pack_context;
-	//bool atlas_needs_reupload;
-	//UI_Texture* atlases[2]; // 0 is the current atlas, 1 is NULL or the old atlas
-	//uint8_t* atlas_buffer_grayscale; // stb truetype works with grayscale, but we want to convert to RGBA8 on the fly.
-
+	
+	UI_GlyphMap glyph_map;
+	
 	// Mouse position in screen space coordinates, snapped to the pixel center. Placing it at the pixel center means we don't
 	// need to worry about dUI_enerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
 	UI_Vec2 mouse_pos;
@@ -409,7 +410,7 @@ typedef struct UI_State {
 	UI_DrawVertex* draw_vertices; // NULL by default
 	uint32_t draw_next_vertex;
 	uint32_t draw_next_index;
-	UI_Texture* draw_active_texture;
+	UI_Texture* draw_active_texture; // NULL means use the atlas texture
 	DS_DynArray(UI_DrawCall) draw_calls;
 } UI_State;
 
@@ -510,8 +511,8 @@ UI_API void UI_RectPad(UI_Rect* rect, float pad);
 UI_API void UI_AtlasAllocatorInit(UI_AtlasAllocator* atlas, DS_Allocator* allocator);
 UI_API void UI_AtlasAllocatorDeinit(UI_AtlasAllocator* atlas);
 
-UI_API UI_AtlasSlotIndex UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width);
-//UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, UI_AtlasSlotIndex slot);
+UI_API UI_AtlasSlotInfo UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width);
+UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, int slot_index);
 
 /*
  `resources_directory` is the path of the `resources` folder that is shipped with FUI.
