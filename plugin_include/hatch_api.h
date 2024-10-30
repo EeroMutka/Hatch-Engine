@@ -85,6 +85,14 @@ typedef struct HT_DrawVertex {
 } HT_DrawVertex;
 #define HT_DRAW_VERTEX HT_LangAgnosticLiteral(HT_DrawVertex)
 
+typedef struct HT_CachedGlyph {
+	vec2 uv_min; // in normalized UV coordinates
+	vec2 uv_max; // in normalized UV coordinates
+	vec2 offset; // in pixel coordinates
+	vec2 size;   // in pixel coordinates
+	float advance; // X-advance to the next character in pixel coordinates
+} HT_CachedGlyph;
+
 typedef struct HT_Texture HT_Texture;
 
 typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
@@ -129,12 +137,21 @@ struct HT_API {
 	
 	// -- UI functions --------------------------------
 	
+	// !!! WARNING !!! pointers received from previous calls to AddVertices may be invalid after calling this!
+	// TODO: flip the API around to require passing a pointer to vertices and indices.
 	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);
 	
-	// Texture may be NULL, in which case the DrawVertex uv must be {0, 0}
+	// Texture may be NULL, in which case the default font atlas will be used.
+	// When the uv is {0, 0} and the default font atlas is used, the triangles
+	// will read a white pixel from the atlas resulting in untextured geometry.
+	// !!! WARNING !!! pointers received from previous calls to AddIndices may be invalid after calling this!
 	u32* (*AddIndices)(int count, HT_Texture* texture);
 	
-	void (*DrawText)(string text, vec2 pos, HT_AlignH align, int font_size, HT_Color color);
+	// Maybe we can still have a basic 2D drawing lib built into the API.
+	// Like draw text, draw circle, draw rect, etc.
+	// void (*DrawText)(string text, vec2 pos, HT_AlignH align, int font_size, HT_Color color);
+	
+	HT_CachedGlyph (*GetCachedGlyph)(u32 codepoint);
 	
 	// ------------------------------------------------
 	

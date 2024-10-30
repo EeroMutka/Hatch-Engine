@@ -11,6 +11,8 @@ static void UI_ValEditArrayScrollAreaComputeUnexpandedSize(UI_Box* box, UI_Axis 
 
 UI_API void UI_AddValArray(UI_Box* box, const char* name, void* array, int array_count, int elem_size, UI_ArrayEditElemFn edit_elem, void* user_data, UI_ValueEditArrayModify* out_modify)
 {
+	UI_TODO();
+#if 0
 	UI_AddBox(box, UI_SizeFlex(1.f), UI_SizeFit(), 0);
 	UI_PushBox(box);
 
@@ -94,6 +96,7 @@ UI_API void UI_AddValArray(UI_Box* box, const char* name, void* array, int array
 	}
 
 	UI_PopBox(box);
+#endif
 }
 
 // default_value may be NULL, in which case the element is zero-initialized
@@ -346,7 +349,6 @@ static void UI_DrawBoxWithTextWrapped(UI_Box* box) {
 UI_API void UI_AddLabelWrapped(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string) {
 	UI_AddBox(box, w, h, flags);
 	box->text = string;
-	box->font = UI_STATE.base_font;
 	box->inner_padding = UI_DEFAULT_TEXT_PADDING;
 	box->compute_unexpanded_size = UI_AddLabelWrappedComputeUnexpandedSize;
 	box->draw = UI_DrawBoxWithTextWrapped;

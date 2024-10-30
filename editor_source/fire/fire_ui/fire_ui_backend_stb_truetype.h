@@ -35,7 +35,16 @@ typedef struct UI_STBTT_AtlasParams {
 	int level_count;
 } UI_STBTT_AtlasParams;
 
+typedef UI_Texture* (*UI_STBTT_CreateAtlasFn)(uint32_t width, uint32_t height);
+
+// When mapping a resource, the returned pointer must stay valid until UI_EndFrame or resize_* is called.
+// The map function may be called multiple times during a frame, subsequent calls should return the previously mapped pointer!
+typedef void* (*UI_STBTT_MapAtlasFn)();
+
 typedef struct UI_STBTT_State {
+	UI_STBTT_CreateAtlasFn CreateAtlas;
+	UI_STBTT_MapAtlasFn MapAtlas;
+	
 	DS_DynArray(UI_FontData) fonts;
 	DS_Map(UI_CachedGlyphKey, UI_STBTT_CachedGlyph) glyph_map;
 	
@@ -49,7 +58,8 @@ typedef struct UI_STBTT_State {
 	float inv_atlas_height;
 } UI_STBTT_State;
 
-static void UI_STBTT_Init();
+
+static void UI_STBTT_Init(UI_STBTT_CreateAtlasFn CreateAtlas, UI_STBTT_MapAtlasFn MapAtlas);
 static void UI_STBTT_Deinit();
 
 // `ttf_data` should be a pointer to a TTF font file data. It is NOT copied internally,
@@ -123,7 +133,7 @@ static UI_CachedGlyph UI_STBTT_GetCachedGlyph(uint32_t codepoint, UI_Font font) 
 		memset(glyph_data, 0, glyph_w*glyph_h);
 		stbtt_MakeGlyphBitmapSubpixel(&font_data->font_info, glyph_data, glyph_w, glyph_h, glyph_w, scale, scale, 0.f, 0.f, glyph_index);
 
-		uint32_t* atlas_data = (uint32_t*)UI_STATE.backend.map_atlas();
+		uint32_t* atlas_data = (uint32_t*)UI_STBTT_STATE.MapAtlas();
 		UI_ASSERT(atlas_data);
 
 		for (int y = 0; y < glyph_h; y++) {
@@ -140,13 +150,15 @@ static UI_CachedGlyph UI_STBTT_GetCachedGlyph(uint32_t codepoint, UI_Font font) 
 		stbtt_GetGlyphHMetrics(&font_data->font_info, glyph_index, &x_advance, &left_side_bearing);
 
 		glyph->atlas_slot_index = (uint32_t)atlas_slot.slot_index;
-		glyph->info.origin_uv.x = (float)atlas_slot.x0 * (float)UI_STBTT_STATE.inv_atlas_width;
-		glyph->info.origin_uv.y = (float)atlas_slot.y0 * (float)UI_STBTT_STATE.inv_atlas_height;
-		glyph->info.size_pixels.x = (float)glyph_w;
-		glyph->info.size_pixels.y = (float)glyph_h;
-		glyph->info.offset_pixels.x = (float)x0;
-		glyph->info.offset_pixels.y = (float)y0 + (float)font.size + font_data->y_offset;
-		glyph->info.x_advance = (float)(int)((float)x_advance*scale + 0.5f); // round to integer
+		glyph->info.uv_min.x = (float)atlas_slot.x0 * (float)UI_STBTT_STATE.inv_atlas_width;
+		glyph->info.uv_min.y = (float)atlas_slot.y0 * (float)UI_STBTT_STATE.inv_atlas_height;
+		glyph->info.uv_max.x = glyph->info.uv_min.x + (float)glyph_w * (float)UI_STBTT_STATE.inv_atlas_width;
+		glyph->info.uv_max.y = glyph->info.uv_min.y + (float)glyph_h * (float)UI_STBTT_STATE.inv_atlas_height;
+		glyph->info.size.x = (float)glyph_w;
+		glyph->info.size.y = (float)glyph_h;
+		glyph->info.offset.x = (float)x0;
+		glyph->info.offset.y = (float)y0 + (float)font.size + font_data->y_offset;
+		glyph->info.advance = (float)(int)((float)x_advance*scale + 0.5f); // round to integer
 	}
 
 	glyph->used_this_frame = 1;
@@ -155,25 +167,28 @@ static UI_CachedGlyph UI_STBTT_GetCachedGlyph(uint32_t codepoint, UI_Font font) 
 	return glyph->info;
 }
 
-static void UI_STBTT_Init() {
+static void UI_STBTT_Init(UI_STBTT_CreateAtlasFn CreateAtlas, UI_STBTT_MapAtlasFn MapAtlas) {
+	UI_STBTT_STATE.CreateAtlas = CreateAtlas;
+	UI_STBTT_STATE.MapAtlas = MapAtlas;
+	
 	DS_MapInit(&UI_STBTT_STATE.glyph_map, UI_STATE.allocator);
 	DS_ArrInit(&UI_STBTT_STATE.fonts, UI_STATE.allocator);
 
 	// hard-code the parameters for now
-	UI_STBTT_AtlasParams params;
-	params.level0_num_slots_x = 16;
-	params.level0_num_slots_y = 8;
-	params.level0_slot_size = 128;
-	params.level_count = 4;
-	UI_STBTT_STATE.atlas_params = params;
+	UI_STBTT_AtlasParams atlas_params;
+	atlas_params.level0_num_slots_x = 16;
+	atlas_params.level0_num_slots_y = 8;
+	atlas_params.level0_slot_size = 128;
+	atlas_params.level_count = 4;
+	UI_STBTT_STATE.atlas_params = atlas_params;
 
-	int width = params.level0_slot_size;
-	int num_slots_y = params.level0_num_slots_y;
-	int num_slots_x = params.level0_num_slots_x;
+	int width = atlas_params.level0_slot_size;
+	int num_slots_y = atlas_params.level0_num_slots_y;
+	int num_slots_x = atlas_params.level0_num_slots_x;
 	int tex_size_y = 0;
 	int num_slots_total = 0;
 	
-	for (int l = 0; l < params.level_count; l++) {
+	for (int l = 0; l < atlas_params.level_count; l++) {
 		tex_size_y += width * num_slots_y;
 		width /= 2;
 		num_slots_total += num_slots_x * num_slots_y;
@@ -183,24 +198,20 @@ static void UI_STBTT_Init() {
 	UI_STBTT_STATE.atlas_slots = (UI_STBTT_AtlasSlot*)DS_MemAlloc(UI_STATE.allocator, sizeof(UI_STBTT_AtlasSlot) * num_slots_total);
 	memset(UI_STBTT_STATE.atlas_slots, 0, sizeof(UI_STBTT_AtlasSlot) * num_slots_total);
 	
-	UI_STBTT_STATE.atlas_width = params.level0_slot_size * params.level0_num_slots_x;
+	UI_STBTT_STATE.atlas_width = atlas_params.level0_slot_size * atlas_params.level0_num_slots_x;
 	UI_STBTT_STATE.atlas_height = tex_size_y;
 	UI_STBTT_STATE.inv_atlas_width = 1.f / (float)UI_STBTT_STATE.atlas_width;
 	UI_STBTT_STATE.inv_atlas_height = 1.f / (float)UI_STBTT_STATE.atlas_height;
 	
 	// Initialize atlas texture
 	{
-		UI_STATE.backend.atlas = UI_STATE.backend.create_atlas(UI_STBTT_STATE.atlas_width, UI_STBTT_STATE.atlas_height);
-		UI_ASSERT(UI_STATE.backend.atlas != NULL);
-		
-		UI_STATE.backend.inv_atlas_size.x = UI_STBTT_STATE.inv_atlas_width;
-		UI_STATE.backend.inv_atlas_size.y = UI_STBTT_STATE.inv_atlas_height;
+		UI_STBTT_STATE.CreateAtlas(UI_STBTT_STATE.atlas_width, UI_STBTT_STATE.atlas_height);
 
 		// Allocate the first possible slot from the atlas allocator, which ends up being the slot in the top-left corner.
 		// This lets us set the top-left corner pixel to be opaque and white. This makes sure that any vertices with an uv of {0, 0}
 		// ends up sampling a white pixel from the atlas and will therefore act as if there was not texture.
 		UI_STBTT_AtlasAllocateSlot(0);
-		void* atlas_data = UI_STATE.backend.map_atlas();
+		void* atlas_data = UI_STBTT_STATE.MapAtlas();
 		*(uint32_t*)atlas_data = 0xFFFFFFFF;
 	}
 

@@ -27,6 +27,22 @@ EXPORT bool UIOrderedDropdownShouldClose(UIDropdownState* s, UI_Box* box) {
 	return UI_InputWasPressed(UI_Input_MouseLeft) && s->has_added_deepest_hovered_root && box->prev_frame != NULL;
 }
 
+EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string, UI_Font icons_font) {
+	UI_ProfEnter();
+	flags |= UI_BoxFlag_Horizontal | UI_BoxFlag_Clickable | UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder |UI_BoxFlag_DrawTransparentBackground;
+	UI_AddBox(box, w, h, flags);
+	UI_PushBox(box);
+
+	UI_AddLabel(UI_BBOX(box), UI_SizeFlex(1.f), UI_SizeFit(), 0, string);
+
+	UI_Box* icon_box = UI_BBOX(box);
+	UI_AddLabel(icon_box, UI_SizeFit(), UI_SizeFit(), 0, STR_V("\x44"));
+	icon_box->font = icons_font;
+
+	UI_PopBox(box);
+	UI_ProfExit();
+}
+
 EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator) {
 	DS_SlotAllocatorInit(&tree->panels, allocator);
 }
@@ -61,7 +77,7 @@ EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel) {
 	DS_FreeSlot(&tree->panels, panel);
 }
 
-EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Panel** out_hovered) {
+EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered) {
 	if (panel->end_child[0] == NULL) {
 		// leaf panel
 		
@@ -127,7 +143,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Re
 			UI_BoxFlags close_flags = UI_BoxFlag_Clickable | UI_BoxFlag_Selectable | UI_BoxFlag_HasText;
 			UI_Box* tab_close_button = UI_BBOX(tab_button);
 			UI_AddLabel(tab_close_button, UI_SizeFit(), UI_SizeFit(), close_flags, "J");
-			tab_close_button->font = UI_STATE.icons_font;
+			tab_close_button->font = icons_font;
 
 			if (UI_Clicked(tab_close_button)) {
 				should_close_tab = i;
@@ -195,7 +211,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Re
 			UI_Rect rect = area_rect;
 			rect.min._[X] = area_rect.min._[X] + start + 1.f;
 			rect.max._[X] = area_rect.min._[X] + end - 1.f;
-			UI_PanelTreeUpdateAndDraw(tree, child, rect, splitter_is_hovered, out_hovered);
+			UI_PanelTreeUpdateAndDraw(tree, child, rect, splitter_is_hovered, icons_font, out_hovered);
 
 			start = end;
 			i++;
@@ -305,7 +321,7 @@ EXPORT void AddNewTabToActivePanel(UI_PanelTree* tree, UI_Tab* tab) {
 	}
 }
 
-EXPORT void UIAddAssetIcon(UI_Box* box, Asset* asset) {
+EXPORT void UIAddAssetIcon(UI_Box* box, Asset* asset, UI_Font icons_font) {
 	UI_AddLabel(box, 15.f, UI_SizeFit(), 0,
 		asset->kind == AssetKind_Package ? "\x4c" :
 		asset->kind == AssetKind_Folder ? (asset->ui_state_is_open ? "\x56" : "\x55") :
@@ -316,7 +332,7 @@ EXPORT void UIAddAssetIcon(UI_Box* box, Asset* asset) {
 	);
 	box->inner_padding.x = 2.f;
 	box->inner_padding.y = 7.f;
-	box->font = UI_STATE.icons_font;
+	box->font = icons_font;
 	box->font.size -= 4;
 	//box->draw_args = UI_DrawBoxDefaultArgsInit();
 	//box->draw_args->text_color =

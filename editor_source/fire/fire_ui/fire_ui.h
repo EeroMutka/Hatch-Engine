@@ -116,10 +116,11 @@ typedef struct UI_CachedGlyphKey {
 } UI_CachedGlyphKey;
 
 typedef struct UI_CachedGlyph {
-	UI_Vec2 origin_uv;     // in UV coordinates
-	UI_Vec2 size_pixels;   // in pixel coordinates
-	UI_Vec2 offset_pixels; // in pixel coordinates
-	float x_advance;      // advance to the next character in pixel coordinates
+	UI_Vec2 uv_min; // in normalized UV coordinates
+	UI_Vec2 uv_max; // in normalized UV coordinates
+	UI_Vec2 offset; // in pixel coordinates
+	UI_Vec2 size;   // in pixel coordinates
+	float advance; // X-advance to the next character in pixel coordinates
 } UI_CachedGlyph;
 
 typedef uint16_t UI_FontID;
@@ -222,11 +223,11 @@ typedef enum UI_AlignH { UI_AlignH_Left, UI_AlignH_Middle, UI_AlignH_Right } UI_
 
 typedef struct UI_Texture UI_Texture; // user-defined structure
 
-typedef struct UI_DrawCall {
-	UI_Texture* texture;
+typedef struct UI_DrawCommand {
+	UI_Texture* texture; // NULL means the atlas texture
 	uint32_t first_index;
 	uint32_t index_count;
-} UI_DrawCall;
+} UI_DrawCommand;
 
 typedef struct UI_DrawRectCorners {
 	// The following order applies: top-left, top-right, bottom-right, bottom-left
@@ -272,21 +273,12 @@ typedef enum UI_InputEvent {
 } UI_InputEvent;
 
 typedef struct UI_Backend {
-	// -- Drawing ---------------------------------
+	// Rendering
+	UI_DrawVertex* (*ResizeAndMapVertexBuffer)(int num_vertices);
+	uint32_t* (*ResizeAndMapIndexBuffer)(int num_indices);
 	
-	UI_Texture* (*create_atlas)(uint32_t width, uint32_t height);
-
-	// When mapping a resource, the returned pointer must stay valid until UI_EndFrame or resize_* is called.
-	// The map function may be called multiple times during a frame, subsequent calls should return the previously mapped pointer!
-	void* (*map_atlas)();
-	void* (*map_vertex_buffer)();
-	void* (*map_index_buffer)();
-	
-	// -- Text rendering --------------------------
-	
+	// Text rendering
 	UI_CachedGlyph (*GetCachedGlyph)(uint32_t codepoint, UI_Font font);
-	UI_Vec2 inv_atlas_size;
-	UI_Texture* atlas;
 } UI_Backend;
 
 typedef struct UI_Inputs {
@@ -319,8 +311,8 @@ typedef struct UI_Outputs {
 	UI_MouseCursor cursor;
 	bool lock_and_hide_cursor;
 
-	UI_DrawCall* draw_calls;
-	int draw_calls_count;
+	UI_DrawCommand* draw_commands;
+	int draw_commands_count;
 } UI_Outputs;
 
 typedef DS_Map(UI_Key, void*) UI_PtrFromKeyMap;
@@ -344,14 +336,11 @@ typedef struct UI_State {
 	bool input_is_down[UI_Input_COUNT];
 
 	float time_since_pressed_lmb;
-
-	UI_Texture* atlas;
 	
 	// Mouse position in screen space coordinates, snapped to the pixel center. Placing it at the pixel center means we don't
 	// need to worry about degenerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
 	UI_Vec2 mouse_pos;
-	UI_Vec2 window_size;
-
+	
 	UI_Vec2 last_released_mouse_pos; // Cleanup: remove from this struct
 	UI_Vec2 mouse_travel_distance_after_press; // NOTE: holding alt/shift will modify the speed at which this value changes. Cleanup: remove from this struct
 
@@ -364,18 +353,23 @@ typedef struct UI_State {
 	
 	float scrollbar_origin_before_press; // Cleanup: remove from this struct
 	
-	// -- Builder state --
-	UI_Font base_font;
-	UI_Font icons_font;
+	// -- Builder state -----------------------
+	
+	UI_Font default_font;
 	DS_DynArray(UI_Box*) box_stack;
 
-	// -- Draw state --
-	uint32_t* draw_indices; // NULL by default
-	UI_DrawVertex* draw_vertices; // NULL by default
-	uint32_t draw_next_vertex;
-	uint32_t draw_next_index;
-	UI_Texture* draw_active_texture; // NULL means the atlas texture
-	DS_DynArray(UI_DrawCall) draw_calls;
+	// -- Draw state --------------------------
+	
+	uint32_t* index_buffer;
+	int index_buffer_count;
+	int index_buffer_capacity;
+	
+	UI_DrawVertex* vertex_buffer;
+	int vertex_buffer_count;
+	int vertex_buffer_capacity;
+	
+	UI_Texture* active_texture; // NULL means the atlas texture
+	DS_DynArray(UI_DrawCommand) draw_commands;
 } UI_State;
 
 #define UI_LIGHTGRAY  UI_COLOR{200, 200, 200, 255}
@@ -404,12 +398,16 @@ typedef struct UI_State {
 #define UI_BLANK      UI_COLOR{0, 0, 0, 0}
 #define UI_MAGENTA    UI_COLOR{255, 0, 255, 255}
 
-#ifndef UI_API
+#ifndef UI_EXTERN
 #ifdef __cplusplus
-#define UI_API extern "C"
+#define UI_EXTERN extern "C"
 #else
-#define UI_API extern
+#define UI_EXTERN extern
 #endif
+#endif
+
+#ifndef UI_API
+#define UI_API UI_EXTERN
 #endif
 
 typedef const UI_Rect* UI_ScissorRect; // may be NULL for no scissor
@@ -433,14 +431,10 @@ typedef struct UI_SplittersState {
 	int panel_count;
 } UI_SplittersState;
 
-// TODO: resizable vertex / index buffers
-#define UI_MAX_VERTEX_COUNT 65536*2
-#define UI_MAX_INDEX_COUNT  65536*4
-
 static const UI_Vec2 UI_DEFAULT_TEXT_PADDING = { 10.f, 5.f };
 
 // -- Global state -------
-UI_API UI_State UI_STATE;
+UI_EXTERN UI_State UI_STATE;
 // -----------------------
 
 static inline bool UI_InputIsDown(UI_Input input)               { return UI_STATE.input_is_down[input]; }
@@ -479,8 +473,8 @@ UI_API void UI_RectPad(UI_Rect* rect, float pad);
 UI_API void UI_Init(DS_Allocator* allocator);
 UI_API void UI_Deinit(void);
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font base_font, UI_Font icons_font);
-UI_API void UI_EndFrame(UI_Outputs* outputs/*, GPU_Graph *graph, GPU_DescriptorArena *descriptor_arena*/);
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font);
+UI_API void UI_EndFrame(UI_Outputs* outputs);
 
 /*
  The way customization is meant to work with FUI is that if you want to add a new feature, then you simply
@@ -515,8 +509,6 @@ UI_API void UI_AddLabel(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, ST
 
 UI_API void UI_AddButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string);
 
-UI_API void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string);
-
 UI_API void UI_AddCheckbox(UI_Box* box, bool* value);
 
 UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text* text);
@@ -529,8 +521,9 @@ UI_API UI_ValNumericState* UI_AddValFloat64(UI_Box* box, UI_Size w, UI_Size h, d
 UI_API UI_ValNumericState* UI_AddValNumeric(UI_Box* box, UI_Size w, UI_Size h, void* value_64_bit, bool is_signed, bool is_float);
 
 // - Returns false if the collapsable header is closed.
-UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text);
-UI_API void UI_PopCollapsing(UI_Box* box);
+// TODO: draw a custom icon without relying on an icons font.
+//UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text, UI_Font icons_font);
+//UI_API void UI_PopCollapsing(UI_Box* box);
 
 UI_API void UI_TextInit(DS_Allocator* allocator, UI_Text* text, STR_View initial_value);
 UI_API void UI_TextDeinit(UI_Text* text);
@@ -545,9 +538,6 @@ UI_API void UI_PopArrangerSet(UI_Box* box, UI_ArrangersRequest* out_edit_request
 UI_API void UI_AddArranger(UI_Box* box, UI_Size w, UI_Size h);
 
 // --------------------------------------
-
-//UI_API UI_Box* UI_PrevFrameBoxFromKey(UI_Key key); // Returns NULL if a box with this key did not exist
-//UI_API UI_Box* UI_BoxFromKey(UI_Key key); // Returns NULL if a box with this key has not been created this frame so far
 
 #define UI_BoxAddVar(BOX, KEY, VALUE)            UI_BoxAddVarData(BOX, KEY, VALUE, sizeof(*VALUE))
 
@@ -589,7 +579,7 @@ UI_API void UI_EditTextSelectAll(const UI_Text* text, UI_Selection* selection);
 UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int panel_count, float panel_min_size);
 UI_API void UI_SplittersNormalizeToTotalSize(UI_SplittersState* splitters, float total_size);
 
-UI_API float UI_GlyphWidth(uint32_t codepoint, UI_Font font);
+UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font);
 UI_API float UI_TextWidth(STR_View text, UI_Font font);
 
 // -- Drawing ----------------------

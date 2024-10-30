@@ -16,31 +16,15 @@ UI_API void UI_AddButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, S
 	UI_ProfExit();
 }
 
-UI_API void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string) {
-	UI_ProfEnter();
-	flags |= UI_BoxFlag_Horizontal | UI_BoxFlag_Clickable | UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder |UI_BoxFlag_DrawTransparentBackground;
-	UI_AddBox(box, w, h, flags);
-	UI_PushBox(box);
-
-	UI_AddLabel(UI_BBOX(box), UI_SizeFlex(1.f), UI_SizeFit(), 0, string);
-
-	UI_Box* icon_box = UI_BBOX(box);
-	UI_AddLabel(icon_box, UI_SizeFit(), UI_SizeFit(), 0, STR_V("\x44"));
-	icon_box->font = UI_STATE.icons_font;
-	
-	UI_PopBox(box);
-	UI_ProfExit();
-}
-
 static int UI_ColumnFromXOffset(float x, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	int column = 0;
 	float start_x = 0.f;
 	for STR_Each(line, r, offset) {
-		float glyph_width = UI_GlyphWidth(r, font);
-		float mid_x = start_x + 0.5f * glyph_width;
+		float glyph_advance = UI_GlyphAdvance(r, font);
+		float mid_x = start_x + 0.5f * glyph_advance;
 		if (x >= mid_x) column++;
-		start_x += glyph_width;
+		start_x += glyph_advance;
 	}
 	UI_ProfExit();
 	return column;
@@ -52,7 +36,7 @@ static float UI_XOffsetFromColumn(int col, STR_View line, UI_Font font) {
 	int i = 0;
 	for STR_Each(line, r, offset) {
 		if (i == col) break;
-		x += UI_GlyphWidth(r, font);
+		x += UI_GlyphAdvance(r, font);
 		i++;
 	}
 	UI_ProfExit();
@@ -505,7 +489,7 @@ static void UI_DrawValTextInnerBox(UI_Box* box) {
 UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text* text) {
 	UI_ProfEnter();
 
-	UI_Font font = UI_STATE.base_font;
+	UI_Font font = UI_STATE.default_font;
 
 	UI_AddBox(box, w, h, UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder | UI_BoxFlag_Clickable);
 	UI_PushBox(box);
@@ -642,7 +626,9 @@ UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text
 UI_API void UI_AddCheckbox(UI_Box* box, bool* value) {
 	UI_ProfEnter();
 
-	float h = UI_STATE.base_font.size + 2.f * UI_DEFAULT_TEXT_PADDING.y;
+	__debugbreak();
+	/*
+	float h = UI_STATE.default_font.size + 2.f * UI_DEFAULT_TEXT_PADDING.y;
 
 	UI_AddBox(box, h, h, 0);
 	box->inner_padding = UI_VEC2{ 5.f, 5.f };
@@ -662,7 +648,7 @@ UI_API void UI_AddCheckbox(UI_Box* box, bool* value) {
 	UI_PopBox(box);
 
 	if (UI_Pressed(inner)) *value = !*value;
-	
+	*/
 	UI_ProfExit();
 }
 
@@ -670,12 +656,11 @@ UI_API void UI_AddLabel(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, ST
 	UI_ProfEnter();
 	UI_AddBox(box, w, h, flags | UI_BoxFlag_HasText);
 	box->text = STR_Clone(&UI_STATE.frame_arena, string);
-	box->font = UI_STATE.base_font;
 	box->inner_padding = UI_DEFAULT_TEXT_PADDING;
 	UI_ProfExit();
 }
 
-UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text) {
+/*UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text, UI_Font icons_font) {
 	UI_ProfEnter();
 	
 	UI_Box* header = UI_BBOX(box);
@@ -712,7 +697,7 @@ UI_API void UI_PopCollapsing(UI_Box* box) {
 	UI_PopBox(box->last_child);
 	UI_PopBox(box);
 	UI_ProfExit();
-}
+}*/
 
 UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y) {
 	UI_ProfEnter();
@@ -1247,6 +1232,7 @@ UI_API UI_Box* UI_GetOrAddBox(UI_Key key, bool assert_newly_added) {
 UI_API UI_Box* UI_InitBox(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags) {
 	UI_ProfEnter();
 
+	box->font = UI_STATE.default_font;
 	box->size[0] = w;
 	box->size[1] = h;
 	box->flags = flags;
@@ -1334,25 +1320,31 @@ UI_API void UI_PopBoxN(UI_Box* box, int n) {
 	UI_ASSERT(last_popped == box);
 }
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font base_font, UI_Font icons_font) {
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font) {
 	UI_ProfEnter();
 
-	UI_STATE.draw_next_vertex = 0;
-	UI_STATE.draw_next_index = 0;
-	UI_STATE.draw_vertices = (UI_DrawVertex*)UI_STATE.backend.map_vertex_buffer();
-	UI_STATE.draw_indices = (uint32_t*)UI_STATE.backend.map_index_buffer();
-	UI_STATE.draw_active_texture = NULL;
-	UI_ASSERT(UI_STATE.draw_vertices != NULL);
-	UI_ASSERT(UI_STATE.draw_indices != NULL);
+	const int max_vertices_default = 4096;
+	const int max_indices_default = 4096*4;
+	
+	UI_STATE.vertex_buffer_count = 0;
+	UI_STATE.vertex_buffer_capacity = max_vertices_default;
+	UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(max_vertices_default);
+	UI_ASSERT(UI_STATE.vertex_buffer != NULL);
+	
+	UI_STATE.index_buffer_count = 0;
+	UI_STATE.index_buffer_capacity = max_indices_default;
+	UI_STATE.index_buffer = UI_STATE.backend.ResizeAndMapIndexBuffer(max_indices_default);
+	UI_ASSERT(UI_STATE.index_buffer != NULL);
+	
+	UI_STATE.active_texture = NULL;
+	DS_ArrInit(&UI_STATE.draw_commands, &UI_STATE.frame_arena);
 	
 	UI_STATE.inputs = *inputs;
 	memset(&UI_STATE.outputs, 0, sizeof(UI_STATE.outputs));
-	UI_STATE.window_size = window_size;
-
+	
 	UI_ASSERT(UI_STATE.box_stack.count == 1);
 	UI_STATE.mouse_pos = UI_AddV2(UI_STATE.inputs.mouse_position, UI_VEC2{ 0.5f, 0.5f });
-	UI_STATE.base_font = base_font;
-	UI_STATE.icons_font = icons_font;
+	UI_STATE.default_font = default_font;
 	
 	DS_Arena prev_frame_arena = UI_STATE.prev_frame_arena;
 	UI_STATE.prev_frame_arena = UI_STATE.frame_arena;
@@ -1368,8 +1360,6 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font 
 	UI_STATE.keyboard_clicking_down_box_new = UI_INVALID_KEY;
 	UI_STATE.selected_box = UI_STATE.selected_box_new;
 	UI_STATE.selected_box_new = UI_INVALID_KEY;
-
-	DS_ArrInit(&UI_STATE.draw_calls, &UI_STATE.frame_arena);
 
 	// When clicking somewhere or pressing escape, by default, hide the selection box
 	if (UI_InputWasPressed(UI_Input_MouseLeft) || UI_InputWasPressed(UI_Input_Escape)) {
@@ -1584,18 +1574,18 @@ UI_API void UI_BoxComputeRects(UI_Box* box, UI_Vec2 box_position) {
 static void UI_FinalizeDrawBatch() {
 	UI_ProfEnter();
 	uint32_t first_index = 0;
-	if (UI_STATE.draw_calls.count > 0) {
-		UI_DrawCall last = DS_ArrPeek(UI_STATE.draw_calls);
+	if (UI_STATE.draw_commands.count > 0) {
+		UI_DrawCommand last = DS_ArrPeek(UI_STATE.draw_commands);
 		first_index = last.first_index + last.index_count;
 	}
 
-	uint32_t index_count = UI_STATE.draw_next_index - first_index;
+	uint32_t index_count = UI_STATE.index_buffer_count - first_index;
 	if (index_count > 0) {
-		UI_DrawCall draw_call = {0};
-		draw_call.texture = UI_STATE.draw_active_texture ? UI_STATE.draw_active_texture : UI_STATE.backend.atlas;
+		UI_DrawCommand draw_call = {0};
+		draw_call.texture = UI_STATE.active_texture;
 		draw_call.first_index = first_index;
 		draw_call.index_count = index_count;
-		DS_ArrPush(&UI_STATE.draw_calls, draw_call);
+		DS_ArrPush(&UI_STATE.draw_commands, draw_call);
 	}
 	UI_ProfExit();
 }
@@ -1623,8 +1613,8 @@ UI_API void UI_EndFrame(UI_Outputs* outputs) {
 
 	UI_FinalizeDrawBatch();
 
-	UI_STATE.outputs.draw_calls = UI_STATE.draw_calls.data;
-	UI_STATE.outputs.draw_calls_count = UI_STATE.draw_calls.count;
+	UI_STATE.outputs.draw_commands = UI_STATE.draw_commands.data;
+	UI_STATE.outputs.draw_commands_count = UI_STATE.draw_commands.count;
 	*outputs = UI_STATE.outputs;
 
 	UI_ProfExit();
@@ -1736,16 +1726,16 @@ UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int 
 #define INVALID_GLYPH '?'
 #define INVALID_GLYPH_COLOR UI_MAGENTA
 
-UI_API float UI_GlyphWidth(uint32_t codepoint, UI_Font font) {
+UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font) {
 	UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(codepoint, font);
-	return glyph.x_advance;
+	return glyph.advance;
 }
 
 UI_API float UI_TextWidth(STR_View text, UI_Font font) {
 	UI_ProfEnter();
 	float w = 0.f;
 	for STR_Each(text, r, i) {
-		w += UI_GlyphWidth(r, font);
+		w += UI_GlyphAdvance(r, font);
 	}
 	UI_ProfExit();
 	return w;
@@ -1753,32 +1743,50 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font) {
 
 UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index) {
 	UI_ProfEnter();
-	*out_first_index = UI_STATE.draw_next_vertex;
-	UI_DrawVertex* v = &UI_STATE.draw_vertices[UI_STATE.draw_next_vertex];
-	UI_STATE.draw_next_vertex += count;
-	UI_ASSERT(UI_STATE.draw_next_vertex <= UI_MAX_VERTEX_COUNT);
+	
+	*out_first_index = UI_STATE.vertex_buffer_count;
+	
+	// Grow vertex buffer if needed
+	int new_count = UI_STATE.vertex_buffer_count + count;
+	if (new_count > UI_STATE.vertex_buffer_capacity) {
+		while (new_count > UI_STATE.vertex_buffer_capacity) {
+			UI_STATE.vertex_buffer_capacity *= 2;
+		}
+		UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(UI_STATE.vertex_buffer_capacity);
+	}
+	
+	UI_DrawVertex* result_data = &UI_STATE.vertex_buffer[UI_STATE.vertex_buffer_count];
+	UI_STATE.vertex_buffer_count = new_count;
+	
 	UI_ProfExit();
-	return v;
+	return result_data;
 }
 
 UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture) {
 	UI_ProfEnter();
 	
 	// Set active texture
-	if (texture != UI_STATE.draw_active_texture) {
-		UI_ASSERT(texture != UI_STATE.backend.atlas); // When using the atlas texture, prefer to pass NULL instead of the atlas directly.
-
-		if (UI_STATE.draw_active_texture != NULL) {
+	if (texture != UI_STATE.active_texture) {
+		if (UI_STATE.active_texture != NULL) {
 			UI_FinalizeDrawBatch();
 		}
-		UI_STATE.draw_active_texture = texture;
+		UI_STATE.active_texture = texture;
 	}
-
-	uint32_t* i = &UI_STATE.draw_indices[UI_STATE.draw_next_index];
-	UI_STATE.draw_next_index += count;
-	UI_ASSERT(UI_STATE.draw_next_index <= UI_MAX_INDEX_COUNT);
+	
+	// Grow index buffer if needed
+	int new_count = UI_STATE.index_buffer_count + count;
+	if (new_count > UI_STATE.index_buffer_capacity) {
+		while (new_count > UI_STATE.index_buffer_capacity) {
+			UI_STATE.index_buffer_capacity *= 2;
+		}
+		UI_STATE.index_buffer = UI_STATE.backend.ResizeAndMapIndexBuffer(UI_STATE.index_buffer_capacity);
+	}
+	
+	uint32_t* result_data = &UI_STATE.index_buffer[UI_STATE.index_buffer_count];
+	UI_STATE.index_buffer_count = new_count;
+	
 	UI_ProfExit();
-	return i;
+	return result_data;
 }
 
 UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture* texture) {
@@ -2239,19 +2247,14 @@ UI_API void UI_DrawText(STR_View text, UI_Font font, UI_Vec2 pos, UI_AlignH alig
 		UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(r, font);
 
 		UI_Rect glyph_rect;
-		glyph_rect.min.x = pos.x + glyph.offset_pixels.x;
-		glyph_rect.min.y = pos.y + glyph.offset_pixels.y;
-		glyph_rect.max.x = glyph_rect.min.x + glyph.size_pixels.x;
-		glyph_rect.max.y = glyph_rect.min.y + glyph.size_pixels.y;
+		glyph_rect.min.x = pos.x + glyph.offset.x;
+		glyph_rect.min.y = pos.y + glyph.offset.y;
+		glyph_rect.max.x = glyph_rect.min.x + glyph.size.x;
+		glyph_rect.max.y = glyph_rect.min.y + glyph.size.y;
 
-		UI_Rect glyph_uv_rect;
-		glyph_uv_rect.min = glyph.origin_uv;
-		glyph_uv_rect.max = glyph_uv_rect.min;
-		glyph_uv_rect.max.x += glyph.size_pixels.x * (float)UI_STATE.backend.inv_atlas_size.x;
-		glyph_uv_rect.max.y += glyph.size_pixels.y * (float)UI_STATE.backend.inv_atlas_size.y;
-
+		UI_Rect glyph_uv_rect = {glyph.uv_min, glyph.uv_max};
 		UI_DrawSprite(glyph_rect, color, glyph_uv_rect, NULL, scissor);
-		pos.x += glyph.x_advance;
+		pos.x += glyph.advance;
 	}
 
 	UI_ProfExit();

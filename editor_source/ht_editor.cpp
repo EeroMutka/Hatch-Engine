@@ -7,10 +7,12 @@ static Asset* g_currently_updating_plugin;
 // -----------------------------------------------------------------
 
 static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column) {
+	EditorState* s = (EditorState*)tree->user_data;
+
 	UI_Key key = node->key;
 	Asset* asset = (Asset*)node->key;
 
-	UIAddAssetIcon(UI_KBOX(key), asset);
+	UIAddAssetIcon(UI_KBOX(key), asset, s->icons_font);
 
 	bool* is_text_editing;
 	UI_BoxGetRetainedVar(UI_KBOX(key), UI_KKEY(key), &is_text_editing);
@@ -122,6 +124,7 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 	assets_tree.num_columns = 1; // 3
 	assets_tree.allow_drag_n_drop = true;
 	assets_tree.AddValueUI = AssetTreeValueUI;
+	assets_tree.user_data = s;
 	
 	UI_AddDataTree(UI_BBOX(root), UI_SizeFlex(1.f), UI_SizeFit(), &assets_tree, &s->assets_tree_ui_state);
 
@@ -169,7 +172,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 
 	if (AssetIsValid(*handle)) {
 		UI_AddBox(UI_BBOX(box), 8.f, 0.f, 0); // padding
-		UIAddAssetIcon(UI_BBOX(box), handle->asset);
+		UIAddAssetIcon(UI_BBOX(box), handle->asset, s->icons_font);
 	}
 
 	UI_Box* label = UI_BBOX(box);
@@ -180,7 +183,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	UI_Box* clear_button = UI_BBOX(box);
 	UI_AddLabel(clear_button, UI_SizeFit(), UI_SizeFlex(1.f), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder, "\x4a");
 	clear_button->inner_padding.y += 2.f;
-	clear_button->font = UI_STATE.icons_font;
+	clear_button->font = s->icons_font;
 	clear_button->font.size -= 4;
 	UI_PopBox(box);
 
@@ -230,7 +233,7 @@ static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, Typ
 
 static void UIAddValType(EditorState* s, UI_Key key, Type* type) {
 	UI_Box* kind_dropdown = UI_KBOX(key);
-	UI_AddDropdownButton(kind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->kind));
+	UI_AddDropdownButton(kind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->kind), s->icons_font);
 	if (UI_Pressed(kind_dropdown)) {
 		s->type_dropdown_open = s->type_dropdown_open == kind_dropdown->key ? UI_INVALID_KEY : kind_dropdown->key;
 	}
@@ -238,7 +241,7 @@ static void UIAddValType(EditorState* s, UI_Key key, Type* type) {
 	UI_Box* subkind_dropdown = NULL;
 	if (type->kind == TypeKind_Array) {
 		subkind_dropdown = UI_KBOX(key);
-		UI_AddDropdownButton(subkind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->subkind));
+		UI_AddDropdownButton(subkind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->subkind), s->icons_font);
 		if (UI_Pressed(subkind_dropdown)) {
 			s->type_dropdown_open = s->type_dropdown_open == subkind_dropdown->key ? UI_INVALID_KEY : subkind_dropdown->key;
 		}
@@ -506,7 +509,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 
 		UI_PushBox(row);
 		UI_AddBox(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0);
-		UIAddAssetIcon(UI_KBOX(key), selected_asset);
+		UIAddAssetIcon(UI_KBOX(key), selected_asset, s->icons_font);
 		UI_AddLabel(UI_KBOX(key), UI_SizeFit(), UI_SizeFit(), 0, UI_TextToStr(selected_asset->name));
 		UI_AddBox(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0);
 
@@ -802,7 +805,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 		box->inner_padding = {18, 2};
 		UI_PushBox(box);
 
-		UIAddAssetIcon(UI_BOX(), asset);
+		UIAddAssetIcon(UI_BOX(), asset, s->icons_font);
 		UI_AddLabel(UI_BOX(), UI_SizeFit(), UI_SizeFit(), 0, UI_TextToStr(asset->name));
 
 		UI_PopBox(box);
@@ -816,9 +819,9 @@ static void HT_DebugPrint(const char* str) {
 	//printf("DEBUG PRINT: %s\n", str);
 }
 
-static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
-	UI_DrawText(text, {UI_STATE.base_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
-}
+//static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
+//	UI_DrawText(text, {UI_STATE.default_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
+//}
 
 static void* HT_AllocatorProc(void* ptr, size_t size) {
 	// We track all plugin allocations so that we can free them at once when the plugin is unloaded.
@@ -860,7 +863,7 @@ EXPORT void UpdatePlugins(EditorState* s) {
 	api.DebugPrint = HT_DebugPrint;
 	*(void**)&api.AddVertices = UI_AddVertices;
 	*(void**)&api.AddIndices = UI_AddIndices;
-	*(void**)&api.DrawText = HT_DrawText;
+	//*(void**)&api.DrawText = HT_DrawText;
 	api.AllocatorProc = HT_AllocatorProc;
 	api.TempArenaPush = HT_TempArenaPush;
 

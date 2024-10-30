@@ -158,12 +158,15 @@ static void UI_DataTreeDraw(UI_Box* box) {
 		// draw arrow
 		// TODO: I think we should do the arrows as button boxes.
 		if (row_draw_data.has_arrow) {
-			UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), UI_STATE.icons_font,
-				UI_VEC2{
-					child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
-					child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
-				},
-				UI_AlignH_Left, UI_WHITE, NULL);
+			// TODO
+			
+
+			//UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), icons_font,
+			//	UI_VEC2{
+			//		child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
+			//		child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
+			//	},
+			//	UI_AlignH_Left, UI_WHITE, NULL);
 		}
 		
 		child = iter;

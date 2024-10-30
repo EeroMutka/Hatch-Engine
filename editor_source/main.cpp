@@ -50,15 +50,15 @@ static void AppInit(EditorState* s) {
 
 	UI_Init(DS_HEAP);
 	UI_DX12_Init(s->render_state->device, atlas_cpu_descriptor, atlas_gpu_descriptor);
-	UI_STBTT_Init();
+	UI_STBTT_Init(UI_DX12_CreateAtlas, UI_DX12_MapAtlas);
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
 	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
 	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
-	s->base_font = UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f);
-	s->icons_font = UI_STBTT_FontInit(icons_ttf.data, -2.f);
+	s->default_font = { UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f), 18 };
+	s->icons_font = { UI_STBTT_FontInit(icons_ttf.data, -2.f), 18 };
 
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
@@ -148,7 +148,8 @@ static void AppInit(EditorState* s) {
 }
 
 static void UpdateAndDraw(EditorState* s) {
-	UI_BeginFrame(&s->ui_inputs, {(float)s->window_size.x, (float)s->window_size.y}, {s->base_font, 18}, {s->icons_font, 18});
+	// {s->icons_font, 18}
+	UI_BeginFrame(&s->ui_inputs, s->default_font);
 
 	s->frame = {};
 	
@@ -168,7 +169,7 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_Rect panel_area_rect = {0};
 	panel_area_rect.min.y = TOP_BAR_HEIGHT;
 	panel_area_rect.max = UI_VEC2{(float)s->window_size.x, (float)s->window_size.y};
-	UI_PanelTreeUpdateAndDraw(&s->panel_tree, s->panel_tree.root, panel_area_rect, false, &s->frame.hovered_panel);
+	UI_PanelTreeUpdateAndDraw(&s->panel_tree, s->panel_tree.root, panel_area_rect, false, s->icons_font, &s->frame.hovered_panel);
 	
 	UpdatePlugins(s);
 

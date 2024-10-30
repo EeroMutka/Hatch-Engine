@@ -283,8 +283,10 @@ struct UIDropdownState {
 	bool has_added_deepest_hovered_root = false;
 };
 
+EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string, UI_Font icons_font);
+
 EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator);
-EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Panel** out_hovered);
+EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered);
 
 EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree);
 EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel);
@@ -295,7 +297,7 @@ EXPORT bool UIOrderedDropdownShouldClose(UIDropdownState* s, UI_Box* box);
 
 EXPORT void UIRegisterOrderedRoot(UIDropdownState* s, UI_Box* dropdown);
 
-EXPORT void UIAddAssetIcon(UI_Box* box, Asset* asset);
+EXPORT void UIAddAssetIcon(UI_Box* box, Asset* asset, UI_Font icons_font);
 
 EXPORT void UIAddPadY(UI_Box* box);
 EXPORT void UIPushDropdown(UIDropdownState* s, UI_Box* box, UI_Size w, UI_Size h);
@@ -340,7 +342,8 @@ struct EditorState {
 	OS_WINDOW window;
 
 	UI_Inputs ui_inputs;
-	UI_FontID base_font, icons_font;
+	UI_Font default_font;
+	UI_Font icons_font;
 
 	UI_Text dummy_text;
 	UI_Text dummy_text_2;

@@ -197,7 +197,7 @@ EXPORT void RenderEndFrame(RenderState* s, UI_Outputs* ui_outputs) {
         s->command_list->SetDescriptorHeaps(1, &s->srv_heap);
         s->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-        UI_DX12_Draw(ui_outputs, s->command_list);
+        UI_DX12_Draw(ui_outputs, {(float)s->window_size.x, (float)s->window_size.y}, s->command_list);
 
         D3D12_RESOURCE_BARRIER rt_to_present = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         s->command_list->ResourceBarrier(1, &rt_to_present);
