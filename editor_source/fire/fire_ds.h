@@ -53,19 +53,24 @@
 #define DS_LangAgnosticLiteral(T) (T) // in C, struct and union literals are of the form (MyStructType){...}
 #endif
 
-#ifndef DS_DEFAULT_ALIGNMENT
-#define DS_DEFAULT_ALIGNMENT  sizeof(void*)
+#ifndef DS_ARENA_BLOCK_ALIGNMENT
+#define DS_ARENA_BLOCK_ALIGNMENT 16
 #endif
 
-#ifndef DS_ARENA_BLOCK_ALIGNMENT
-#define DS_ARENA_BLOCK_ALIGNMENT  (sizeof(void*)*2)
+#ifndef DS_DEFAULT_ALLOCATOR_PROC_ALIGNMENT
+#define DS_DEFAULT_ALLOCATOR_PROC_ALIGNMENT 16 // MSVC's malloc uses 16-byte alignment when building in 64-bit mode
+#endif
+
+#ifndef DS_DEFAULT_ARENA_PUSH_ALIGNMENT
+#define DS_DEFAULT_ARENA_PUSH_ALIGNMENT 8
 #endif
 
 typedef struct DS_AllocatorBase {
 	// AllocatorProc is a combination of malloc, free and realloc.
-	// A new allocation is made (or an existing allocation is resized if old_ptr != NULL) when new_size > 0.
-	// An existing allocation is freed when new_size == 0.
-	void* (*AllocatorProc)(struct DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align);
+	// A new allocation is made when new_size > 0.
+	// An existing allocation is freed when new_size == 0; in this case the old_size parameter is ignored.
+	// To resize an existing allocation, pass the existing pointer into `ptr` and its size into `old_size`.
+	void* (*AllocatorProc)(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align);
 } DS_AllocatorBase;
 
 // ----------------------------------------------------------
@@ -109,7 +114,7 @@ struct DS_Arena {
 #endif
 
 #ifndef DS_NO_MALLOC
-static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
+static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	if (size == 0) {
 		_aligned_free(ptr);
 		return NULL;
@@ -144,7 +149,7 @@ static const DS_AllocatorBase DS_HEAP_ = { DS_HeapAllocatorProc };
 template<typename T> static inline T* DS_Clone__(DS_Arena* a, const T& v) { T* x = (T*)DS_ArenaPush(a, sizeof(T)); *x = v; return x; }
 #define DS_Clone_(T, ARENA, VALUE) DS_Clone__<T>(ARENA, VALUE)
 #else
-#define DS_Clone_(T, ARENA, VALUE) ((T*)0 == &(VALUE), (T*)DS_CloneSize(ARENA, &(VALUE), sizeof(VALUE)))
+#define DS_Clone_(T, ARENA, VALUE) ((T*)0 == &(VALUE), (T*)DS_MemClone(ARENA, &(VALUE), sizeof(VALUE)))
 #endif
 
 // -------------------------------------------------------------------
@@ -387,7 +392,7 @@ DS_API void DS_ArenaDeinit(DS_Arena* arena);
 
 DS_API char* DS_ArenaPush(DS_Arena* arena, int size);
 DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size);
-DS_API char* DS_ArenaPushEx(DS_Arena* arena, int size, int alignment);
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment);
 
 DS_API DS_ArenaMark DS_ArenaGetMark(DS_Arena* arena);
 DS_API void DS_ArenaSetMark(DS_Arena* arena, DS_ArenaMark mark);
@@ -444,14 +449,14 @@ static inline void DS_ScopeEnd(DS_MemScope* scope) {
 
 // -- Memory allocation --------------------------------
 
-#define DS_MemAlloc(ALLOCATOR, SIZE)                      (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL, (SIZE), DS_DEFAULT_ALIGNMENT)
-#define DS_MemRealloc(ALLOCATOR, PTR, SIZE)               (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (SIZE), DS_DEFAULT_ALIGNMENT)
-#define DS_MemFree(ALLOCATOR, PTR)                        (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR),      0, DS_DEFAULT_ALIGNMENT)
-#define DS_MemAllocAligned(ALLOCATOR, SIZE, ALIGN)        (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL, (SIZE), ALIGN)
-#define DS_MemReallocAligned(ALLOCATOR, PTR, SIZE, ALIGN) (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (SIZE), ALIGN)
+#define DS_MemAlloc(ALLOCATOR, SIZE)                               (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL,          0, (SIZE), DS_DEFAULT_ALLOCATOR_PROC_ALIGNMENT)
+#define DS_MemResize(ALLOCATOR, PTR, OLD_SIZE, SIZE)               (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (OLD_SIZE), (SIZE), DS_DEFAULT_ALLOCATOR_PROC_ALIGNMENT)
+#define DS_MemFree(ALLOCATOR, PTR)                                 (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR),          0,      0, DS_DEFAULT_ALLOCATOR_PROC_ALIGNMENT)
+#define DS_MemAllocAligned(ALLOCATOR, SIZE, ALIGN)                 (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL,          0, (SIZE), ALIGN)
+#define DS_MemResizeAligned(ALLOCATOR, PTR, OLD_SIZE, SIZE, ALIGN) (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (OLD_SIZE), (SIZE), ALIGN)
 
-static inline void* DS_CloneSize(DS_Arena* arena, const void* value, int size) { void* p = DS_ArenaPush(arena, size); return memcpy(p, value, size); }
-static inline void* DS_CloneSizeA(DS_Arena* arena, const void* value, int size, int align) { void* p = DS_ArenaPushEx(arena, size, align); return memcpy(p, value, size); }
+static inline void* DS_MemClone(DS_Arena* arena, const void* value, int size) { void* p = DS_ArenaPush(arena, size); return memcpy(p, value, size); }
+static inline void* DS_MemCloneAligned(DS_Arena* arena, const void* value, int size, int align) { void* p = DS_ArenaPushAligned(arena, size, align); return memcpy(p, value, size); }
 
 // -- Dynamic array --------------------------------
 
@@ -925,7 +930,7 @@ static inline void* DS_BucketArrayPushRaw(DS_BucketArrayRaw* array, uint32_t ele
 }
 
 DS_API void DS_ArrCloneRaw(DS_Arena* arena, DS_DynArrayRaw* array, int elem_size) {
-	array->data = DS_CloneSize(arena, array->data, array->count * elem_size);
+	array->data = DS_MemClone(arena, array->data, array->count * elem_size);
 }
 
 DS_API void DS_ArrReserveRaw(DS_DynArrayRaw* array, int capacity, int elem_size) {
@@ -939,7 +944,7 @@ DS_API void DS_ArrReserveRaw(DS_DynArrayRaw* array, int capacity, int elem_size)
 	}
 
 	if (new_capacity != array->capacity) {
-		array->data = DS_MemRealloc(array->allocator, array->data, new_capacity * elem_size);
+		array->data = DS_MemResize(array->allocator, array->data, array->capacity * elem_size, new_capacity * elem_size);
 		array->capacity = new_capacity;
 	}
 
@@ -1364,10 +1369,10 @@ static inline bool DS_MapInsertRaw(DS_MapRaw* map, const void* key, DS_OUT void*
 	return added;
 }
 
-static void* DS_ArenaAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
-	char* result = DS_ArenaPushEx((DS_Arena*)allocator, (int)size, (int)align); // TODO: use size_t for arenas instead of int
-	if (ptr) memcpy(result, ptr, size);
-	return result;
+static void* DS_ArenaAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
+	char* data = DS_ArenaPushAligned((DS_Arena*)allocator, (int)size, (int)align); // TODO: use size_t for arenas instead of int
+	if (ptr) memcpy(data, ptr, old_size);
+	return data;
 }
 
 DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator) {
@@ -1387,16 +1392,16 @@ DS_API void DS_ArenaDeinit(DS_Arena* arena) {
 }
 
 DS_API char* DS_ArenaPush(DS_Arena* arena, int size) {
-	return DS_ArenaPushEx(arena, size, DS_DEFAULT_ALIGNMENT);
+	return DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 }
 
 DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size) {
-	char* ptr = DS_ArenaPushEx(arena, size, DS_DEFAULT_ALIGNMENT);
+	char* ptr = DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 	memset(ptr, 0, size);
 	return ptr;
 }
 
-DS_API char* DS_ArenaPushEx(DS_Arena* arena, int size, int alignment) {
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
 	DS_ProfEnter();
 
 	bool alignment_is_power_of_2 = ((alignment) & ((alignment)-1)) == 0;

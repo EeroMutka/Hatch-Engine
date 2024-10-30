@@ -156,9 +156,18 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 	STR_View plugin_name = UI_TextToStr(plugin->name);
 
 	if (plugin->plugin.dll_handle) {
+		printf("Unloading plugin with %d allocations\n", plugin->plugin.allocations.count);
+
 		OS_UnloadDLL(plugin->plugin.dll_handle);
+		
 		plugin->plugin.dll_handle = NULL;
 		plugin->plugin.dll_UpdatePlugin = NULL;
+
+		for (int i = 0; i < plugin->plugin.allocations.count; i++) {
+			PluginAllocationHeader* allocation = plugin->plugin.allocations[i];
+			DS_MemFree(DS_HEAP, allocation);
+		}
+		DS_ArrClear(&plugin->plugin.allocations);
 
 		STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", plugin_name);
 		ForceVisualStudioToClosePDBFileHandle(pdb_filepath);

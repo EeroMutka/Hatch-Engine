@@ -117,7 +117,15 @@ struct HT_API {
 	
 	// -- Memory allocation ---------------------------
 	
-	void* (*AllocatorProc)(void* ptr, size_t size, size_t align);
+	// AllocatorProc is a combination of malloc, free and realloc.
+	// A new allocation is made (or an existing allocation is resized if ptr != NULL) when new_size > 0.
+	// An existing allocation is freed when new_size == 0.
+	// All allocations are aligned to 16 bytes.
+	void* (*AllocatorProc)(void* ptr, size_t size);
+	
+	// The returned memory from TempArenaPush gets automatically free'd after the current frame.
+	// The returned memory is uninitialized.
+	void* (*TempArenaPush)(size_t size, size_t align);
 	
 	// -- UI functions --------------------------------
 	

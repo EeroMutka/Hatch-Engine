@@ -15,8 +15,12 @@ struct Allocator {
 	HT_API* ht;
 };
 
-static void* AllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
-	return ((Allocator*)allocator)->ht->AllocatorProc(ptr, size, align);
+#define TODO() __debugbreak()
+
+static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
+	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
+	if (ptr) memcpy(data, ptr, old_size);
+	return data;
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
@@ -37,19 +41,19 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// ok... so first thing first, we need to allocate memory.
 	// Then we need fire_ds support.
 	
-	Allocator _allocator = {{AllocatorProc}, ht};
-	_allocator.base.AllocatorProc = AllocatorProc;
-	DS_Allocator* allocator = (DS_Allocator*)&_allocator;
+	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
+	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
 	
 	/*DS_Arena test_arena;
 	DS_ArenaInit(&test_arena, 1024, allocator);*/
-	__debugbreak();
-	
-	DS_DynArray(int) my_things = {allocator};
+
+	DS_DynArray(int) my_things = {temp_allocator};
 	DS_ArrPush(&my_things, 1);
 	DS_ArrPush(&my_things, 2);
 	DS_ArrPush(&my_things, 3);
 	DS_ArrPush(&my_things, 4);
+	
+	// DS_ArrClear(&my_things);
 	
 	UI_DrawRect(ht, {{200, 50}, {230, 600}}, UI_RED);
 	

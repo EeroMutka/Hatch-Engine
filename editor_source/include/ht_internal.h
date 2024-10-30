@@ -121,10 +121,18 @@ struct PluginOptions {
 	AssetRef Data;
 };
 
+struct PluginAllocationHeader {
+	u32 allocation_index;
+	size_t size;
+};
+
 struct Asset_Plugin {
 	PluginOptions options; // a value of type g_plugin_options_struct_type
+	
 	OS_DLL* dll_handle;
 	void (*dll_UpdatePlugin)(HT_API* HT);
+
+	DS_DynArray(PluginAllocationHeader*) allocations;
 };
 
 struct Asset_StructData {

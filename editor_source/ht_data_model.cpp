@@ -84,6 +84,7 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 		//asset->plugin.options_data = DS_MemAlloc(DS_HEAP, tree->plugin_options_struct_type->struct_type.size);
 		//memset(asset->plugin.options_data, 0, tree->plugin_options_struct_type->struct_type.size);
 		name = "Untitled Plugin";
+		DS_ArrInit(&asset->plugin.allocations, DS_HEAP);
 	}break;
 	case AssetKind_StructType: {
 		DS_ArrInit(&asset->struct_type.members, DS_HEAP);
@@ -206,7 +207,7 @@ EXPORT void ComputeStructLayout(Asset* struct_type) {
 EXPORT void ArrayPush(Array* array, int32_t elem_size) {
 	if (array->count == array->capacity) {
 		int32_t new_capacity = array->capacity == 0 ? 8 : array->capacity * 2;
-		array->data = DS_MemRealloc(DS_HEAP, array->data, new_capacity * elem_size);
+		array->data = DS_MemResize(DS_HEAP, array->data, array->capacity * elem_size, new_capacity * elem_size);
 		array->capacity = new_capacity;
 		//if (array->capacity == 0) {
 		//	int32_t new_size = elem_size * 8;
@@ -267,6 +268,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	case AssetKind_CPP: {}break;
 	case AssetKind_Plugin: {
 		//DS_MemFree(DS_HEAP, asset->plugin.options_data);
+		DS_ArrDeinit(&asset->plugin.allocations);
 	}break;
 	case AssetKind_StructType: {
 		DS_ArrDeinit(&asset->struct_type.members);

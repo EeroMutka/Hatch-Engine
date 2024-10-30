@@ -1,5 +1,11 @@
 #include "include/ht_internal.h"
 
+// -- GLOBALS ------------------------------------------------------
+
+static Asset* g_currently_updating_plugin;
+
+// -----------------------------------------------------------------
+
 static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column) {
 	UI_Key key = node->key;
 	Asset* asset = (Asset*)node->key;
@@ -814,8 +820,39 @@ static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_siz
 	UI_DrawText(text, {UI_STATE.base_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
 }
 
-static void* HT_AllocatorProc(void* ptr, size_t size, size_t align) {
-	return DS_MemReallocAligned(DS_HEAP, ptr, size, align);
+static void* HT_AllocatorProc(void* ptr, size_t size) {
+	// We track all plugin allocations so that we can free them at once when the plugin is unloaded.
+
+	Asset_Plugin* plugin = &g_currently_updating_plugin->plugin;
+	if (size == 0) {
+		// Move last allocation to the place of the allocation we want to free in the allocations array
+		PluginAllocationHeader* header = (PluginAllocationHeader*)((char*)ptr - 16);
+		PluginAllocationHeader* last_allocation = plugin->allocations[plugin->allocations.count - 1];
+		
+		last_allocation->allocation_index = header->allocation_index;
+		plugin->allocations[header->allocation_index] = last_allocation;
+		
+		DS_ArrPop(&plugin->allocations);
+
+		DS_MemFree(DS_HEAP, header);
+		return NULL;
+	}
+	else {
+		// Having a 16 byte header is quite a lot of overhead per allocation... but for now its ok.
+
+		size_t old_size = ptr ? ((PluginAllocationHeader*)((char*)ptr - 16))->size : 0;
+
+		PluginAllocationHeader* header = (PluginAllocationHeader*)DS_MemResizeAligned(DS_HEAP, ptr, old_size, 16 + size, 16);
+		header->size = size;
+		header->allocation_index = plugin->allocations.count;
+		DS_ArrPush(&plugin->allocations, header);
+
+		return (char*)header + 16;
+	}
+}
+
+static void* HT_TempArenaPush(size_t size, size_t align) {
+	return DS_ArenaPushAligned(TEMP, (int)size, (int)align);
 }
 
 EXPORT void UpdatePlugins(EditorState* s) {
@@ -825,6 +862,7 @@ EXPORT void UpdatePlugins(EditorState* s) {
 	*(void**)&api.AddIndices = UI_AddIndices;
 	*(void**)&api.DrawText = HT_DrawText;
 	api.AllocatorProc = HT_AllocatorProc;
+	api.TempArenaPush = HT_TempArenaPush;
 
 	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
 		Asset* plugin = IT.elem;
@@ -832,7 +870,9 @@ EXPORT void UpdatePlugins(EditorState* s) {
 		if (plugin->kind != AssetKind_Plugin) continue;
 
 		if (plugin->plugin.dll_handle) {
+			g_currently_updating_plugin = plugin;
 			plugin->plugin.dll_UpdatePlugin(&api);
+			g_currently_updating_plugin = NULL;
 		}
 	}
 }
