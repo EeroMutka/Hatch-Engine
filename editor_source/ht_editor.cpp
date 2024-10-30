@@ -811,7 +811,7 @@ static void DebugPrint(const char* str) {
 }
 
 static void DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
-	UI_DrawText(text, {UI_STATE.base_font.font, font_size}, pos, align_h, color, NULL);
+	UI_DrawText(text, {UI_STATE.base_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
 }
 
 EXPORT void UpdatePlugins(EditorState* s) {

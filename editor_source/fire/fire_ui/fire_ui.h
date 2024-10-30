@@ -116,20 +116,18 @@ typedef struct UI_CachedGlyphKey {
 } UI_CachedGlyphKey;
 
 typedef struct UI_CachedGlyph {
-	uint32_t atlas_slot_index : 31;
-	uint32_t used_this_frame : 1;
 	UI_Vec2 origin_uv;     // in UV coordinates
 	UI_Vec2 size_pixels;   // in pixel coordinates
 	UI_Vec2 offset_pixels; // in pixel coordinates
 	float x_advance;      // advance to the next character in pixel coordinates
 } UI_CachedGlyph;
 
-typedef uint16_t UI_FontIndex;
+typedef uint16_t UI_FontID;
 
-typedef struct UI_FontView {
-	UI_FontIndex font;
-	int size;
-} UI_FontView;
+typedef struct UI_Font {
+	UI_FontID id;
+	uint16_t size;
+} UI_Font;
 
 typedef struct UI_ArrangerSet {
 	struct UI_Box* dragging_elem; // may be NULL
@@ -181,9 +179,9 @@ struct UI_Box {
 	UI_Size size[2];
 	UI_Vec2 offset;
 	UI_Vec2 inner_padding; // applied to text or children
+	UI_Font font;
 
 	STR_View text;
-	UI_FontView font;
 
 	void (*compute_unexpanded_size)(UI_Box* box, UI_Axis axis, int pass, bool* request_second_pass);
 
@@ -276,20 +274,19 @@ typedef enum UI_InputEvent {
 } UI_InputEvent;
 
 typedef struct UI_Backend {
-	// A backend expects the following three global resources:
-	// - A vertex buffer
-	// - An index buffer
-	// - An atlas texture
-	// The resize_ functions are used for creating, resizing and destroying them. A resource should be destroyed when size=0.
-	void (*resize_vertex_buffer)(uint32_t size);
-	void (*resize_index_buffer)(uint32_t size);
-
+	// -- Drawing ---------------------------------
+	
 	UI_Texture* (*create_atlas)(uint32_t width, uint32_t height);
 
 	// When mapping a resource, the returned pointer must stay valid until UI_EndFrame or resize_* is called.
 	void* (*map_atlas)();
 	void* (*map_vertex_buffer)();
 	void* (*map_index_buffer)();
+	
+	// -- Text rendering --------------------------
+	
+	UI_CachedGlyph (*GetCachedGlyph)(uint32_t codepoint, UI_Font font);
+	UI_Vec2 inv_atlas_size;
 } UI_Backend;
 
 typedef struct UI_Inputs {
@@ -327,37 +324,10 @@ typedef struct UI_Outputs {
 } UI_Outputs;
 
 typedef DS_Map(UI_Key, void*) UI_PtrFromKeyMap;
-typedef DS_Map(UI_CachedGlyphKey, UI_CachedGlyph) UI_GlyphMap;
-
-typedef struct UI_AtlasSlot {
-	bool occupied;
-} UI_AtlasSlot;
-
-typedef struct UI_AtlasAllocator {
-	// Parameters
-	int level0_slot_size; // Describes the slot width and height in pixels
-	int level0_num_slots_x;
-	int level0_num_slots_y;
-	int level_count;
-
-	// State
-	DS_Allocator* allocator;
-	UI_AtlasSlot* slots; // first big slots, then smaller slots, then smaller slots, etc...
-	int tex_width;
-	int tex_height;
-} UI_AtlasAllocator;
-
-typedef struct UI_AtlasSlotInfo {
-	int x0;
-	int y0;
-	int x1;
-	int y1;
-	int slot_index;
-} UI_AtlasSlotInfo;
 
 typedef struct UI_State {
 	DS_Allocator* allocator;
-	DS_Arena persistent_arena;
+	
 	UI_Backend backend;
 
 	DS_Arena prev_frame_arena;
@@ -375,13 +345,8 @@ typedef struct UI_State {
 
 	float time_since_pressed_lmb;
 
-	DS_DynArray(struct UI_FontData) fonts;
-
-	UI_AtlasAllocator atlas_allocator;
 	UI_Texture* atlas;
 	void* atlas_mapped_ptr;
-	
-	UI_GlyphMap glyph_map;
 	
 	// Mouse position in screen space coordinates, snapped to the pixel center. Placing it at the pixel center means we don't
 	// need to worry about dUI_enerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
@@ -401,8 +366,8 @@ typedef struct UI_State {
 	float scrollbar_origin_before_press;
 	
 	// -- Builder state --
-	UI_FontView base_font;
-	UI_FontView icons_font;
+	UI_Font base_font;
+	UI_Font icons_font;
 	DS_DynArray(UI_Box*) box_stack;
 
 	// -- Draw state --
@@ -508,20 +473,14 @@ UI_API void UI_SelectionFixOrder(UI_Selection* sel);
 
 UI_API void UI_RectPad(UI_Rect* rect, float pad);
 
-UI_API void UI_AtlasAllocatorInit(UI_AtlasAllocator* atlas, DS_Allocator* allocator);
-UI_API void UI_AtlasAllocatorDeinit(UI_AtlasAllocator* atlas);
-
-UI_API UI_AtlasSlotInfo UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width);
-UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, int slot_index);
-
 /*
  `resources_directory` is the path of the `resources` folder that is shipped with FUI.
  FUI will load the default fonts from this folder during `UI_Init`, as well as the shader.
 */
-UI_API void UI_Init(DS_Allocator* allocator, const UI_Backend* backend);
+UI_API void UI_Init(DS_Allocator* allocator);
 UI_API void UI_Deinit(void);
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_FontView base_font, UI_FontView icons_font);
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font base_font, UI_Font icons_font);
 UI_API void UI_EndFrame(UI_Outputs* outputs/*, GPU_Graph *graph, GPU_DescriptorArena *descriptor_arena*/);
 
 /*
@@ -631,19 +590,8 @@ UI_API void UI_EditTextSelectAll(const UI_Text* text, UI_Selection* selection);
 UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int panel_count, float panel_min_size);
 UI_API void UI_SplittersNormalizeToTotalSize(UI_SplittersState* splitters, float total_size);
 
-UI_API float UI_GlyphWidth(uint32_t codepoint, UI_FontView font);
-UI_API float UI_TextWidth(STR_View text, UI_FontView font);
-
-// Returns true when newly added, false when existing
-// ... do we have the ability to upload new data to a texture? That would need to inform the graphics backend.
-UI_API bool UI_CacheTextureArea(int64_t key, int width, int height, void** out_pixels, UI_Vec2* out_uv_min, UI_Vec2* out_uv_max);
-
-UI_API void UI_FreeTextureArea(int64_t key);
-
-// `ttf_data` should be a pointer to a TTF font file data. It is NOT copied internally,
-// and must therefore remain valid across the whole lifetime of the font!
-UI_API UI_FontIndex UI_FontInit(const void* ttf_data, float y_offset);
-UI_API void UI_FontDeinit(UI_FontIndex font_idx);
+UI_API float UI_GlyphWidth(uint32_t codepoint, UI_Font font);
+UI_API float UI_TextWidth(STR_View text, UI_Font font);
 
 // -- Drawing ----------------------
 
@@ -664,7 +612,7 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 UI_API void UI_DrawTriangle(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Color color);
 UI_API void UI_DrawQuad(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Vec2 d, UI_Color color);
 
-UI_API void UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 pos, UI_AlignH align, UI_Color color, UI_ScissorRect scissor);
+UI_API void UI_DrawText(STR_View text, UI_Font font, UI_Vec2 pos, UI_AlignH align, UI_Color color, UI_ScissorRect scissor);
 
 UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_Texture* texture, UI_ScissorRect scissor);
 

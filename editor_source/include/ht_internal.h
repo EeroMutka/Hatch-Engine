@@ -332,7 +332,7 @@ struct EditorState {
 	OS_WINDOW window;
 
 	UI_Inputs ui_inputs;
-	UI_FontIndex base_font, icons_font;
+	UI_FontID base_font, icons_font;
 
 	UI_Text dummy_text;
 	UI_Text dummy_text_2;

@@ -3,6 +3,7 @@
 
 #include "fire/fire_ui/fire_ui_backend_fire_os.h"
 #include "fire/fire_ui/fire_ui_backend_dx12.h"
+#include "fire/fire_ui/fire_ui_backend_stb_truetype.h"
 
 // -- Globals -----------------------------
 
@@ -11,6 +12,7 @@ EXPORT DS_Arena* TEMP;
 extern "C" {
 	EXPORT UI_State UI_STATE;
 	EXPORT UI_DX12_State UI_DX12_STATE;
+	EXPORT UI_STBTT_State UI_STBTT_STATE;
 }
 
 // ----------------------------------------
@@ -46,18 +48,17 @@ static void AppInit(EditorState* s) {
 	D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor = s->render_state->srv_heap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor = s->render_state->srv_heap->GetGPUDescriptorHandleForHeapStart();
 
-	UI_Backend ui_backend = {0};
-	UI_DX12_Init(&ui_backend, s->render_state->device, atlas_cpu_descriptor, atlas_gpu_descriptor);
-	
-	UI_Init(DS_HEAP, &ui_backend);
+	UI_Init(DS_HEAP);
+	UI_DX12_Init(s->render_state->device, atlas_cpu_descriptor, atlas_gpu_descriptor);
+	UI_STBTT_Init();
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
 	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
 	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
-	s->base_font = UI_FontInit(roboto_mono_ttf.data, -4.f);
-	s->icons_font = UI_FontInit(icons_ttf.data, -2.f);
+	s->base_font = UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f);
+	s->icons_font = UI_STBTT_FontInit(icons_ttf.data, -2.f);
 
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
@@ -176,8 +177,10 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_Outputs ui_outputs;
 	UI_EndFrame(&ui_outputs);
 	
+	UI_STBTT_FreeUnusedGlyphs();
+	
 	UI_OS_ApplyOutputs(&s->window, &ui_outputs);
-
+	
 	RenderEndFrame(s->render_state, &ui_outputs);
 }
 

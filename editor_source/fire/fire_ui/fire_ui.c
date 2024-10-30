@@ -1,14 +1,5 @@
 #include "fire_ui.h"
 
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "stb_truetype.h"
-
-typedef struct UI_FontData {
-	const uint8_t* data; // NULL if the font is deinitialized
-	float y_offset;
-	stbtt_fontinfo font_info;
-} UI_FontData;
-
 // -- Global state ---------
 UI_API UI_State UI_STATE;
 // -------------------------
@@ -41,7 +32,7 @@ UI_API void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags 
 	UI_ProfExit();
 }
 
-static int UI_ColumnFromXOffset(float x, STR_View line, UI_FontView font) {
+static int UI_ColumnFromXOffset(float x, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	int column = 0;
 	float start_x = 0.f;
@@ -55,7 +46,7 @@ static int UI_ColumnFromXOffset(float x, STR_View line, UI_FontView font) {
 	return column;
 }
 
-static float UI_XOffsetFromColumn(int col, STR_View line, UI_FontView font) {
+static float UI_XOffsetFromColumn(int col, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	float x = 0.f;
 	int i = 0;
@@ -107,7 +98,7 @@ static int UI_MarkToByteOffset(UI_Mark mark, const UI_Text* text) {
 	return result;
 }
 
-static UI_Vec2 UI_XYOffsetFromMark(const UI_Text* text, UI_Mark mark, UI_FontView font) {
+static UI_Vec2 UI_XYOffsetFromMark(const UI_Text* text, UI_Mark mark, UI_Font font) {
 	UI_ProfEnter();
 	float x = UI_XOffsetFromColumn(mark.col, UI_GetLineString(mark.line, text), font);
 	UI_Vec2 result = { x, (float)font.size * mark.line };
@@ -115,7 +106,7 @@ static UI_Vec2 UI_XYOffsetFromMark(const UI_Text* text, UI_Mark mark, UI_FontVie
 	return result;
 }
 
-static void UI_DrawTextRangeHighlight(UI_Mark min, UI_Mark max, UI_Vec2 text_origin, STR_View text, UI_FontView font, UI_Color color, UI_ScissorRect scissor) {
+static void UI_DrawTextRangeHighlight(UI_Mark min, UI_Mark max, UI_Vec2 text_origin, STR_View text, UI_Font font, UI_Color color, UI_ScissorRect scissor) {
 	UI_ProfEnter();
 	float min_pos_x = UI_XOffsetFromColumn(min.col, text, font);
 	float max_pos_x = UI_XOffsetFromColumn(max.col, text, font); // this is not OK with multiline!
@@ -258,7 +249,7 @@ static void UI_MoveMarkH(UI_Mark* mark, const UI_Text* text, int dir, bool ctrl)
 	UI_ProfExit();
 }
 
-static void UI_EditTextArrowKeyInputX(int dir, const UI_Text* text, UI_Selection* selection, UI_FontView font) {
+static void UI_EditTextArrowKeyInputX(int dir, const UI_Text* text, UI_Selection* selection, UI_Font font) {
 	UI_ProfEnter();
 
 	bool shift = UI_InputIsDown(UI_Input_Shift);
@@ -514,7 +505,7 @@ static void UI_DrawValTextInnerBox(UI_Box* box) {
 UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text* text) {
 	UI_ProfEnter();
 
-	UI_FontView font = UI_STATE.base_font;
+	UI_Font font = UI_STATE.base_font;
 
 	UI_AddBox(box, w, h, UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder | UI_BoxFlag_Clickable);
 	UI_PushBox(box);
@@ -1343,7 +1334,7 @@ UI_API void UI_PopBoxN(UI_Box* box, int n) {
 	UI_ASSERT(last_popped == box);
 }
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_FontView base_font, UI_FontView icons_font) {
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font base_font, UI_Font icons_font) {
 	UI_ProfEnter();
 
 	UI_STATE.draw_next_vertex = 0;
@@ -1401,54 +1392,22 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_FontV
 UI_API void UI_Deinit(void) {
 	UI_ProfEnter();
 	
-	DS_MapDeinit(&UI_STATE.glyph_map);
-	DS_ArrDeinit(&UI_STATE.fonts);
 	DS_ArenaDeinit(&UI_STATE.frame_arena);
 	DS_ArenaDeinit(&UI_STATE.prev_frame_arena);
-	DS_ArenaDeinit(&UI_STATE.persistent_arena);
-
-	UI_STATE.backend.resize_index_buffer(0);
-	UI_STATE.backend.resize_vertex_buffer(0);
 	
-	UI_AtlasAllocatorDeinit(&UI_STATE.atlas_allocator);
-
-	//DS_MemFree(UI_STATE.allocator, UI_STATE.atlas_buffer_grayscale);
-
 	UI_ProfExit();
 }
 
-UI_API void UI_Init(DS_Allocator* allocator, const UI_Backend* backend) {
+UI_API void UI_Init(DS_Allocator* allocator) {
 	UI_ProfEnter();
 
 	memset(&UI_STATE, 0, sizeof(UI_STATE));
 	UI_STATE.allocator = allocator;
-	UI_STATE.backend = *backend;
-	DS_ArenaInit(&UI_STATE.persistent_arena, DS_KIB(1), allocator);
+	
 	DS_ArenaInit(&UI_STATE.prev_frame_arena, DS_KIB(4), allocator);
 	DS_ArenaInit(&UI_STATE.frame_arena, DS_KIB(4), allocator);
-	DS_ArrInit(&UI_STATE.fonts, allocator);
-	DS_MapInit(&UI_STATE.glyph_map, allocator);
-
-	// Initialize atlas
-	{
-		UI_AtlasAllocatorInit(&UI_STATE.atlas_allocator, allocator);
-
-		UI_STATE.atlas = backend->create_atlas(UI_STATE.atlas_allocator.tex_width, UI_STATE.atlas_allocator.tex_height);
-		UI_ASSERT(UI_STATE.atlas != NULL);
-
-		// @AtlasReserveWhitePixel
-		// Allocate the first possible slot from the atlas allocator, which ends up being the slot in the top-left corner.
-		// This lets us set the top-left corner pixel to be opaque and white. This makes sure that any vertices with an uv of {0, 0}
-		// ends up sampling a white pixel from the atlas and will therefore act as if there was not texture.
-		UI_AtlasAllocateSlot(&UI_STATE.atlas_allocator, 0);
-		UI_STATE.atlas_mapped_ptr = UI_STATE.backend.map_atlas();
-		*(uint32_t*)UI_STATE.atlas_mapped_ptr = 0xFFFFFFFF;
-	}
-
-	backend->resize_vertex_buffer(sizeof(UI_DrawVertex) * UI_MAX_VERTEX_COUNT);
-	backend->resize_index_buffer(sizeof(uint32_t) * UI_MAX_INDEX_COUNT);
-
-	DS_ArrInit(&UI_STATE.box_stack, &UI_STATE.persistent_arena);
+	
+	DS_ArrInit(&UI_STATE.box_stack, allocator);
 	DS_ArrPush(&UI_STATE.box_stack, NULL);
 
 	UI_ProfExit();
@@ -1671,23 +1630,6 @@ UI_API void UI_EndFrame(UI_Outputs* outputs) {
 	UI_STATE.outputs.draw_calls_count = UI_STATE.draw_calls.count;
 	*outputs = UI_STATE.outputs;
 
-	// Garbage-collect unused glyphs
-	{
-		DS_DynArray(UI_CachedGlyphKey) unused_glyphs = {&UI_STATE.frame_arena};
-
-		DS_ForMapEach(UI_CachedGlyphKey, UI_CachedGlyph, &UI_STATE.glyph_map, IT) {
-			if (!IT.value->used_this_frame) {
-				UI_AtlasFreeSlot(&UI_STATE.atlas_allocator, IT.value->atlas_slot_index);
-				DS_ArrPush(&unused_glyphs, *IT.key);
-			}
-			IT.value->used_this_frame = 0;
-		}
-
-		for (int i = 0; i < unused_glyphs.count; i++) {
-			DS_MapRemove(&UI_STATE.glyph_map, unused_glyphs.data[i]);
-		}
-	}
-
 	UI_ProfExit();
 }
 
@@ -1797,102 +1739,12 @@ UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int 
 #define INVALID_GLYPH '?'
 #define INVALID_GLYPH_COLOR UI_MAGENTA
 
-UI_API UI_FontIndex UI_FontInit(const void* ttf_data, float y_offset) {
-	UI_ProfEnter();
-	
-	int idx = -1;
-	for (int i = 0; i < UI_STATE.fonts.count; i++) {
-		if (UI_STATE.fonts.data[i].data == NULL) { idx = i; break; }
-	}
-	if (idx == -1) {
-		idx = UI_STATE.fonts.count;
-		DS_ArrResizeUndef(&UI_STATE.fonts, UI_STATE.fonts.count + 1);
-	}
-
-	UI_FontData* font = &UI_STATE.fonts.data[idx];
-	memset(font, 0, sizeof(*font));
-
-	font->data = (const unsigned char*)ttf_data;
-	font->y_offset = y_offset;
-
-	int font_offset = stbtt_GetFontOffsetForIndex(font->data, 0);
-	UI_ASSERT(stbtt_InitFont(&font->font_info, font->data, font_offset));
-	UI_ProfExit();
-	
-	return (UI_FontIndex)idx;
-}
-
-UI_API void UI_FontDeinit(UI_FontIndex font_idx) {
-	UI_FontData* font = DS_ArrGetPtr(UI_STATE.fonts, font_idx);
-	UI_ASSERT(font->data);
-	font->data = NULL;
-}
-
-static UI_CachedGlyph UI_GetCachedGlyph(uint32_t codepoint, UI_FontView font, int* out_atlas_index) {
-	UI_ProfEnter();
-	int atlas_index = 0;
-	UI_CachedGlyphKey key = { codepoint, font.font, (uint16_t)font.size };
-
-	UI_CachedGlyph* glyph = NULL;
-	bool added_new = DS_MapGetOrAddPtr(&UI_STATE.glyph_map, key, &glyph);
-	if (added_new) {
-		UI_FontData* font_data = DS_ArrGetPtr(UI_STATE.fonts, font.font);
-
-		int glyph_index = stbtt_FindGlyphIndex(&font_data->font_info, codepoint);
-		float scale = stbtt_ScaleForPixelHeight(&font_data->font_info, (float)font.size);
-
-		int x0, y0, x1, y1;
-		stbtt_GetGlyphBitmapBox(&font_data->font_info, glyph_index, scale, scale, &x0, &y0, &x1, &y1);
-
-		int glyph_w = x1 - x0;
-		int glyph_h = y1 - y0;
-
-		UI_AtlasSlotInfo atlas_slot = UI_AtlasAllocateSlot(&UI_STATE.atlas_allocator, UI_Max(glyph_w, glyph_h));
-
-		uint8_t* glyph_data = (uint8_t*)DS_ArenaPush(&UI_STATE.frame_arena, glyph_w*glyph_h);
-		memset(glyph_data, 0, glyph_w*glyph_h);
-		stbtt_MakeGlyphBitmapSubpixel(&font_data->font_info, glyph_data, glyph_w, glyph_h, glyph_w, scale, scale, 0.f, 0.f, glyph_index);
-
-		uint32_t* atlas_data = (uint32_t*)(UI_STATE.atlas_mapped_ptr ? UI_STATE.atlas_mapped_ptr : UI_STATE.backend.map_atlas());
-		UI_STATE.atlas_mapped_ptr = atlas_data;
-		UI_ASSERT(atlas_data);
-
-		for (int y = 0; y < glyph_h; y++) {
-			uint8_t* src_row = glyph_data + y*glyph_w;
-			uint32_t* dst_row = atlas_data + (atlas_slot.y0 + y)*UI_STATE.atlas_allocator.tex_width + atlas_slot.x0;
-
-			for (int x = 0; x < glyph_w; x++) {
-				dst_row[x] = ((uint32_t)src_row[x] << 24) | 0x00FFFFFF;
-			}
-		}
-
-		int x_advance;
-		int left_side_bearing;
-		stbtt_GetGlyphHMetrics(&font_data->font_info, glyph_index, &x_advance, &left_side_bearing);
-
-		glyph->atlas_slot_index = (uint32_t)atlas_slot.slot_index;
-		glyph->origin_uv.x = (float)atlas_slot.x0 / (float)UI_STATE.atlas_allocator.tex_width;
-		glyph->origin_uv.y = (float)atlas_slot.y0 / (float)UI_STATE.atlas_allocator.tex_height;
-		glyph->size_pixels.x = (float)glyph_w;
-		glyph->size_pixels.y = (float)glyph_h;
-		glyph->offset_pixels.x = (float)x0;
-		glyph->offset_pixels.y = (float)y0 + (float)font.size + font_data->y_offset;
-		glyph->x_advance = (float)(int)((float)x_advance*scale + 0.5f); // round to integer
-	}
-	
-	glyph->used_this_frame = 1;
-
-	if (out_atlas_index) *out_atlas_index = atlas_index;
-	UI_ProfExit();
-	return *glyph;
-}
-
-UI_API float UI_GlyphWidth(uint32_t codepoint, UI_FontView font) {
-	UI_CachedGlyph glyph = UI_GetCachedGlyph(codepoint, font, NULL);
+UI_API float UI_GlyphWidth(uint32_t codepoint, UI_Font font) {
+	UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(codepoint, font);
 	return glyph.x_advance;
 }
 
-UI_API float UI_TextWidth(STR_View text, UI_FontView font) {
+UI_API float UI_TextWidth(STR_View text, UI_Font font) {
 	UI_ProfEnter();
 	float w = 0.f;
 	for STR_Each(text, r, i) {
@@ -2373,7 +2225,7 @@ UI_API void UI_DrawPolylineLoop(const UI_Vec2* points, const UI_Color* colors, i
 	UI_DrawPolylineEx(points, colors, points_count, thickness, true, 0.7f);
 }
 
-UI_API void UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 pos, UI_AlignH align, UI_Color color, UI_ScissorRect scissor) {
+UI_API void UI_DrawText(STR_View text, UI_Font font, UI_Vec2 pos, UI_AlignH align, UI_Color color, UI_ScissorRect scissor) {
 	UI_ProfEnter();
 	
 	if (align == UI_AlignH_Middle) {
@@ -2384,10 +2236,10 @@ UI_API void UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 pos, UI_AlignH 
 	}
 
 	pos.x = (float)(int)(pos.x + 0.5f); // round to integer
+	pos.y = (float)(int)(pos.y + 0.5f); // round to integer
 
 	for STR_Each(text, r, i) {
-		int atlas_index = 0;
-		UI_CachedGlyph glyph = UI_GetCachedGlyph(r, font, &atlas_index);
+		UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(r, font);
 
 		UI_Rect glyph_rect;
 		glyph_rect.min.x = pos.x + glyph.offset_pixels.x;
@@ -2398,8 +2250,8 @@ UI_API void UI_DrawText(STR_View text, UI_FontView font, UI_Vec2 pos, UI_AlignH 
 		UI_Rect glyph_uv_rect;
 		glyph_uv_rect.min = glyph.origin_uv;
 		glyph_uv_rect.max = glyph_uv_rect.min;
-		glyph_uv_rect.max.x += glyph.size_pixels.x / (float)UI_STATE.atlas_allocator.tex_width; // TODO: store the inverse tex width as well and multiply
-		glyph_uv_rect.max.y += glyph.size_pixels.y / (float)UI_STATE.atlas_allocator.tex_height;
+		glyph_uv_rect.max.x += glyph.size_pixels.x * (float)UI_STATE.backend.inv_atlas_size.x;
+		glyph_uv_rect.max.y += glyph.size_pixels.y * (float)UI_STATE.backend.inv_atlas_size.y;
 
 		UI_DrawSprite(glyph_rect, color, glyph_uv_rect, NULL, scissor);
 		pos.x += glyph.x_advance;
@@ -2545,98 +2397,4 @@ UI_API void UI_AddArranger(UI_Box* box, UI_Size w, UI_Size h) {
 		UI_ASSERT(elem);
 	}
 	UI_ProfExit();
-}
-
-// -- Atlas allocator -------------------------------------------------
-
-UI_API void UI_AtlasAllocatorInit(UI_AtlasAllocator* atlas, DS_Allocator* allocator) {
-	// hard-code the parameters for now
-	atlas->level0_num_slots_x = 16;
-	atlas->level0_num_slots_y = 8;
-	atlas->level0_slot_size = 128;
-	atlas->level_count = 4;
-
-	atlas->allocator = allocator;
-
-	int width = atlas->level0_slot_size;
-	int num_slots_y = atlas->level0_num_slots_y;
-	int num_slots_x = atlas->level0_num_slots_x;
-	int tex_size_y = 0;
-	int num_slots_total = 0;
-	
-	for (int l = 0; l < atlas->level_count; l++) {
-		tex_size_y += width * num_slots_y;
-		width /= 2;
-		num_slots_total += num_slots_x * num_slots_y;
-		num_slots_x *= 2;
-	}
-	
-	atlas->slots = (UI_AtlasSlot*)DS_MemAlloc(atlas->allocator, sizeof(UI_AtlasSlot) * num_slots_total);
-	memset(atlas->slots, 0, sizeof(UI_AtlasSlot) * num_slots_total);
-	
-	atlas->tex_width = atlas->level0_slot_size * atlas->level0_num_slots_x;
-	atlas->tex_height = tex_size_y;
-}
-
-UI_API void UI_AtlasAllocatorDeinit(UI_AtlasAllocator* atlas) {
-	DS_MemFree(atlas->allocator, atlas->slots);
-	DS_DebugFillGarbage(atlas, sizeof(*atlas));
-}
-
-UI_API UI_AtlasSlotInfo UI_AtlasAllocateSlot(UI_AtlasAllocator* atlas, int required_width) {
-	assert(required_width <= atlas->level0_slot_size);
-
-	int width = atlas->level0_slot_size;
-	int num_slots_x = atlas->level0_num_slots_x;
-	for (int i = 1; i < atlas->level_count; i++) {
-		width /= 2;
-		num_slots_x *= 2;
-	}
-	
-	int first_slot = 0;
-	int num_slots_y = atlas->level0_num_slots_y;
-
-	UI_AtlasSlotInfo result = {0};
-
-	int base_texspace_y = 0;
-
-	for (int l = 0; l < atlas->level_count; l++) {
-		
-		if (required_width > width) {
-			// Does not fit into this level
-			base_texspace_y += width * num_slots_y;
-			width *= 2;
-			first_slot += num_slots_x * num_slots_y;
-			num_slots_x /= 2;
-			continue;
-		}
-
-		// Find a slot in this level.
-
-		int i = first_slot;
-		for (int y = 0; y < num_slots_y; y++) {
-			for (int x = 0; x < num_slots_x; x++) {
-				if (!atlas->slots[i].occupied) {
-					// Take this slot!
-					atlas->slots[i].occupied = true;
-					
-					result.x0 = x * width;
-					result.y0 = base_texspace_y + y * width;
-					result.x1 = result.x0 + width;
-					result.y1 = result.y0 + width;
-					result.slot_index = i;
-					
-					return result;
-				}
-				i++;
-			}
-		}
-	}
-	
-	UI_ASSERT(0); // We didn't find a slot.
-	return result;
-}
-
-UI_API void UI_AtlasFreeSlot(UI_AtlasAllocator* atlas, int slot_index) {
-	atlas->slots[slot_index].occupied = false;
 }

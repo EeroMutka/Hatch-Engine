@@ -164,19 +164,19 @@ static void UI_DX12_ResizeIndexBuffer(uint32_t size) {
 	UI_DX12_ResizeBuffer(&UI_DX12_STATE.index_buffer, size);
 }
 
-static void UI_DX12_Init(UI_Backend* backend, ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor, D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor) {
+static void UI_DX12_Init(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor, D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor) {
 	memset(&UI_DX12_STATE, 0, sizeof(UI_DX12_STATE));
 	UI_DX12_STATE.device = device;
 	UI_DX12_STATE.atlas_cpu_descriptor = atlas_cpu_descriptor;
 	UI_DX12_STATE.atlas_gpu_descriptor = atlas_gpu_descriptor;
 
-	backend->resize_vertex_buffer = UI_DX12_ResizeVertexBuffer;
-	backend->resize_index_buffer = UI_DX12_ResizeIndexBuffer;
-	backend->create_atlas = UI_DX12_CreateAtlas;
+	//backend->resize_vertex_buffer = UI_DX12_ResizeVertexBuffer;
+	//backend->resize_index_buffer = UI_DX12_ResizeIndexBuffer;
+	UI_STATE.backend.create_atlas = UI_DX12_CreateAtlas;
 
-	backend->map_vertex_buffer = UI_DX12_MapVertexBuffer;
-	backend->map_index_buffer = UI_DX12_MapIndexBuffer;
-	backend->map_atlas = UI_DX12_MapAtlas;
+	UI_STATE.backend.map_vertex_buffer = UI_DX12_MapVertexBuffer;
+	UI_STATE.backend.map_index_buffer = UI_DX12_MapIndexBuffer;
+	UI_STATE.backend.map_atlas = UI_DX12_MapAtlas;
 
 	// Create the root signature
 	{
@@ -325,9 +325,15 @@ static void UI_DX12_Init(UI_Backend* backend, ID3D12Device* device, D3D12_CPU_DE
 		vertex_shader->Release();
 		pixel_shader->Release();
 	}
+	
+	UI_DX12_ResizeVertexBuffer(sizeof(UI_DrawVertex) * UI_MAX_VERTEX_COUNT);
+	UI_DX12_ResizeIndexBuffer(sizeof(uint32_t) * UI_MAX_INDEX_COUNT);
 }
 
 static void UI_DX12_Deinit(void) {
+	UI_DX12_ResizeVertexBuffer(0);
+	UI_DX12_ResizeIndexBuffer(0);
+	
 	if (UI_DX12_STATE.atlas) {
 		UI_DX12_STATE.atlas_staging_buffer->Release();
 		UI_DX12_STATE.atlas->Release();

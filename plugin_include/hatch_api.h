@@ -119,7 +119,7 @@ struct HT_API {
 	
 	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);
 	
-	// Texture may be NULL, in which case the DrawVertex uv's must be {0, 0}
+	// Texture may be NULL, in which case the DrawVertex uv must be {0, 0}
 	u32* (*AddIndices)(int count, HT_Texture* texture);
 	
 	void (*DrawText)(string text, vec2 pos, HT_AlignH align, int font_size, HT_Color color);
