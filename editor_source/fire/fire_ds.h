@@ -21,7 +21,7 @@
 #include <string.h>  // memcpy, memmove, memset, memcmp, strlen
 
 #ifndef DS_NO_MALLOC
-#include <stdlib.h>  // for DS_AllocatorFn_Default
+#include <stdlib.h>
 #endif
 
 #ifndef DS_PROFILER_MACROS_OVERRIDE
@@ -61,26 +61,19 @@
 #define DS_ARENA_BLOCK_ALIGNMENT  (sizeof(void*)*2)
 #endif
 
-typedef enum DS_AllocatorType {
-	DS_AllocatorType_Heap = 0,
-	DS_AllocatorType_Arena = 1,
-} DS_AllocatorType;
-
 typedef struct DS_AllocatorBase {
-	DS_AllocatorType type;
+	// AllocatorProc is a combination of malloc, free and realloc.
+	// A new allocation is made (or an existing allocation is resized if old_ptr != NULL) when new_size > 0.
+	// An existing allocation is freed when new_size == 0.
+	void* (*AllocatorProc)(struct DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align);
 } DS_AllocatorBase;
-
-#ifndef DS_USE_CUSTOM_ALLOCATOR
-#define DS_AllocatorFn_Impl(ALLOCATOR, OLD_PTR, OLD_SIZE, NEW_SIZE, NEW_ALIGNMENT) DS_AllocatorFn_Default(ALLOCATOR, OLD_PTR, OLD_SIZE, NEW_SIZE, NEW_ALIGNMENT)
-#endif
 
 // ----------------------------------------------------------
 
 typedef struct DS_Arena DS_Arena;
 
-// DS_Allocator can be any structure that DS_AllocatorFn_Impl defines the behaviour of.
-// For convenience, it's type-defined to be DS_Arena, to make it easy to pass an arena pointer to any parameter
-// of type DS_Allocator*, but it doesn't have to be an arena.
+// For convenience, DS_Allocator is type-defined to be DS_Arena to make it easy to pass an arena pointer to any parameter
+// of type DS_Allocator*, but it can be anything that points to DS_AllocatorBase.
 typedef DS_Arena DS_Allocator;
 
 typedef struct DS_ArenaBlockHeader {
@@ -115,8 +108,18 @@ struct DS_Arena {
 #define DS_LangAgnosticZero(T) (T){0}
 #endif
 
-static const DS_AllocatorBase DS_HEAP_ = { DS_AllocatorType_Heap };
+#ifndef DS_NO_MALLOC
+static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
+	if (size == 0) {
+		_aligned_free(ptr);
+		return NULL;
+	} else {
+		return _aligned_realloc(ptr, size, align);
+	}
+}
+static const DS_AllocatorBase DS_HEAP_ = { DS_HeapAllocatorProc };
 #define DS_HEAP (DS_Allocator*)(&DS_HEAP_)
+#endif
 
 // Results in a compile-error if `elem` does not match the array's element type
 #define DS_ArrTypecheck(array, elem) (void)((array)->data == elem)
@@ -441,33 +444,11 @@ static inline void DS_ScopeEnd(DS_MemScope* scope) {
 
 // -- Memory allocation --------------------------------
 
-#ifndef DS_NO_MALLOC
-static char* DS_AllocatorFn_Default(DS_AllocatorBase* allocator, char* old_ptr, int old_size, int new_size, int new_alignment) {
-	char* result;
-	if (allocator->type == DS_AllocatorType_Arena) {
-		result = DS_ArenaPushEx((DS_Arena*)allocator, new_size, new_alignment);
-		memcpy(result, old_ptr, old_size);
-	}
-	else {
-		result = (char*)_aligned_realloc(old_ptr, new_size, new_alignment);
-	}
-	return result;
-}
-#endif
-
-// DS_AllocatorFn is a combination of malloc, free and realloc.
-// - To make a new allocation (i.e. malloc/realloc), pass a size other than 0 into `new_size`,
-//   and pass an alignment, e.g. DS_DEFAULT_ALIGNMENT into `new_alignment`.
-// - To free an existing allocation (i.e. free/realloc), pass it into `old_ptr` and its size into `old_size, otherwise pass NULL and 0.
-static inline char* DS_AllocatorFn(DS_Allocator* allocator, const void* old_ptr, int old_size, int new_size, int new_alignment) {
-	char* result = DS_AllocatorFn_Impl((DS_AllocatorBase*)allocator, (char*)old_ptr, old_size, new_size, new_alignment);
-	DS_ASSERT(((uintptr_t)result & (new_alignment - 1)) == 0); // check that the alignment is correct
-	return result;
-}
-
-#define DS_MemAllocEx(ALLOCATOR, SIZE, ALIGNMENT) DS_AllocatorFn(ALLOCATOR, NULL, 0, SIZE, ALIGNMENT)
-#define DS_MemAlloc(ALLOCATOR, SIZE)              DS_AllocatorFn(ALLOCATOR, NULL, 0, SIZE, DS_DEFAULT_ALIGNMENT)
-#define DS_MemFree(ALLOCATOR, PTR)                DS_AllocatorFn(ALLOCATOR, PTR, 0, 0, 1)
+#define DS_MemAlloc(ALLOCATOR, SIZE)                      (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL, (SIZE), DS_DEFAULT_ALIGNMENT)
+#define DS_MemRealloc(ALLOCATOR, PTR, SIZE)               (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (SIZE), DS_DEFAULT_ALIGNMENT)
+#define DS_MemFree(ALLOCATOR, PTR)                        (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR),      0, DS_DEFAULT_ALIGNMENT)
+#define DS_MemAllocAligned(ALLOCATOR, SIZE, ALIGN)        (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL, (SIZE), ALIGN)
+#define DS_MemReallocAligned(ALLOCATOR, PTR, SIZE, ALIGN) (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (SIZE), ALIGN)
 
 static inline void* DS_CloneSize(DS_Arena* arena, const void* value, int size) { void* p = DS_ArenaPush(arena, size); return memcpy(p, value, size); }
 static inline void* DS_CloneSizeA(DS_Arena* arena, const void* value, int size, int align) { void* p = DS_ArenaPushEx(arena, size, align); return memcpy(p, value, size); }
@@ -958,7 +939,7 @@ DS_API void DS_ArrReserveRaw(DS_DynArrayRaw* array, int capacity, int elem_size)
 	}
 
 	if (new_capacity != array->capacity) {
-		array->data = DS_AllocatorFn(array->allocator, array->data, array->count * elem_size, new_capacity * elem_size, DS_DEFAULT_ALIGNMENT);
+		array->data = DS_MemRealloc(array->allocator, array->data, new_capacity * elem_size);
 		array->capacity = new_capacity;
 	}
 
@@ -1032,12 +1013,9 @@ DS_API void DS_ArrInitRaw(DS_DynArrayRaw* array, DS_Allocator* allocator) {
 }
 
 DS_API void DS_ArrDeinitRaw(DS_DynArrayRaw* array, int elem_size) {
-	DS_ProfEnter();
 	DS_DebugFillGarbage(array->data, array->capacity * elem_size);
-	DS_AllocatorFn(array->allocator, array->data, 0, 0, DS_DEFAULT_ALIGNMENT);
-	DS_DynArrayRaw empty = {0};
-	*array = empty;
-	DS_ProfExit();
+	DS_MemFree(array->allocator, array->data);
+	DS_DebugFillGarbage(array, sizeof(*array));
 }
 
 DS_API int DS_ArrPushRaw(DS_DynArrayRaw* array, const void* elem, int elem_size) {
@@ -1088,7 +1066,7 @@ static inline void DS_MapClearRaw(DS_MapRaw* map, int elem_size) {
 static inline void DS_MapDeinitRaw(DS_MapRaw* map, int elem_size) {
 	DS_ProfEnter();
 	DS_DebugFillGarbage(map->data, map->capacity * elem_size);
-	DS_AllocatorFn(map->allocator, map->data, 0, 0, DS_DEFAULT_ALIGNMENT);
+	DS_MemFree(map->allocator, map->data);
 	DS_MapRaw empty = {0};
 	*map = empty;
 	DS_ProfExit();
@@ -1252,7 +1230,7 @@ static bool DS_MapGetOrAddRawEx(DS_MapRaw* map, const void* key, DS_OUT void** o
 		map->capacity = old_capacity == 0 ? 8 : old_capacity * 2;
 		map->count = 0;
 
-		void* new_data = DS_AllocatorFn(map->allocator, NULL, 0, map->capacity * elem_size, DS_DEFAULT_ALIGNMENT);
+		void* new_data = DS_MemAlloc(map->allocator, map->capacity * elem_size);
 
 		memcpy(&map->data, &new_data, sizeof(void*));
 		memset(map->data, 0, map->capacity * elem_size); // set hash values to 0
@@ -1271,7 +1249,7 @@ static bool DS_MapGetOrAddRawEx(DS_MapRaw* map, const void* key, DS_OUT void** o
 		}
 
 		DS_DebugFillGarbage(old_data, old_capacity * elem_size);
-		DS_AllocatorFn(map->allocator, old_data, 0, 0, DS_DEFAULT_ALIGNMENT); // free the old data
+		DS_MemFree(map->allocator, old_data);
 	}
 
 	uint32_t mask = (uint32_t)map->capacity - 1;
@@ -1371,7 +1349,7 @@ static inline bool DS_MapRemoveRaw(DS_MapRaw* map, const void* key, int K_size, 
 static inline void DS_MapInitCloneRaw(DS_MapRaw* map, DS_MapRaw* src, DS_Allocator* allocator, int elem_size) {
 	*map = *src;
 	map->allocator = allocator;
-	*(void**)&map->data = DS_AllocatorFn(allocator, NULL, 0, src->capacity * elem_size, DS_DEFAULT_ALIGNMENT);
+	*(void**)&map->data = DS_MemAlloc(allocator, src->capacity * elem_size);
 	memcpy(map->data, src->data, src->capacity * elem_size);
 }
 
@@ -1386,9 +1364,15 @@ static inline bool DS_MapInsertRaw(DS_MapRaw* map, const void* key, DS_OUT void*
 	return added;
 }
 
+static void* DS_ArenaAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
+	char* result = DS_ArenaPushEx((DS_Arena*)allocator, (int)size, (int)align); // TODO: use size_t for arenas instead of int
+	if (ptr) memcpy(result, ptr, size);
+	return result;
+}
+
 DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator) {
 	memset(arena, 0, sizeof(*arena));
-	arena->base.type = DS_AllocatorType_Arena;
+	arena->base.AllocatorProc = DS_ArenaAllocatorProc;
 	arena->block_size = block_size;
 	arena->allocator = allocator;
 }
@@ -1445,7 +1429,9 @@ DS_API char* DS_ArenaPushEx(DS_Arena* arena, int size, int alignment) {
 
 		// Otherwise, insert a new block.
 		if (new_block == NULL) {
-			new_block = (DS_ArenaBlockHeader*)DS_AllocatorFn(arena->allocator, NULL, 0, new_block_size, DS_ARENA_BLOCK_ALIGNMENT);
+			new_block = (DS_ArenaBlockHeader*)DS_MemAllocAligned(arena->allocator, new_block_size, DS_ARENA_BLOCK_ALIGNMENT);
+			DS_ASSERT(((uintptr_t)new_block & (DS_ARENA_BLOCK_ALIGNMENT - 1)) == 0); // make sure that the alignment is correct
+	
 			new_block->size_including_header = new_block_size;
 			new_block->next = next_block;
 			arena->total_mem_reserved += new_block_size;

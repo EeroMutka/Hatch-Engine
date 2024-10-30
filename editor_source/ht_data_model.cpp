@@ -206,7 +206,7 @@ EXPORT void ComputeStructLayout(Asset* struct_type) {
 EXPORT void ArrayPush(Array* array, int32_t elem_size) {
 	if (array->count == array->capacity) {
 		int32_t new_capacity = array->capacity == 0 ? 8 : array->capacity * 2;
-		array->data = DS_AllocatorFn(DS_HEAP, array->data, array->capacity * elem_size, new_capacity * elem_size, DS_DEFAULT_ALIGNMENT);
+		array->data = DS_MemRealloc(DS_HEAP, array->data, new_capacity * elem_size);
 		array->capacity = new_capacity;
 		//if (array->capacity == 0) {
 		//	int32_t new_size = elem_size * 8;

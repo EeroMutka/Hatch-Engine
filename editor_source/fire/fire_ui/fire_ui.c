@@ -1342,7 +1342,6 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Vec2 window_size, UI_Font 
 	UI_STATE.draw_vertices = (UI_DrawVertex*)UI_STATE.backend.map_vertex_buffer();
 	UI_STATE.draw_indices = (uint32_t*)UI_STATE.backend.map_index_buffer();
 	UI_STATE.draw_active_texture = NULL;
-	UI_STATE.atlas_mapped_ptr = NULL;
 	UI_ASSERT(UI_STATE.draw_vertices != NULL);
 	UI_ASSERT(UI_STATE.draw_indices != NULL);
 	
@@ -1593,11 +1592,9 @@ static void UI_FinalizeDrawBatch() {
 	uint32_t index_count = UI_STATE.draw_next_index - first_index;
 	if (index_count > 0) {
 		UI_DrawCall draw_call = {0};
-		draw_call.texture = UI_STATE.draw_active_texture ? UI_STATE.draw_active_texture : UI_STATE.atlas;
+		draw_call.texture = UI_STATE.draw_active_texture ? UI_STATE.draw_active_texture : UI_STATE.backend.atlas;
 		draw_call.first_index = first_index;
 		draw_call.index_count = index_count;
-		draw_call.vertex_buffer_id = 0;
-		draw_call.index_buffer_id = 1;
 		DS_ArrPush(&UI_STATE.draw_calls, draw_call);
 	}
 	UI_ProfExit();
@@ -1769,7 +1766,7 @@ UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture) {
 	
 	// Set active texture
 	if (texture != UI_STATE.draw_active_texture) {
-		UI_ASSERT(texture != UI_STATE.atlas); // When using the atlas texture, prefer to pass NULL instead of the atlas directly.
+		UI_ASSERT(texture != UI_STATE.backend.atlas); // When using the atlas texture, prefer to pass NULL instead of the atlas directly.
 
 		if (UI_STATE.draw_active_texture != NULL) {
 			UI_FinalizeDrawBatch();

@@ -115,6 +115,10 @@ struct HT_API {
 	// There should be sane default restrictions to make sure the user of Hatch always has a sane time and won't lose control.
 	// The user should always be in control.
 	
+	// -- Memory allocation ---------------------------
+	
+	void* (*AllocatorProc)(void* ptr, size_t size, size_t align);
+	
 	// -- UI functions --------------------------------
 	
 	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);

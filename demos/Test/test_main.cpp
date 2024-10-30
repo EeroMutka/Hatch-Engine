@@ -5,7 +5,19 @@
 // this should be in the utility libraries...
 // #include "../editor_source/fire/fire_ui/fire_ui.c"
 
+#define DS_NO_MALLOC
+#include "../editor_source/fire/fire_ds.h"
+
 #include "utility_libraries/hatch_ui.h"
+
+struct Allocator {
+	DS_AllocatorBase base;
+	HT_API* ht;
+};
+
+static void* AllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t size, size_t align) {
+	return ((Allocator*)allocator)->ht->AllocatorProc(ptr, size, align);
+}
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// ht->DebugPrint("This is NOT fun!\n");
@@ -21,7 +33,25 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// Ok, so can we make a fire UI button using a local copy of the fire-UI library?
 	// maybe we should first solve the atlas thing yeah...
 	
+	
+	// ok... so first thing first, we need to allocate memory.
+	// Then we need fire_ds support.
+	
+	Allocator _allocator = {{AllocatorProc}, ht};
+	_allocator.base.AllocatorProc = AllocatorProc;
+	DS_Allocator* allocator = (DS_Allocator*)&_allocator;
+	
+	/*DS_Arena test_arena;
+	DS_ArenaInit(&test_arena, 1024, allocator);*/
+	__debugbreak();
+	
+	DS_DynArray(int) my_things = {allocator};
+	DS_ArrPush(&my_things, 1);
+	DS_ArrPush(&my_things, 2);
+	DS_ArrPush(&my_things, 3);
+	DS_ArrPush(&my_things, 4);
+	
 	UI_DrawRect(ht, {{200, 50}, {230, 600}}, UI_RED);
 	
-	ht->DrawText("Hello!", {200, 500}, HT_AlignH_Left, HT_AlignV_Top, 200, UI_BLUE);
+	ht->DrawText("Hello!", {200, 500}, HT_AlignH_Left, 100, UI_BLUE);
 }

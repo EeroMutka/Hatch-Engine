@@ -223,8 +223,6 @@ typedef enum UI_AlignH { UI_AlignH_Left, UI_AlignH_Middle, UI_AlignH_Right } UI_
 typedef struct UI_Texture UI_Texture; // user-defined structure
 
 typedef struct UI_DrawCall {
-	int vertex_buffer_id;
-	int index_buffer_id;
 	UI_Texture* texture;
 	uint32_t first_index;
 	uint32_t index_count;
@@ -279,6 +277,7 @@ typedef struct UI_Backend {
 	UI_Texture* (*create_atlas)(uint32_t width, uint32_t height);
 
 	// When mapping a resource, the returned pointer must stay valid until UI_EndFrame or resize_* is called.
+	// The map function may be called multiple times during a frame, subsequent calls should return the previously mapped pointer!
 	void* (*map_atlas)();
 	void* (*map_vertex_buffer)();
 	void* (*map_index_buffer)();
@@ -287,6 +286,7 @@ typedef struct UI_Backend {
 	
 	UI_CachedGlyph (*GetCachedGlyph)(uint32_t codepoint, UI_Font font);
 	UI_Vec2 inv_atlas_size;
+	UI_Texture* atlas;
 } UI_Backend;
 
 typedef struct UI_Inputs {
@@ -346,10 +346,9 @@ typedef struct UI_State {
 	float time_since_pressed_lmb;
 
 	UI_Texture* atlas;
-	void* atlas_mapped_ptr;
 	
 	// Mouse position in screen space coordinates, snapped to the pixel center. Placing it at the pixel center means we don't
-	// need to worry about dUI_enerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
+	// need to worry about degenerate cases where the mouse is exactly at the edge of one or many rectangles when testing for overlap.
 	UI_Vec2 mouse_pos;
 	UI_Vec2 window_size;
 
@@ -363,7 +362,7 @@ typedef struct UI_State {
 	UI_Key selected_box;
 	UI_Key selected_box_new;
 	
-	float scrollbar_origin_before_press;
+	float scrollbar_origin_before_press; // Cleanup: remove from this struct
 	
 	// -- Builder state --
 	UI_Font base_font;
@@ -375,7 +374,7 @@ typedef struct UI_State {
 	UI_DrawVertex* draw_vertices; // NULL by default
 	uint32_t draw_next_vertex;
 	uint32_t draw_next_index;
-	UI_Texture* draw_active_texture; // NULL means use the atlas texture
+	UI_Texture* draw_active_texture; // NULL means the atlas texture
 	DS_DynArray(UI_DrawCall) draw_calls;
 } UI_State;
 

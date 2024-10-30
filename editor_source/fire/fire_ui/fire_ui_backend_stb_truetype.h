@@ -123,8 +123,7 @@ static UI_CachedGlyph UI_STBTT_GetCachedGlyph(uint32_t codepoint, UI_Font font) 
 		memset(glyph_data, 0, glyph_w*glyph_h);
 		stbtt_MakeGlyphBitmapSubpixel(&font_data->font_info, glyph_data, glyph_w, glyph_h, glyph_w, scale, scale, 0.f, 0.f, glyph_index);
 
-		uint32_t* atlas_data = (uint32_t*)(UI_STATE.atlas_mapped_ptr ? UI_STATE.atlas_mapped_ptr : UI_STATE.backend.map_atlas());
-		UI_STATE.atlas_mapped_ptr = atlas_data;
+		uint32_t* atlas_data = (uint32_t*)UI_STATE.backend.map_atlas();
 		UI_ASSERT(atlas_data);
 
 		for (int y = 0; y < glyph_h; y++) {
@@ -191,8 +190,8 @@ static void UI_STBTT_Init() {
 	
 	// Initialize atlas texture
 	{
-		UI_STATE.atlas = UI_STATE.backend.create_atlas(UI_STBTT_STATE.atlas_width, UI_STBTT_STATE.atlas_height);
-		UI_ASSERT(UI_STATE.atlas != NULL);
+		UI_STATE.backend.atlas = UI_STATE.backend.create_atlas(UI_STBTT_STATE.atlas_width, UI_STBTT_STATE.atlas_height);
+		UI_ASSERT(UI_STATE.backend.atlas != NULL);
 		
 		UI_STATE.backend.inv_atlas_size.x = UI_STBTT_STATE.inv_atlas_width;
 		UI_STATE.backend.inv_atlas_size.y = UI_STBTT_STATE.inv_atlas_height;
@@ -201,8 +200,8 @@ static void UI_STBTT_Init() {
 		// This lets us set the top-left corner pixel to be opaque and white. This makes sure that any vertices with an uv of {0, 0}
 		// ends up sampling a white pixel from the atlas and will therefore act as if there was not texture.
 		UI_STBTT_AtlasAllocateSlot(0);
-		UI_STATE.atlas_mapped_ptr = UI_STATE.backend.map_atlas();
-		*(uint32_t*)UI_STATE.atlas_mapped_ptr = 0xFFFFFFFF;
+		void* atlas_data = UI_STATE.backend.map_atlas();
+		*(uint32_t*)atlas_data = 0xFFFFFFFF;
 	}
 
 	UI_STATE.backend.GetCachedGlyph = UI_STBTT_GetCachedGlyph;

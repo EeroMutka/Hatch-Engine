@@ -805,21 +805,26 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	}
 }
 
-static void DebugPrint(const char* str) {
+static void HT_DebugPrint(const char* str) {
 	TODO();
 	//printf("DEBUG PRINT: %s\n", str);
 }
 
-static void DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
+static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
 	UI_DrawText(text, {UI_STATE.base_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
+}
+
+static void* HT_AllocatorProc(void* ptr, size_t size, size_t align) {
+	return DS_MemReallocAligned(DS_HEAP, ptr, size, align);
 }
 
 EXPORT void UpdatePlugins(EditorState* s) {
 	HT_API api = {0};
-	api.DebugPrint = DebugPrint;
+	api.DebugPrint = HT_DebugPrint;
 	*(void**)&api.AddVertices = UI_AddVertices;
 	*(void**)&api.AddIndices = UI_AddIndices;
-	*(void**)&api.DrawText = DrawText;
+	*(void**)&api.DrawText = HT_DrawText;
+	api.AllocatorProc = HT_AllocatorProc;
 
 	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
 		Asset* plugin = IT.elem;

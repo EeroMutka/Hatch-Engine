@@ -2,7 +2,7 @@
 typedef struct UI_DX12_Buffer {
 	ID3D12Resource* handle;
 	uint32_t size;
-	bool is_mapped;
+	void* mapped_ptr;
 } UI_DX12_Buffer;
 
 typedef struct UI_DX12_State {
@@ -20,7 +20,7 @@ typedef struct UI_DX12_State {
 	ID3D12Resource* atlas_staging_buffer;
 	uint32_t atlas_width;
 	uint32_t atlas_height;
-	bool atlas_is_mapped;
+	void* atlas_mapped_ptr;
 } UI_DX12_State;
 
 // -- GLOBALS ----------
@@ -99,30 +99,30 @@ static UI_Texture* UI_DX12_CreateAtlas(uint32_t width, uint32_t height) {
 }
 
 static void* UI_DX12_MapAtlas() {
-	void* ptr;
-	D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
-	bool ok = UI_DX12_STATE.atlas_staging_buffer->Map(0, &read_range, &ptr) == S_OK;
-	UI_ASSERT(ok);
-	UI_DX12_STATE.atlas_is_mapped = true;
-	return ptr;
+	if (UI_DX12_STATE.atlas_mapped_ptr == NULL) {
+		D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
+		bool ok = UI_DX12_STATE.atlas_staging_buffer->Map(0, &read_range, &UI_DX12_STATE.atlas_mapped_ptr) == S_OK;
+		UI_ASSERT(ok);
+	}
+	return UI_DX12_STATE.atlas_mapped_ptr;
 }
 
 static void* UI_DX12_MapVertexBuffer() {
-	void* ptr;
-	D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
-	bool ok = UI_DX12_STATE.vertex_buffer.handle->Map(0, &read_range, &ptr) == S_OK;
-	UI_ASSERT(ok);
-	UI_DX12_STATE.vertex_buffer.is_mapped = true;
-	return ptr;
+	if (UI_DX12_STATE.vertex_buffer.mapped_ptr == NULL) {
+		D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
+		bool ok = UI_DX12_STATE.vertex_buffer.handle->Map(0, &read_range, &UI_DX12_STATE.vertex_buffer.mapped_ptr) == S_OK;
+		UI_ASSERT(ok);
+	}
+	return UI_DX12_STATE.vertex_buffer.mapped_ptr;
 }
 
 static void* UI_DX12_MapIndexBuffer() {
-	void* ptr;
-	D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
-	bool ok = UI_DX12_STATE.index_buffer.handle->Map(0, &read_range, &ptr) == S_OK;
-	UI_ASSERT(ok);
-	UI_DX12_STATE.index_buffer.is_mapped = true;
-	return ptr;
+	if (UI_DX12_STATE.index_buffer.mapped_ptr == NULL) {
+		D3D12_RANGE read_range = {}; // We do not intend to read from this resource on the CPU.
+		bool ok = UI_DX12_STATE.index_buffer.handle->Map(0, &read_range, &UI_DX12_STATE.index_buffer.mapped_ptr) == S_OK;
+		UI_ASSERT(ok);
+	}
+	return UI_DX12_STATE.index_buffer.mapped_ptr;
 }
 
 static void UI_DX12_ResizeBuffer(UI_DX12_Buffer* buffer, uint32_t size) {
@@ -132,7 +132,7 @@ static void UI_DX12_ResizeBuffer(UI_DX12_Buffer* buffer, uint32_t size) {
 	else {
 		UI_ASSERT(buffer->size == 0); // TODO
 		buffer->size = size;
-		buffer->is_mapped = false;
+		buffer->mapped_ptr = NULL;
 
 		D3D12_HEAP_PROPERTIES heap_props = {};
 		heap_props.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -358,7 +358,7 @@ static void UI_DX12_Deinit(void) {
 static void UI_DX12_Draw(UI_Outputs* outputs, ID3D12GraphicsCommandList* command_list) {
 	UI_DX12_State* s = &UI_DX12_STATE;
 
-	if (s->atlas_is_mapped) {
+	if (s->atlas_mapped_ptr) {
 		s->atlas_staging_buffer->Unmap(0, NULL);
 
 		uint32_t width = s->atlas_width;
@@ -399,14 +399,14 @@ static void UI_DX12_Draw(UI_Outputs* outputs, ID3D12GraphicsCommandList* command
 		post_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 		command_list->ResourceBarrier(1, &post_barrier);
 
-		s->atlas_is_mapped = false;
+		s->atlas_mapped_ptr = NULL;
 	}
 	
 	UI_DX12_Buffer* buffers[] = { &s->vertex_buffer, &s->index_buffer };
 	for (int i = 0; i < 2; i++) {
-		if (buffers[i]->is_mapped) {
+		if (buffers[i]->mapped_ptr) {
 			buffers[i]->handle->Unmap(0, NULL);
-			buffers[i]->is_mapped = false;
+			buffers[i]->mapped_ptr = NULL;
 		}
 	}
 
