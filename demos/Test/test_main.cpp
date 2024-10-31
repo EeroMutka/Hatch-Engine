@@ -87,19 +87,15 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	UI_Outputs ui_outputs;
 	UI_EndFrame(&ui_outputs);
 	
-	u32 first_vertex;
-	HT_DrawVertex* ht_vertices = ht->AddVertices(UI_STATE.vertex_buffer_count, &first_vertex);
-	memcpy(ht_vertices, G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count * sizeof(HT_DrawVertex));
+	u32 first_vertex = ht->AddVertices(G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count);
+	
+	int ib_count = G_UI.index_buffer.count;
+	for (int i = 0; i < ib_count; i++) {
+		G_UI.index_buffer.data[i] += first_vertex;
+	}
 	
 	for (int i = 0; i < ui_outputs.draw_commands_count; i++) {
 		UI_DrawCommand* draw_command = &ui_outputs.draw_commands[i];
-		
-		u32* indices = ht->AddIndices(draw_command->index_count, NULL);
-		memcpy(indices, &G_UI.index_buffer[draw_command->first_index], draw_command->index_count * sizeof(u32));
-		
-		u32* end = indices + draw_command->index_count;
-		for (u32* idx = indices; idx < end; idx++) {
-			*idx += first_vertex;
-		}
+		ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count, NULL);
 	}
 }

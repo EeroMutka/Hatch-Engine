@@ -586,8 +586,9 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font);
 
 UI_API bool UI_ClipRect(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
 
-UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index);
-UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture);
+UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count); // Returns the index of the first new vertex
+UI_API UI_DrawVertex* UI_AddVerticesUnsafe(int count, uint32_t* out_first_vertex); // WARNING: Returned pointer may be invalid on the next call to UI_AddVerticesUnsafe
+UI_API void UI_AddIndices(uint32_t* indices, int count, UI_Texture* texture);
 UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture* texture);
 UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_Texture* texture);
 

@@ -1741,10 +1741,10 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font) {
 	return w;
 }
 
-UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index) {
+UI_API UI_DrawVertex* UI_AddVerticesUnsafe(int count, uint32_t* out_first_vertex) {
 	UI_ProfEnter();
 	
-	*out_first_index = UI_STATE.vertex_buffer_count;
+	*out_first_vertex = UI_STATE.vertex_buffer_count;
 	
 	// Grow vertex buffer if needed
 	int new_count = UI_STATE.vertex_buffer_count + count;
@@ -1762,7 +1762,28 @@ UI_API UI_DrawVertex* UI_AddVertices(int count, uint32_t* out_first_index) {
 	return result_data;
 }
 
-UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture) {
+UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count) {
+	UI_ProfEnter();
+	
+	uint32_t first_index = UI_STATE.vertex_buffer_count;
+	
+	// Grow vertex buffer if needed
+	int new_count = UI_STATE.vertex_buffer_count + count;
+	if (new_count > UI_STATE.vertex_buffer_capacity) {
+		while (new_count > UI_STATE.vertex_buffer_capacity) {
+			UI_STATE.vertex_buffer_capacity *= 2;
+		}
+		UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(UI_STATE.vertex_buffer_capacity);
+	}
+	
+	memcpy(&UI_STATE.vertex_buffer[UI_STATE.vertex_buffer_count], vertices, count * sizeof(UI_DrawVertex));
+	UI_STATE.vertex_buffer_count = new_count;
+	
+	UI_ProfExit();
+	return first_index;
+}
+
+UI_API void UI_AddIndices(uint32_t* indices, int count, UI_Texture* texture) {
 	UI_ProfEnter();
 	
 	// Set active texture
@@ -1782,34 +1803,30 @@ UI_API uint32_t* UI_AddIndices(int count, UI_Texture* texture) {
 		UI_STATE.index_buffer = UI_STATE.backend.ResizeAndMapIndexBuffer(UI_STATE.index_buffer_capacity);
 	}
 	
-	uint32_t* result_data = &UI_STATE.index_buffer[UI_STATE.index_buffer_count];
+	memcpy(&UI_STATE.index_buffer[UI_STATE.index_buffer_count], indices, count * sizeof(uint32_t));
 	UI_STATE.index_buffer_count = new_count;
 	
 	UI_ProfExit();
-	return result_data;
 }
 
 UI_API void UI_AddTriangleIndices(uint32_t a, uint32_t b, uint32_t c, UI_Texture* texture) {
 	UI_ProfEnter();
-	uint32_t* indices = UI_AddIndices(3, texture);
-	indices[0] = a;
-	indices[1] = b;
-	indices[2] = c;
+	uint32_t indices[3] = {a, b, c};
+	UI_AddIndices(indices, 3, texture);
 	UI_ProfExit();
 }
 
 UI_API void UI_AddQuadIndices(uint32_t a, uint32_t b, uint32_t c, uint32_t d, UI_Texture* texture) {
 	UI_ProfEnter();
-	uint32_t* indices = UI_AddIndices(6, texture);
-	indices[0] = a; indices[1] = b; indices[2] = c;
-	indices[3] = a; indices[4] = c; indices[5] = d;
+	uint32_t indices[6] = {a, b, c, a, c, d};
+	UI_AddIndices(indices, 6, texture);
 	UI_ProfExit();
 }
 
 UI_API void UI_DrawConvexPolygon(const UI_Vec2* points, int points_count, UI_Color color) {
 	UI_ProfEnter();
 	uint32_t first_vertex;
-	UI_DrawVertex* vertices = UI_AddVertices(points_count, &first_vertex);
+	UI_DrawVertex* vertices = UI_AddVerticesUnsafe(points_count, &first_vertex);
 	for (int i = 0; i < points_count; i++) {
 		UI_Vec2 p = points[i];
 		vertices[i] = UI_DRAW_VERTEX{ {p.x, p.y}, {0, 0}, color };
@@ -1823,13 +1840,13 @@ UI_API void UI_DrawConvexPolygon(const UI_Vec2* points, int points_count, UI_Col
 UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_Texture* texture, UI_ScissorRect scissor) {
 	UI_ProfEnter();
 	if (scissor == NULL || !UI_ClipRect(&rect, &uv_rect, scissor)) {
-		uint32_t first_vertex;
-		UI_DrawVertex* vertices = UI_AddVertices(4, &first_vertex);
-		vertices[0] = UI_DRAW_VERTEX{ {rect.min.x, rect.min.y}, uv_rect.min,                    color };
-		vertices[1] = UI_DRAW_VERTEX{ {rect.max.x, rect.min.y}, {uv_rect.max.x, uv_rect.min.y}, color };
-		vertices[2] = UI_DRAW_VERTEX{ {rect.max.x, rect.max.y}, uv_rect.max,                    color };
-		vertices[3] = UI_DRAW_VERTEX{ {rect.min.x, rect.max.y}, {uv_rect.min.x, uv_rect.max.y}, color };
-
+		UI_DrawVertex vertices[4] = {
+			{ {rect.min.x, rect.min.y}, uv_rect.min,                    color },
+			{ {rect.max.x, rect.min.y}, {uv_rect.max.x, uv_rect.min.y}, color },
+			{ {rect.max.x, rect.max.y}, uv_rect.max,                    color },
+			{ {rect.min.x, rect.max.y}, {uv_rect.min.x, uv_rect.max.y}, color },
+		};
+		uint32_t first_vertex = UI_AddVertices(vertices, 4);
 		UI_AddQuadIndices(first_vertex, first_vertex + 1, first_vertex + 2, first_vertex + 3, texture);
 	}
 	UI_ProfExit();
@@ -1903,27 +1920,28 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 		inset_corners[3] = UI_AddV2(UI_VEC2{ rect.min.x, rect.max.y }, UI_VEC2{ corners->roundness[3], -corners->roundness[3] });
 
 		// Per each edge (top, right, bottom, left), we add 4 vertices: first outer, first inner, last outer, last inner
-		uint32_t edge_verts;
-		UI_DrawVertex* v = UI_AddVertices(4 * 4, &edge_verts);
-		v[0] = UI_DRAW_VERTEX{ {inset_corners[0].x, rect.min.y}, {0.f, 0.f}, corners->color[0] };
-		v[1] = UI_DRAW_VERTEX{ {inset_corners[0].x, rect.min.y + thickness}, {0.f, 0.f}, corners->color[0] };
-		v[2] = UI_DRAW_VERTEX{ {inset_corners[1].x, rect.min.y}, {0.f, 0.f}, corners->color[1] };
-		v[3] = UI_DRAW_VERTEX{ {inset_corners[1].x, rect.min.y + thickness}, {0.f, 0.f}, corners->color[1] };
+		UI_DrawVertex v[16] = {
+			{ {inset_corners[0].x, rect.min.y}, {0.f, 0.f}, corners->color[0] },
+			{ {inset_corners[0].x, rect.min.y + thickness}, {0.f, 0.f}, corners->color[0] },
+			{ {inset_corners[1].x, rect.min.y}, {0.f, 0.f}, corners->color[1] },
+			{ {inset_corners[1].x, rect.min.y + thickness}, {0.f, 0.f}, corners->color[1] },
 
-		v[4] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[1].y}, {0.f, 0.f}, corners->color[1] };
-		v[5] = UI_DRAW_VERTEX{ {rect.max.x - thickness, inset_corners[1].y}, {0.f, 0.f}, corners->color[1] };
-		v[6] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[2].y}, {0.f, 0.f}, corners->color[2] };
-		v[7] = UI_DRAW_VERTEX{ {rect.max.x - thickness, inset_corners[2].y}, {0.f, 0.f}, corners->color[2] };
+			{ {rect.max.x, inset_corners[1].y}, {0.f, 0.f}, corners->color[1] },
+			{ {rect.max.x - thickness, inset_corners[1].y}, {0.f, 0.f}, corners->color[1] },
+			{ {rect.max.x, inset_corners[2].y}, {0.f, 0.f}, corners->color[2] },
+			{ {rect.max.x - thickness, inset_corners[2].y}, {0.f, 0.f}, corners->color[2] },
 
-		v[8] = UI_DRAW_VERTEX{ {inset_corners[2].x, rect.max.y}, {0.f, 0.f}, corners->color[2] };
-		v[9] = UI_DRAW_VERTEX{ {inset_corners[2].x, rect.max.y - thickness}, {0.f, 0.f}, corners->color[2] };
-		v[10] = UI_DRAW_VERTEX{ {inset_corners[3].x, rect.max.y}, {0.f, 0.f}, corners->color[3] };
-		v[11] = UI_DRAW_VERTEX{ {inset_corners[3].x, rect.max.y - thickness}, {0.f, 0.f}, corners->color[3] };
+			{ {inset_corners[2].x, rect.max.y}, {0.f, 0.f}, corners->color[2] },
+			{ {inset_corners[2].x, rect.max.y - thickness}, {0.f, 0.f}, corners->color[2] },
+			{ {inset_corners[3].x, rect.max.y}, {0.f, 0.f}, corners->color[3] },
+			{ {inset_corners[3].x, rect.max.y - thickness}, {0.f, 0.f}, corners->color[3] },
 
-		v[12] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[3].y}, {0.f, 0.f}, corners->color[3] };
-		v[13] = UI_DRAW_VERTEX{ {rect.min.x + thickness, inset_corners[3].y}, {0.f, 0.f}, corners->color[3] };
-		v[14] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[0].y}, {0.f, 0.f}, corners->color[0] };
-		v[15] = UI_DRAW_VERTEX{ {rect.min.x + thickness, inset_corners[0].y}, {0.f, 0.f}, corners->color[0] };
+			{ {rect.min.x, inset_corners[3].y}, {0.f, 0.f}, corners->color[3] },
+			{ {rect.min.x + thickness, inset_corners[3].y}, {0.f, 0.f}, corners->color[3] },
+			{ {rect.min.x, inset_corners[0].y}, {0.f, 0.f}, corners->color[0] },
+			{ {rect.min.x + thickness, inset_corners[0].y}, {0.f, 0.f}, corners->color[0] },
+		};
+		uint32_t edge_verts = UI_AddVertices(v, 16);
 
 		// Generate edge quads
 		for (uint32_t base = edge_verts; base < edge_verts + 16; base += 4) {
@@ -1953,10 +1971,11 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 				UI_Vec2 outer_pos = UI_AddV2(inset_corners[corner], UI_VEC2{ dir.x * outer_radius_x, dir.y * outer_radius_y });
 				UI_Vec2 mid_pos = UI_AddV2(inset_corners[corner], UI_VEC2{ dir.x * mid_radius_x, dir.y * mid_radius_y });
 
-				uint32_t new_verts_first;
-				UI_DrawVertex* new_verts = UI_AddVertices(2, &new_verts_first);
-				new_verts[0] = UI_DRAW_VERTEX{ outer_pos, {0.f, 0.f}, corners->color[corner] };
-				new_verts[1] = UI_DRAW_VERTEX{ mid_pos, {0.f, 0.f}, corners->color[corner] };
+				UI_DrawVertex new_verts[2] = {
+					{ outer_pos, {0.f, 0.f}, corners->color[corner] },
+					{ mid_pos, {0.f, 0.f}, corners->color[corner] },
+				};
+				uint32_t new_verts_first = UI_AddVertices(new_verts, 2);
 
 				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 0, new_verts_first + 1, NULL);
 				UI_AddTriangleIndices(prev_verts_first + 0, new_verts_first + 1, prev_verts_first + 1, NULL);
@@ -1974,7 +1993,7 @@ UI_API void UI_DrawRectLinesEx(UI_Rect rect, const UI_DrawRectCorners* corners, 
 UI_API void UI_DrawCircle(UI_Vec2 p, float radius, int segments, UI_Color color) {
 	UI_ProfEnter();
 	uint32_t first_vertex;
-	UI_DrawVertex* vertices = UI_AddVertices(segments, &first_vertex);
+	UI_DrawVertex* vertices = UI_AddVerticesUnsafe(segments, &first_vertex);
 	for (int i = 0; i < segments; i++) {
 		float theta = ((float)i / (float)segments) * (2.f * 3.141592f);
 		UI_Vec2 v = { p.x + radius * cosf(theta), p.y + radius * sinf(theta) };
@@ -1988,37 +2007,40 @@ UI_API void UI_DrawCircle(UI_Vec2 p, float radius, int segments, UI_Color color)
 
 UI_API void UI_DrawTriangle(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Color color) {
 	UI_ProfEnter();
-	uint32_t first_vert;
-	UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-	v[0] = UI_DRAW_VERTEX{a, {0, 0}, color};
-	v[1] = UI_DRAW_VERTEX{b, {0, 0}, color};
-	v[2] = UI_DRAW_VERTEX{c, {0, 0}, color};
-	UI_AddTriangleIndices(first_vert, first_vert + 1, first_vert + 2, NULL);
+	UI_DrawVertex v[3] = {
+		{a, {0, 0}, color},
+		{b, {0, 0}, color},
+		{c, {0, 0}, color},
+	};
+	uint32_t i = UI_AddVertices(v, 3);
+	UI_AddTriangleIndices(i, i + 1, i + 2, NULL);
 	UI_ProfExit();
 }
 
 UI_API void UI_DrawQuad(UI_Vec2 a, UI_Vec2 b, UI_Vec2 c, UI_Vec2 d, UI_Color color) {
 	UI_ProfEnter();
-	uint32_t first_vert;
-	UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-	v[0] = UI_DRAW_VERTEX{a, {0, 0}, color};
-	v[1] = UI_DRAW_VERTEX{b, {0, 0}, color};
-	v[2] = UI_DRAW_VERTEX{c, {0, 0}, color};
-	v[3] = UI_DRAW_VERTEX{d, {0, 0}, color};
-	UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, NULL);
+	UI_DrawVertex v[4] = {
+		{a, {0, 0}, color},
+		{b, {0, 0}, color},
+		{c, {0, 0}, color},
+		{d, {0, 0}, color},
+	};
+	uint32_t i = UI_AddVertices(v, 4);
+	UI_AddQuadIndices(i, i + 1, i + 2, i + 3, NULL);
 	UI_ProfExit();
 }
 
 UI_API void UI_DrawRect(UI_Rect rect, UI_Color color) {
 	UI_ProfEnter();
 	if (rect.max.x > rect.min.x && rect.max.y > rect.min.y) {
-		uint32_t first_vert;
-		UI_DrawVertex* v = UI_AddVertices(4, &first_vert);
-		v[0] = UI_DRAW_VERTEX{{rect.min.x, rect.min.y}, {0, 0}, color};
-		v[1] = UI_DRAW_VERTEX{{rect.max.x, rect.min.y}, {0, 0}, color};
-		v[2] = UI_DRAW_VERTEX{{rect.max.x, rect.max.y}, {0, 0}, color};
-		v[3] = UI_DRAW_VERTEX{{rect.min.x, rect.max.y}, {0, 0}, color};
-		UI_AddQuadIndices(first_vert, first_vert + 1, first_vert + 2, first_vert + 3, NULL);
+		UI_DrawVertex v[4] = {
+			{{rect.min.x, rect.min.y}, {0, 0}, color},
+			{{rect.max.x, rect.min.y}, {0, 0}, color},
+			{{rect.max.x, rect.max.y}, {0, 0}, color},
+			{{rect.min.x, rect.max.y}, {0, 0}, color},
+		};
+		uint32_t i = UI_AddVertices(v, 4);
+		UI_AddQuadIndices(i, i + 1, i + 2, i + 3, NULL);
 	}
 	UI_ProfExit();
 }
@@ -2051,22 +2073,23 @@ UI_API void UI_DrawRectEx(UI_Rect rect, const UI_DrawRectCorners* corners, int n
 		inset_corners[2] = UI_AddV2(rect.max, UI_VEC2{ -corners->roundness[2], -corners->roundness[2] });
 		inset_corners[3] = UI_AddV2(UI_VEC2{ rect.min.x, rect.max.y }, UI_VEC2{ corners->roundness[3], -corners->roundness[3] });
 		
-		uint32_t inset_corner_verts;
-		UI_DrawVertex* v = UI_AddVertices(12, &inset_corner_verts);
-		v[0] = UI_DRAW_VERTEX{ inset_corners[0], {0, 0}, corners->color[0] };
-		v[1] = UI_DRAW_VERTEX{ inset_corners[1], {0, 0}, corners->color[1] };
-		v[2] = UI_DRAW_VERTEX{ inset_corners[2], {0, 0}, corners->color[2] };
-		v[3] = UI_DRAW_VERTEX{ inset_corners[3], {0, 0}, corners->color[3] };
+		UI_DrawVertex v[12] = {
+			{ inset_corners[0], {0, 0}, corners->color[0] },
+			{ inset_corners[1], {0, 0}, corners->color[1] },
+			{ inset_corners[2], {0, 0}, corners->color[2] },
+			{ inset_corners[3], {0, 0}, corners->color[3] },
 
+			{ {rect.min.x, inset_corners[0].y}, {0, 0}, corners->outer_color[0] },
+			{ {inset_corners[0].x, rect.min.y}, {0, 0}, corners->outer_color[0] },
+			{ {inset_corners[1].x, rect.min.y}, {0, 0}, corners->outer_color[1] },
+			{ {rect.max.x, inset_corners[1].y}, {0, 0}, corners->outer_color[1] },
+			{ {rect.max.x, inset_corners[2].y}, {0, 0}, corners->outer_color[2] },
+			{ {inset_corners[2].x, rect.max.y}, {0, 0}, corners->outer_color[2] },
+			{ {inset_corners[3].x, rect.max.y}, {0, 0}, corners->outer_color[3] },
+			{ {rect.min.x, inset_corners[3].y}, {0, 0}, corners->outer_color[3] },
+		};
+		uint32_t inset_corner_verts = UI_AddVertices(v, 12);
 		uint32_t border_verts = inset_corner_verts + 4;
-		v[4] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[0].y}, {0, 0}, corners->outer_color[0] };
-		v[5] = UI_DRAW_VERTEX{ {inset_corners[0].x, rect.min.y}, {0, 0}, corners->outer_color[0] };
-		v[6] = UI_DRAW_VERTEX{ {inset_corners[1].x, rect.min.y}, {0, 0}, corners->outer_color[1] };
-		v[7] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[1].y}, {0, 0}, corners->outer_color[1] };
-		v[8] = UI_DRAW_VERTEX{ {rect.max.x, inset_corners[2].y}, {0, 0}, corners->outer_color[2] };
-		v[9] = UI_DRAW_VERTEX{ {inset_corners[2].x, rect.max.y}, {0, 0}, corners->outer_color[2] };
-		v[10] = UI_DRAW_VERTEX{ {inset_corners[3].x, rect.max.y}, {0, 0}, corners->outer_color[3] };
-		v[11] = UI_DRAW_VERTEX{ {rect.min.x, inset_corners[3].y}, {0, 0}, corners->outer_color[3] };
 
 		// edge quads
 		UI_AddQuadIndices(border_verts + 1, border_verts + 2, inset_corner_verts + 1, inset_corner_verts + 0, NULL); // top edge
@@ -2083,9 +2106,8 @@ UI_API void UI_DrawRectEx(UI_Rect rect, const UI_DrawRectCorners* corners, int n
 			for (int i = 1; i < num_corner_segments; i++) {
 				UI_Vec2 c = UI_PointOnRoundedCorner(corner_i, i, num_corner_segments);
 				
-				uint32_t new_vert_idx;
-				UI_DrawVertex* new_vert = UI_AddVertices(1, &new_vert_idx);
-				new_vert[0] = UI_DRAW_VERTEX{ {inset_corners[corner_i].x + r*c.x, inset_corners[corner_i].y + r*c.y}, {0, 0}, corners->outer_color[corner_i] };
+				UI_DrawVertex new_vert = { {inset_corners[corner_i].x + r*c.x, inset_corners[corner_i].y + r*c.y}, {0, 0}, corners->outer_color[corner_i] };
+				uint32_t new_vert_idx = UI_AddVertices(&new_vert, 1);
 
 				UI_AddTriangleIndices(inset_corner_verts + corner_i, prev_vert_idx, new_vert_idx, NULL);
 				prev_vert_idx = new_vert_idx;
@@ -2174,12 +2196,13 @@ UI_API void UI_DrawPolylineEx(const UI_Vec2* points, const UI_Color* colors, int
 			}
 
 			if (n_pre.x*n_post.x + n_pre.y*n_post.y < split_miter_threshold) {
-				uint32_t new_vertices;
-				UI_DrawVertex* v = UI_AddVertices(4, &new_vertices);
-				v[0] = UI_DRAW_VERTEX{{p.x + n_pre.x*half_thickness, p.y + n_pre.y*half_thickness}, {0.f, 0.f}, color};
-				v[1] = UI_DRAW_VERTEX{{p.x - n_pre.x*half_thickness, p.y - n_pre.y*half_thickness}, {0.f, 0.f}, color};
-				v[2] = UI_DRAW_VERTEX{{p.x + n_post.x*half_thickness, p.y + n_post.y*half_thickness}, {0.f, 0.f}, color};
-				v[3] = UI_DRAW_VERTEX{{p.x - n_post.x*half_thickness, p.y - n_post.y*half_thickness}, {0.f, 0.f}, color};
+				UI_DrawVertex v[4] = {
+					{{p.x + n_pre.x*half_thickness, p.y + n_pre.y*half_thickness}, {0.f, 0.f}, color},
+					{{p.x - n_pre.x*half_thickness, p.y - n_pre.y*half_thickness}, {0.f, 0.f}, color},
+					{{p.x + n_post.x*half_thickness, p.y + n_post.y*half_thickness}, {0.f, 0.f}, color},
+					{{p.x - n_post.x*half_thickness, p.y - n_post.y*half_thickness}, {0.f, 0.f}, color},
+				};
+				uint32_t new_vertices = UI_AddVertices(v, 4);
 
 				if (loop || (i != 0 && i != last)) {
 					UI_AddQuadIndices(new_vertices+0, new_vertices+1, new_vertices+3, new_vertices+2, NULL);
@@ -2199,10 +2222,11 @@ UI_API void UI_DrawPolylineEx(const UI_Vec2* points, const UI_Color* colors, int
 				float denom = n.x * n_pre.x + n.y * n_pre.y;
 				float t = half_thickness / denom;
 
-				uint32_t new_vertices;
-				UI_DrawVertex* v = UI_AddVertices(2, &new_vertices);
-				v[0] = UI_DRAW_VERTEX{{p.x + n.x*t, p.y + n.y*t}, {0.f, 0.f}, color};
-				v[1] = UI_DRAW_VERTEX{{p.x - n.x*t, p.y - n.y*t}, {0.f, 0.f}, color};
+				UI_DrawVertex v[2] = {
+					{{p.x + n.x*t, p.y + n.y*t}, {0.f, 0.f}, color},
+					{{p.x - n.x*t, p.y - n.y*t}, {0.f, 0.f}, color},
+				};
+				uint32_t new_vertices = UI_AddVertices(v, 2);
 
 				if (i > 0) {
 					UI_AddQuadIndices(prev_idx[0], prev_idx[1], new_vertices + 1, new_vertices + 0, NULL);

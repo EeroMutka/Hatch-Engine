@@ -155,15 +155,14 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	while (ht->PollNextTabUpdate(&tab_update)) {
 		if (tab_update.tab_class == GLOBALS.my_tab_class) {
 			// update tab!
-			u32 first_vertex;
-			HT_DrawVertex* vertices = ht->AddVertices(3, &first_vertex);
-			u32* indices = ht->AddIndices(3, NULL);
-			indices[0] = first_vertex;
-			indices[1] = first_vertex+1;
-			indices[2] = first_vertex+2;
-			vertices[0] = {{tab_update.rect_min.x, tab_update.rect_min.y}, {0, 0}, {255, 0, 0, 255}};
-			vertices[1] = {{tab_update.rect_min.x, tab_update.rect_max.y}, {0, 0}, {0, 255, 0, 255}};
-			vertices[2] = {{tab_update.rect_max.x, tab_update.rect_max.y}, {0, 0}, {0, 0, 255, 255}};
+			HT_DrawVertex vertices[3] = {
+				{{tab_update.rect_min.x, tab_update.rect_min.y}, {0, 0}, {255, 0, 0, 255}},
+				{{tab_update.rect_min.x, tab_update.rect_max.y}, {0, 0}, {0, 255, 0, 255}},
+				{{tab_update.rect_max.x, tab_update.rect_max.y}, {0, 0}, {0, 0, 255, 255}},
+			};
+			u32 i = ht->AddVertices(vertices, 3);
+			u32 indices[3] = {i, i + 1, i + 2};
+			ht->AddIndices(indices, 3, NULL);
 		}
 	}
 	

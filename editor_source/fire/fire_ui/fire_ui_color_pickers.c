@@ -68,7 +68,7 @@ static void UI_DrawHueSaturationCircle(UI_Box* box) {
 	uint32_t prev_wheel_first_vertex;
 	for (int i = 0; i < UI_COLOR_WHEEL_NUM_ROWS; i++) {
 		uint32_t wheel_first_vertex;
-		UI_DrawVertex* wheel_vertices = UI_AddVertices(UI_COLOR_WHEEL_NUM_COLUMNS, &wheel_first_vertex);
+		UI_DrawVertex* wheel_vertices = UI_AddVerticesUnsafe(UI_COLOR_WHEEL_NUM_COLUMNS, &wheel_first_vertex);
 
 		for (int j = 0; j < UI_COLOR_WHEEL_NUM_COLUMNS; j++) {
 			float saturation = (float)i / (UI_COLOR_WHEEL_NUM_ROWS - 1.f);
@@ -138,7 +138,7 @@ static void UI_ColorPickerSaturationSliderDraw(UI_Box* box) {
 	UI_Rect rect = box->computed_rect;
 
 	uint32_t first_vertex;
-	UI_DrawVertex* vertices = UI_AddVertices(4, &first_vertex);
+	UI_DrawVertex* vertices = UI_AddVerticesUnsafe(4, &first_vertex);
 	for (int i = 0; i < 2; i++) {
 		float y_t = (float)i / (2 - 1.f);
 		float y = UI_Lerp(rect.min.y, rect.max.y, y_t);
@@ -165,7 +165,7 @@ static void UI_ColorPickerValueSliderDraw(UI_Box* box) {
 	UI_Rect rect = box->computed_rect;
 
 	uint32_t first_vertex;
-	UI_DrawVertex* vertices = UI_AddVertices(4, &first_vertex);
+	UI_DrawVertex* vertices = UI_AddVerticesUnsafe(4, &first_vertex);
 	for (int i = 0; i < 2; i++) {
 		float y_t = (float)i / (2 - 1.f);
 		float y = UI_Lerp(rect.min.y, rect.max.y, y_t);

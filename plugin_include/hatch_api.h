@@ -176,15 +176,13 @@ struct HT_API {
 	
 	bool (*PollNextTabUpdate)(HT_TabUpdate* tab_update);
 	
-	// !!! WARNING !!! pointers received from previous calls to AddVertices may be invalid after calling this!
-	// TODO: flip the API around to require passing a pointer to vertices and indices.
-	HT_DrawVertex* (*AddVertices)(int count, u32* out_first_index);
+	// Returns the index of the first new vertex
+	u32 (*AddVertices)(HT_DrawVertex* vertices, int count);
 	
 	// Texture may be NULL, in which case the default font atlas will be used.
 	// When the uv is {0, 0} and the default font atlas is used, the triangles
 	// will read a white pixel from the atlas resulting in untextured geometry.
-	// !!! WARNING !!! pointers received from previous calls to AddIndices may be invalid after calling this!
-	u32* (*AddIndices)(int count, HT_Texture* texture);
+	void (*AddIndices)(u32* indices, int count, HT_Texture* texture);
 	
 	// Maybe we can still have a basic 2D drawing lib built into the API.
 	// Like draw text, draw circle, draw rect, etc.
