@@ -3,17 +3,23 @@
 #define MD_FUNCTION extern "C"
 #include "third_party/md.h"
 
-EXPORT STR_View GetAssetFileExtension(Asset* asset) {
-	switch (asset->kind) {
-	case AssetKind_C:          return "c";
-	case AssetKind_CPP:        return "cpp";
-	case AssetKind_Plugin:     return "hatch_plugin";
-	case AssetKind_StructType: return "hatch_struct";
-	case AssetKind_StructData: return "hatch_data";
-	default: break;
+EXPORT STR_View GetAssetFilePath(DS_Arena* arena, STR_View directory, Asset* asset) {
+	STR_View result;
+	if (asset->kind == AssetKind_File) {
+		result = STR_Form(arena, "%v/%v", directory, UI_TextToStr(asset->name));
 	}
-	assert(0);
-	return "";
+	else {
+		STR_View ext = "";
+		switch (asset->kind) {
+		case AssetKind_File:       ext = ""; break;
+		case AssetKind_Plugin:     ext = "plugin.ht"; break;
+		case AssetKind_StructType: ext = "struct.ht"; break;
+		case AssetKind_StructData: ext = "data.ht"; break;
+		default: break;
+		}
+		result = STR_Form(arena, "%v/%v.%v", directory, UI_TextToStr(asset->name), ext);
+	}
+	return result;
 }
 
 static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, (int)str.size}; }
@@ -64,15 +70,14 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 		}
 
 		for (Asset* child = asset->first_child; child; child = child->next) {
-			STR_View ext = GetAssetFileExtension(child);
-			STR_View child_filesys_path = STR_Form(TEMP, "%v/%v.%v", filesys_path, UI_TextToStr(child->name), ext);
+			STR_View child_filesys_path = GetAssetFilePath(TEMP, filesys_path, child);
 			SaveAsset(child, child_filesys_path);
 		}
 	}
 	else {
 		bool write = true;
 
-		if (asset->kind == AssetKind_C || asset->kind == AssetKind_CPP) { // only write code files when they don't exist already
+		if (asset->kind == AssetKind_File) { // only write file assets when they don't exist already
 			uint64_t modtime;
 			bool file_exists = OS_FileGetModtime(MEM_TEMP(), filesys_path, &modtime);
 			write = file_exists == false;
@@ -206,21 +211,20 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* package, Asset* parent, ST
 			STR_View name = STR_AfterLast(file_name, '/');
 			STR_View stem = STR_BeforeFirst(name, '.');
 			STR_View ext = STR_AfterFirst(name, '.');
-			if (STR_MatchCaseInsensitive(ext, "hatch_generated.h")) continue;
+			if (STR_MatchCaseInsensitive(ext, "inc.ht")) continue;
 
 			AssetKind asset_kind = AssetKind_Folder;
 			if (!info.is_directory) {
-				/**/ if (STR_MatchCaseInsensitive(ext, "hatch_plugin")) asset_kind = AssetKind_Plugin;
-				else if (STR_MatchCaseInsensitive(ext, "hatch_struct")) asset_kind = AssetKind_StructType;
-				else if (STR_MatchCaseInsensitive(ext, "hatch_data"))   asset_kind = AssetKind_StructData;
-				else if (STR_MatchCaseInsensitive(ext, "c"))            asset_kind = AssetKind_C;
-				else if (STR_MatchCaseInsensitive(ext, "cpp"))          asset_kind = AssetKind_CPP;
+				/**/ if (STR_MatchCaseInsensitive(ext, "plugin.ht")) asset_kind = AssetKind_Plugin;
+				else if (STR_MatchCaseInsensitive(ext, "struct.ht")) asset_kind = AssetKind_StructType;
+				else if (STR_MatchCaseInsensitive(ext, "data.ht"))   asset_kind = AssetKind_StructData;
+				else asset_kind = AssetKind_File;
 			}
 
 			asset = MakeNewAsset(tree, asset_kind);
 
 			//asset->has_unsaved_changes = false;
-			UI_TextSet(&asset->name, stem);
+			UI_TextSet(&asset->name, asset_kind == AssetKind_File ? name : stem);
 			
 			MoveAssetToInside(tree, asset, parent);
 		}
@@ -274,8 +278,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 		if (!asset->reload_assets_pass2_needs_hotreload) continue;
 
 		MD_ParseResult parse;
-		if (asset->kind == AssetKind_Plugin ||
-			asset->kind == AssetKind_StructType)
+		if (asset->kind == AssetKind_StructType)
 		{
 			MD_String8 md_filepath = {(MD_u8*)asset->reload_assets_filesys_path.data, (MD_u64)asset->reload_assets_filesys_path.size};
 
@@ -297,24 +300,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 		//	}
 		//}
 
-		if (asset->kind == AssetKind_Plugin) {
-			Array* source_files = &asset->plugin.options.SourceFiles;
-			ArrayClear(source_files, sizeof(AssetRef));
-			
-			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("SourceFiles"), 0);
-			
-			if (!MD_NodeIsNil(source_files_node)) {
-				for (MD_EachNode(it, source_files_node->first_child)) {
-					STR_View path = StrFromMD(it->string);
-					Asset* elem = FindAssetFromPath(ctx->package, path);
-					AssetRef elem_ref = elem ? GetAssetHandle(elem) : AssetRef{};
-					
-					ArrayPush(source_files, sizeof(AssetRef));
-					((AssetRef*)source_files->data)[source_files->count - 1] = elem_ref;
-				}
-			}
-		}
-
+		
 		if (asset->kind == AssetKind_StructType) {
 			MD_Node* members_node = MD_ChildFromString(parse.node, MD_S8Lit("Members"), 0);
 			for (int i = 0; i < asset->struct_type.members.count; i++) {
@@ -332,10 +318,14 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				UI_TextSet(&member.name.text, name);
 				
 				assert(!MD_NodeIsNil(it->first_child));
-				/**/ if (MD_S8Match(it->first_child->string, MD_S8Lit("Float"), 0)) member.type.kind = TypeKind_Float;
-				else if (MD_S8Match(it->first_child->string, MD_S8Lit("Int"), 0))   member.type.kind = TypeKind_Int;
-				else if (MD_S8Match(it->first_child->string, MD_S8Lit("Bool"), 0))  member.type.kind = TypeKind_Bool;
-				else assert(0);
+				STR_View type_name = StrFromMD(it->first_child->string);
+				member.type.kind = StringToTypeKind(type_name);
+				assert(member.type.kind != TypeKind_INVALID);
+
+				///**/ if (MD_S8Match(it->first_child->string, MD_S8Lit("Float"), 0)) member.type.kind = TypeKind_Float;
+				//else if (MD_S8Match(it->first_child->string, MD_S8Lit("Int"), 0))   member.type.kind = TypeKind_Int;
+				//else if (MD_S8Match(it->first_child->string, MD_S8Lit("Bool"), 0))  member.type.kind = TypeKind_Bool;
+				//else assert(0);
 				
 				DS_ArrPush(&asset->struct_type.members, member);
 			}
@@ -351,17 +341,41 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
 		if (!asset->reload_assets_pass2_needs_hotreload) continue;
 
-		if (asset->kind == AssetKind_StructData) {
+		MD_ParseResult parse;
+		if (asset->kind == AssetKind_StructData || asset->kind == AssetKind_Plugin) {
 			MD_String8 md_filepath = {(MD_u8*)asset->reload_assets_filesys_path.data, (MD_u64)asset->reload_assets_filesys_path.size};
 
 			MD_ArenaClear(ctx->md_arena);
-			MD_ParseResult parse = MD_ParseWholeFile(ctx->md_arena, md_filepath);
+			parse = MD_ParseWholeFile(ctx->md_arena, md_filepath);
 			assert(!MD_NodeIsNil(parse.node));
 			assert(parse.errors.node_count == 0);
+		}
+		
+		if (asset->kind == AssetKind_Plugin) {
+			Array* source_files = &asset->plugin.options.SourceFiles;
+			ArrayClear(source_files, sizeof(AssetRef));
+
+			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("SourceFiles"), 0);
 			
+			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("Data"), 0);
+			Asset* data_asset = FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
+			asset->plugin.options.Data = data_asset ? GetAssetHandle(data_asset) : AssetRef{};
+
+			if (!MD_NodeIsNil(source_files_node)) {
+				for (MD_EachNode(it, source_files_node->first_child)) {
+					STR_View path = StrFromMD(it->string);
+					Asset* elem = FindAssetFromPath(ctx->package, path);
+					AssetRef elem_ref = elem ? GetAssetHandle(elem) : AssetRef{};
+
+					ArrayPush(source_files, sizeof(AssetRef));
+					((AssetRef*)source_files->data)[source_files->count - 1] = elem_ref;
+				}
+			}
+		}
+
+		if (asset->kind == AssetKind_StructData) {
 			MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("Type"), 0);
-			STR_View type_path = StrFromMD(type_node->first_child->string);
-			Asset* type_asset = FindAssetFromPath(ctx->package, type_path);
+			Asset* type_asset = FindAssetFromPath(ctx->package, StrFromMD(type_node->first_child->string));
 			assert(type_asset != NULL);
 			assert(type_asset->kind == AssetKind_StructType);
 			
@@ -377,15 +391,18 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 				
 				switch (member.type.kind) {
 				case TypeKind_Float: {
-					float val;
-					bool ok = ParseMetadeskFloat(child->first_child, &val);
+					float* val = (float*)((char*)asset->struct_data.data + member.offset);
+					bool ok = ParseMetadeskFloat(child->first_child, val);
 					assert(ok);
-					memcpy((char*)asset->struct_data.data + member.offset, &val, sizeof(float));
+				}break;
+				case TypeKind_AssetRef: {
+					AssetRef* val = (AssetRef*)((char*)asset->struct_data.data + member.offset);
+					Asset* found_asset = FindAssetFromPath(ctx->package, StrFromMD(child->first_child->string));
+					*val = found_asset ? GetAssetHandle(found_asset) : AssetRef{};
 				}break;
 				default: TODO();
 				}
 			}
-			
 		}
 
 		ReloadAssetsPass3(ctx, asset);

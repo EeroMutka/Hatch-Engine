@@ -145,6 +145,8 @@ static void AppInit(EditorState* s) {
 		
 		ComputeStructLayout(s->asset_tree.plugin_options_struct_type);
 	}
+
+	InitAPI(s);
 }
 
 static void UpdateAndDraw(EditorState* s) {
@@ -182,7 +184,7 @@ static void UpdateAndDraw(EditorState* s) {
 	
 	UI_OS_ApplyOutputs(&s->window, &ui_outputs);
 	
-	RenderEndFrame(s->render_state, &ui_outputs);
+	RenderEndFrame(s, s->render_state, &ui_outputs);
 }
 
 static void OnResizeWindow(u32 width, u32 height, void* user_ptr) {

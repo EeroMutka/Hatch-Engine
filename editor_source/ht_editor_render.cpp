@@ -158,7 +158,7 @@ EXPORT void ResizeSwapchain(RenderState* s, ivec2 size) {
     s->window_size = size;
 }
 
-EXPORT void RenderEndFrame(RenderState* s, UI_Outputs* ui_outputs) {
+EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs) {
 
 	// Populate the command buffer
     {
@@ -198,6 +198,21 @@ EXPORT void RenderEndFrame(RenderState* s, UI_Outputs* ui_outputs) {
         s->command_list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
         UI_DX12_Draw(ui_outputs, {(float)s->window_size.x, (float)s->window_size.y}, s->command_list);
+
+        // Then populate the command list for plugin defined things
+        DS_ForSlotAllocatorEachSlot(Asset, &editor_state->asset_tree.assets, IT) {
+            Asset* plugin = IT.elem;
+            if (AssetSlotIsEmpty(plugin)) continue;
+            if (plugin->kind != AssetKind_Plugin) continue;
+
+            if (plugin->plugin.dll_handle) {
+                void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
+                *(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(plugin->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
+                if (BuildPluginD3DCommandList) {
+                    BuildPluginD3DCommandList(editor_state->api, s->command_list);
+                }
+            }
+        }
 
         D3D12_RESOURCE_BARRIER rt_to_present = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         s->command_list->ResourceBarrier(1, &rt_to_present);

@@ -86,14 +86,12 @@ struct Type {
 	AssetRef _struct;
 };
 
-//EXPORT STR_View TypeToString(Type* type);
-EXPORT STR_View TypeKindToString(TypeKind type);
-
 enum AssetKind {
 	AssetKind_Package, // Packages are root-level folders. Packages can be saved to disk. Packages cannot contain other packages.
 	AssetKind_Folder,
-	AssetKind_C,
-	AssetKind_CPP,
+	//AssetKind_C,
+	//AssetKind_CPP,
+	AssetKind_File, // file with an arbitrary extension. The extension is encoded in the asset name.
 	AssetKind_Plugin,
 	AssetKind_StructType,
 	AssetKind_StructData,
@@ -130,7 +128,10 @@ struct Asset_Plugin {
 	PluginOptions options; // a value of type g_plugin_options_struct_type
 	
 	OS_DLL* dll_handle;
-	void (*dll_UpdatePlugin)(HT_API* HT);
+	
+	void (*UpdatePlugin)(HT_API* HT);
+	void (*LoadPlugin)(HT_API* HT);
+	void (*UnloadPlugin)(HT_API* HT);
 
 	DS_DynArray(PluginAllocationHeader*) allocations;
 };
@@ -189,6 +190,9 @@ struct AssetTree {
 // Pass STR_View into printf-style %.*s arguments
 #define StrArg(X) X.size, X.data
 
+EXPORT STR_View TypeKindToString(TypeKind type);
+EXPORT TypeKind StringToTypeKind(STR_View str); // may return TypeKind_INVALID
+
 EXPORT bool AssetIsValid(AssetRef handle);
 
 EXPORT AssetRef GetAssetHandle(Asset* asset);
@@ -235,10 +239,6 @@ struct LogMessage {
 };
 
 EXPORT void LogPrint(STR_View str);
-
-// -- ht_plugin_compiler.cpp ------------------------------------------
-
-EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
@@ -335,6 +335,8 @@ struct PerFrameState {
 };
 
 struct EditorState {
+	HT_API* api;
+
 	DS_Arena persistent_arena;
 	DS_Arena temporary_arena;
 
@@ -386,6 +388,12 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 EXPORT void UILogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 
+EXPORT void InitAPI(EditorState* s);
+
 EXPORT void UpdatePlugins(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
+
+// -- ht_plugin_compiler.cpp ------------------------------------------
+
+EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory);

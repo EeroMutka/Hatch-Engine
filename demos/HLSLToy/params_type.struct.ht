@@ -1,0 +1,4 @@
+Members: {
+	shader_file: Asset
+	testing: Float
+}

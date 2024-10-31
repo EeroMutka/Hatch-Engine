@@ -97,11 +97,21 @@ typedef struct HT_Texture HT_Texture;
 
 typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
 
+typedef struct HT_AssetRef {
+	void* internal[2];
+} HT_AssetRef;
+
 #ifdef __cplusplus
 #define HT_EXPORT extern "C" __declspec(dllexport)
 #else
 #define HT_EXPORT __declspec(dllexport)
 #endif
+
+typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
+
+// Helpers
+// #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
+#define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData()
 
 struct HT_API {
 	void (*DebugPrint)(const char* str);
@@ -122,6 +132,22 @@ struct HT_API {
 	// I think we should artificially limit the plugin to only drawing in special plugin-defined tabs.
 	// There should be sane default restrictions to make sure the user of Hatch always has a sane time and won't lose control.
 	// The user should always be in control.
+	
+	// -- Data model ----------------------------------
+	
+	HT_GeneratedTypeTable* type_table;
+	
+	// Returns NULL if data asset is invalid or of different type than `type_id`
+	void* (*GetPluginData)(/*HT_AssetRef type_id*/);
+	
+	// Works on data assets. Returns NULL if asset handle is invalid or not a data asset.
+	// void* (*AssetGetData)(HT_AssetRef asset);
+	
+	// bool (*AssetIsValid)(/*HT_AssetRef type_id, */HT_AssetRef asset);
+	
+	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
+	// The returned string is valid for this frame only.
+	string (*AssetGetFilepath)(HT_AssetRef asset);
 	
 	// -- Memory allocation ---------------------------
 	
@@ -153,6 +179,21 @@ struct HT_API {
 	
 	HT_CachedGlyph (*GetCachedGlyph)(u32 codepoint);
 	
-	// ------------------------------------------------
+	// -- D3D12 API -----------------------------------
+#ifdef HT_INCLUDE_D3D12_API
 	
+	ID3D12Device* D3D_device;
+	
+	HRESULT (*D3DCompile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
+		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
+		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
+	
+	HRESULT (*D3DCompileFromFile)(const wchar_t* pFileName, const D3D_SHADER_MACRO* pDefines,
+		ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
+		u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
+	
+	HRESULT (*D3D12SerializeRootSignature)(const D3D12_ROOT_SIGNATURE_DESC* pRootSignature,
+		D3D_ROOT_SIGNATURE_VERSION Version, ID3DBlob** ppBlob, ID3DBlob** ppErrorBlob);
+#endif
+	// ------------------------------------------------
 };

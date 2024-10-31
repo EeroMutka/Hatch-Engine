@@ -1,4 +1,15 @@
+
+// Currently with the way this is structured, we have to include d3d12 here to fill the HT_INCLUDE_D3D12_API fields of the hatch API struct.
+// I think this could be cleaned up!
+#define HT_INCLUDE_D3D12_API
+#define WIN32_LEAN_AND_MEAN
+#include <d3d12.h>
+#include <dxgi1_4.h>
+#include <d3dcompiler.h>
+#include <dxgidebug.h>
+
 #include "include/ht_internal.h"
+#include "include/ht_editor_render.h" // this should also be cleaned up!
 
 // -- GLOBALS ------------------------------------------------------
 
@@ -535,7 +546,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 		UI_Box* compile_button = UI_BOX();
 		UI_AddButton(compile_button, UI_SizeFit(), UI_SizeFit(), 0, "Compile");
 		if (UI_Clicked(compile_button)) {
-			RecompilePlugin(selected_asset, s->hatch_install_directory);
+			RecompilePlugin(s, selected_asset, s->hatch_install_directory);
 		}
 	}
 
@@ -610,14 +621,14 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		if (selected_asset) {
 			// for christmas MVP version, we can just do cut-n-paste for getting things into and outside of folders.
 			UI_Box* new_folder = UI_BOX();
-			UI_Box* new_code_file = UI_BOX();
+			UI_Box* new_file = UI_BOX();
 			UI_Box* new_plugin = UI_BOX();
 			UI_Box* new_struct_type = UI_BOX();
 
 			UI_AddLabel(new_folder, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Folder");
 			UI_AddLabel(new_struct_type, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Struct Type");
 			UI_AddLabel(new_plugin, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Plugin");
-			UI_AddLabel(new_code_file, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New C++ File");
+			UI_AddLabel(new_file, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New File");
 
 			if (UI_Clicked(new_folder)) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_Folder);
@@ -626,8 +637,8 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
 				s->rmb_menu_open = false;
 			}
-			if (UI_Clicked(new_code_file)) {
-				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_CPP);
+			if (UI_Clicked(new_file)) {
+				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_File);
 				MoveAssetToInside(&s->asset_tree, new_asset, selected_asset);
 				selected_asset->ui_state_is_open = true;
 				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
@@ -814,9 +825,10 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	}
 }
 
+#include <stdio.h>
 static void HT_DebugPrint(const char* str) {
-	TODO();
-	//printf("DEBUG PRINT: %s\n", str);
+	//TODO();
+	printf("DEBUG PRINT: %s\n", str);
 }
 
 //static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
@@ -858,23 +870,37 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 	return DS_ArenaPushAligned(TEMP, (int)size, (int)align);
 }
 
-EXPORT void UpdatePlugins(EditorState* s) {
-	HT_API api = {0};
+static void* HT_GetPluginData_(/*AssetRef type_id*/) {
+	AssetRef data = g_currently_updating_plugin->plugin.options.Data;
+	if (!AssetIsValid(data)) return NULL;
+	return data.asset->struct_data.data;
+}
+
+EXPORT void InitAPI(EditorState* s) {
+	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
 	*(void**)&api.AddVertices = UI_AddVertices;
 	*(void**)&api.AddIndices = UI_AddIndices;
 	//*(void**)&api.DrawText = HT_DrawText;
 	api.AllocatorProc = HT_AllocatorProc;
 	api.TempArenaPush = HT_TempArenaPush;
+	api.GetPluginData = HT_GetPluginData_;
+	api.D3DCompile = D3DCompile;
+	api.D3DCompileFromFile = D3DCompileFromFile;
+	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
+	api.D3D_device = s->render_state->device;
+	s->api = &api;
+}
 
+EXPORT void UpdatePlugins(EditorState* s) {
 	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
 		Asset* plugin = IT.elem;
 		if (AssetSlotIsEmpty(plugin)) continue;
 		if (plugin->kind != AssetKind_Plugin) continue;
 
-		if (plugin->plugin.dll_handle) {
+		if (plugin->plugin.dll_handle && plugin->plugin.UpdatePlugin != NULL) {
 			g_currently_updating_plugin = plugin;
-			plugin->plugin.dll_UpdatePlugin(&api);
+			plugin->plugin.UpdatePlugin(s->api);
 			g_currently_updating_plugin = NULL;
 		}
 	}

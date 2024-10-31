@@ -5,7 +5,7 @@ EXPORT STR_View TypeKindToString(TypeKind type) {
 	case TypeKind_Float:     return "Float";
 	case TypeKind_Int:       return "Int";
 	case TypeKind_Bool:      return "Bool";
-	case TypeKind_AssetRef:  return "Asset Reference";
+	case TypeKind_AssetRef:  return "Asset";
 	case TypeKind_Struct:    return "Struct";
 	case TypeKind_Array:     return "Array";
 	case TypeKind_String:    return "String";
@@ -14,6 +14,18 @@ EXPORT STR_View TypeKindToString(TypeKind type) {
 	case TypeKind_INVALID: break;
 	}
 	return "(invalid)";
+}
+
+EXPORT TypeKind StringToTypeKind(STR_View str) {
+	/**/ if (STR_Match(str, "Float"))  return TypeKind_Float;
+	else if (STR_Match(str, "Int"))    return TypeKind_Int;
+	else if (STR_Match(str, "Bool"))   return TypeKind_Bool;
+	else if (STR_Match(str, "Asset"))  return TypeKind_AssetRef;
+	else if (STR_Match(str, "Struct")) return TypeKind_Struct;
+	else if (STR_Match(str, "Array"))  return TypeKind_Array;
+	else if (STR_Match(str, "String")) return TypeKind_String;
+	else if (STR_Match(str, "Type"))   return TypeKind_Type;
+	return TypeKind_INVALID;
 }
 
 EXPORT void MoveAssetToBefore(AssetTree* tree, Asset* asset, Asset* move_before_this) {
@@ -93,12 +105,15 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 	case AssetKind_StructData: {
 		name = "Untitled Data";
 	}break;
-	case AssetKind_C: {
-		name = "Untitled C File";
+	case AssetKind_File: {
+		name = "Untitled.txt";
 	}break;
-	case AssetKind_CPP: {
-		name = "Untitled CPP File";
-	}break;
+	//case AssetKind_C: {
+	//	name = "Untitled C File";
+	//}break;
+	//case AssetKind_CPP: {
+	//	name = "Untitled CPP File";
+	//}break;
 	}
 	if (kind != AssetKind_Package) {
 		UI_TextInit(DS_HEAP, &asset->name, name);
@@ -264,8 +279,9 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}break;
 	case AssetKind_Folder: {
 	}break;
-	case AssetKind_C: {}break;
-	case AssetKind_CPP: {}break;
+	//case AssetKind_C: {}break;
+	//case AssetKind_CPP: {}break;
+	case AssetKind_File: {}break;
 	case AssetKind_Plugin: {
 		//DS_MemFree(DS_HEAP, asset->plugin.options_data);
 		DS_ArrDeinit(&asset->plugin.allocations);
@@ -284,6 +300,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 
 EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {
 	Asset* parent = package;
+	Asset* result = NULL;
 
 	for (STR_View remaining = path; remaining.size > 0 && parent;) {
 		STR_View name = STR_ParseUntilAndSkip(&remaining, '/');
@@ -295,7 +312,8 @@ EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {
 			}
 		}
 		parent = new_parent;
+		result = parent;
 	}
 
-	return parent;
+	return result;
 }

@@ -144,7 +144,7 @@ static void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 	CloseHandle(h);
 }
 
-EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
+EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory) {
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
 
@@ -161,7 +161,9 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 		OS_UnloadDLL(plugin->plugin.dll_handle);
 		
 		plugin->plugin.dll_handle = NULL;
-		plugin->plugin.dll_UpdatePlugin = NULL;
+		plugin->plugin.LoadPlugin = NULL;
+		plugin->plugin.UnloadPlugin = NULL;
+		plugin->plugin.UpdatePlugin = NULL;
 
 		for (int i = 0; i < plugin->plugin.allocations.count; i++) {
 			PluginAllocationHeader* allocation = plugin->plugin.allocations[i];
@@ -173,7 +175,7 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 		ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 	}
 
-	const char* header_name = STR_FormC(TEMP, "%v.hatch_generated.h", plugin_name);
+	const char* header_name = STR_FormC(TEMP, "%v.inc.ht", plugin_name);
 	FILE* header = fopen(header_name, "wb");
 	assert(header != NULL);
 
@@ -205,7 +207,8 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 				case TypeKind_Float: { fprintf(header, "float"); }break;
 				case TypeKind_Int: { fprintf(header, "int"); }break;
 				case TypeKind_Bool: { fprintf(header, "bool"); }break;
-				default: break;
+				case TypeKind_AssetRef: { fprintf(header, "HT_AssetRef"); }break;
+				default: assert(0); break;
 				}
 				STR_View member_name = UI_TextToStr(member.name.text);
 				fprintf(header, " %.*s;\n", StrArg(member_name));
@@ -237,7 +240,7 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 	for (int i = 0; i < plugin_opts->SourceFiles.count; i++) {
 		AssetRef source_file = *((AssetRef*)plugin_opts->SourceFiles.data + i);
 		if (AssetIsValid(source_file)) {
-			const char* file_name = STR_FormC(TEMP, "%v.%v", UI_TextToStr(source_file.asset->name), GetAssetFileExtension(source_file.asset));
+			const char* file_name = STR_ToC(TEMP, UI_TextToStr(source_file.asset->name));
 			BUILD_AddSourceFile(&project, file_name);
 		}
 	}
@@ -261,8 +264,13 @@ EXPORT void RecompilePlugin(Asset* plugin, STR_View hatch_install_directory) {
 
 		plugin->plugin.dll_handle = dll;
 
-		*(void**)&plugin->plugin.dll_UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
-		assert(plugin->plugin.dll_UpdatePlugin != NULL);
+		*(void**)&plugin->plugin.LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
+		*(void**)&plugin->plugin.UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
+		*(void**)&plugin->plugin.UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
+
+		if (plugin->plugin.LoadPlugin) {
+			plugin->plugin.LoadPlugin(s->api);
+		}
 	}
 
 	BUILD_ProjectDeinit(&project);
