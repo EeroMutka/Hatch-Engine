@@ -18,22 +18,20 @@ extern "C" {
 // ----------------------------------------
 
 static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
-	switch (tab->kind) {
-	case TabKind_Assets:     return "Assets";
-	case TabKind_Properties: return "Properties";
-	case TabKind_Log:        return "Log";
-	case TabKind_Custom:     return tab->name;
-	}
-	return "";
+	return tab->name;
 }
 
 void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
 	EditorState* s = (EditorState*)tree->user_data;
-	switch (tab->kind) {
-	case TabKind_Assets:     UIAssetsBrowserTab(s, key, area_rect); break;
-	case TabKind_Properties: UIPropertiesTab(s, key, area_rect); break;
-	case TabKind_Log:        UILogTab(s, key, area_rect); break;
-	case TabKind_Custom: TODO(); break;
+	/**/ if (tab == s->assets_tab_class)      UIAssetsBrowserTab(s, key, area_rect);
+	else if (tab == s->properties_tab_class)  UIPropertiesTab(s, key, area_rect);
+	else if (tab == s->log_tab_class)         UILogTab(s, key, area_rect);
+	else {
+		HT_TabUpdate update;
+		update.tab_class = (HT_TabClass*)tab;
+		update.rect_min = area_rect.min;
+		update.rect_max = area_rect.max;
+		DS_ArrPush(&s->frame.queued_tab_updates, update);
 	}
 }
 
@@ -74,6 +72,9 @@ static void AppInit(EditorState* s) {
 	s->panel_tree.user_data = s;
 	
 	DS_BucketArrayInit(&s->tab_classes, persist, 16);
+	s->assets_tab_class = CreateTabClass(s, "Assets");
+	s->log_tab_class = CreateTabClass(s, "Log");
+	s->properties_tab_class = CreateTabClass(s, "Properties");
 
 	DS_BucketArrayInit(&s->asset_tree.assets, persist, 16);
 	s->asset_tree.next_asset_generation = 1;
@@ -86,15 +87,10 @@ static void AppInit(EditorState* s) {
 	UI_Panel* asset_browser_panel = NewUIPanel(&s->panel_tree);
 	UI_Panel* properties_panel = NewUIPanel(&s->panel_tree);
 
-	static UI_Tab asset_browser_tab = {TabKind_Assets};
-	DS_ArrPush(&asset_browser_panel->tabs, &asset_browser_tab);
+	DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
+	DS_ArrPush(&log_panel->tabs, s->log_tab_class);
+	DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
 	
-	static UI_Tab log_tab = {TabKind_Log};
-	DS_ArrPush(&log_panel->tabs, &log_tab);
-
-	static UI_Tab properties_tab = {TabKind_Properties};
-	DS_ArrPush(&properties_panel->tabs, &properties_tab);
-
 	s->panel_tree.root->split_along = UI_Axis_Y;
 	s->panel_tree.root->end_child[0] = root_left_panel;
 	s->panel_tree.root->end_child[1] = properties_panel;
@@ -158,25 +154,28 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_BeginFrame(&s->ui_inputs, s->default_font);
 
 	s->frame = {};
+	DS_ArrInit(&s->frame.queued_tab_updates, TEMP);
 	
 	UIDropdownStateBeginFrame(&s->dropdown_state);
+	
+	if (UI_InputIsDown(UI_Input_Shift)) __debugbreak();
 
+	UI_Rect panel_area_rect = {0};
+	panel_area_rect.min.y = TOP_BAR_HEIGHT;
+	panel_area_rect.max = UI_VEC2{(float)s->window_size.x, (float)s->window_size.y};
+	UI_PanelTreeUpdateAndDraw(&s->dropdown_state, &s->panel_tree, s->panel_tree.root, panel_area_rect, false, s->icons_font, &s->frame.hovered_panel);
+	
 	UI_Box* root_box = UI_BOX();
 	UI_InitRootBox(root_box, (float)s->window_size.x, (float)s->window_size.y, 0);
-	UIRegisterOrderedRoot(&s->dropdown_state, root_box);
 	UI_PushBox(root_box);
 
+	// Add top bar after panel tree to make the top bar dropdowns "in front" of the root
 	AddTopBar(s);
 
 	UI_PopBox(root_box);
 	UI_BoxComputeRects(root_box, vec2{0, 0});
 	UI_DrawBox(root_box);
 
-	UI_Rect panel_area_rect = {0};
-	panel_area_rect.min.y = TOP_BAR_HEIGHT;
-	panel_area_rect.max = UI_VEC2{(float)s->window_size.x, (float)s->window_size.y};
-	UI_PanelTreeUpdateAndDraw(&s->panel_tree, s->panel_tree.root, panel_area_rect, false, s->icons_font, &s->frame.hovered_panel);
-	
 	UpdatePlugins(s);
 
 	UpdateAndDrawDropdowns(s);

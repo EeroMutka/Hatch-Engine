@@ -86,15 +86,17 @@ EXPORT void AddTopBar(EditorState* s) {
 		s->frame.file_dropdown_open = true;
 	}
 
-	UI_Box* edit_button = UI_BOX();
-	UIAddTopBarButton(edit_button, UI_SizeFit(), UI_SizeFit(), "Edit");
-	if (UI_Pressed(edit_button)) {
-		s->frame.edit_dropdown_open = true;
-	}
-
+	//UI_Box* edit_button = UI_BOX();
+	//UIAddTopBarButton(edit_button, UI_SizeFit(), UI_SizeFit(), "Edit");
+	//if (UI_Pressed(edit_button)) {
+	//	s->frame.edit_dropdown_open = true;
+	//}
+	
 	UI_Box* window_button = UI_BOX();
 	UIAddTopBarButton(window_button, UI_SizeFit(), UI_SizeFit(), "Window");
 	
+	//if (s->window_dropdown_open && UI_InputWasPressed(UI_Input_MouseLeft)) TODO();
+
 	s->window_dropdown_open =
 		(s->window_dropdown_open && !(UI_InputWasPressed(UI_Input_MouseLeft) && s->dropdown_state.has_added_deepest_hovered_root)) ||
 		(!s->window_dropdown_open && UI_Pressed(window_button));
@@ -103,43 +105,30 @@ EXPORT void AddTopBar(EditorState* s) {
 		s->frame.window_dropdown = UI_BOX();
 		s->frame.window_dropdown_button = window_button;
 		UI_InitRootBox(s->frame.window_dropdown, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
+		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
 		UI_PushBox(s->frame.window_dropdown);
 		
-		TODO();
+		int i = 0;
+		DS_ForBucketArrayEach(UI_Tab, &s->tab_classes, IT) {
+			if (IT.elem->name.size == 0) continue; // free slot
 
-		// remove from the middle
-
-		/*DS_ForBucketArrayEach(UI_Tab, &s->tab_classes, IT) {
-			// ugh.... this stinks.
-			// how can I improve the slot allocator? Somehow we need to ask explicitly for the "next" slot and manually encode liveness.
-			
-			// Can we just have a bucket array instead? with easy free-from-the-middle
-
-
-
-			// 
-			// 
-			// 
-			// 
-			//if (AssetSlotIsEmpty(IT.elem)) continue;
-
-			if (IT.elem->kind != AssetKind_StructData || IT.elem->struct_data.struct_type.asset != struct_type) continue;
-
-			TODO();
-			// we want to also have a DS_Set per struct type that recursively references all struct types it depends on
-		}*/
-
-		// open tab kinds:
-		UI_AddLabel(UI_BOX(), UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable, "Open tab:");
+			UI_Box* button = UI_KBOX(UI_HashInt(UI_KEY(), i));
+			UI_AddLabel(button, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, IT.elem->name);
+			if (UI_Clicked(button)) {
+				AddNewTabToActivePanel(&s->panel_tree, IT.elem);
+				s->window_dropdown_open = false;
+			}
+			i++;
+		}
 
 		UI_PopBox(s->frame.window_dropdown);
 	}
 
-	UI_Box* help_button = UI_BOX();
-	UIAddTopBarButton(help_button, UI_SizeFit(), UI_SizeFit(), "Help");
-	if (UI_Clicked(help_button)) {
-		TODO();
-	}
+	//UI_Box* help_button = UI_BOX();
+	//UIAddTopBarButton(help_button, UI_SizeFit(), UI_SizeFit(), "Help");
+	//if (UI_Clicked(help_button)) {
+	//	//TODO();
+	//}
 
 	UI_PopBox(top_bar_box);
 }
@@ -505,7 +494,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 	Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
 	if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 		StructMemberNode root = {0};
-		root.base.key = UI_HashPtr(UI_KEY(), selected_asset);
+		root.base.key = UI_HashPtr(UI_KKEY(key), selected_asset);
 		UI_DataTreeNode* p = &root.base;
 		
 		int members_count = selected_asset->struct_type.members.count;
@@ -550,7 +539,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 		}
 		else {
 			Asset* struct_type = selected_asset->struct_data.struct_type.asset;
-			UIAddStructValueEditTree(s, UI_KEY(), selected_asset->struct_data.data, struct_type);
+			UIAddStructValueEditTree(s, UI_KKEY(key), selected_asset->struct_data.data, struct_type);
 		}
 	}
 
@@ -584,9 +573,9 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 
 		UI_PopBox(row);
 
-		UIAddStructValueEditTree(s, UI_KEY(), &selected_asset->plugin.options, s->asset_tree.plugin_options_struct_type);
+		UIAddStructValueEditTree(s, UI_KKEY(key), &selected_asset->plugin.options, s->asset_tree.plugin_options_struct_type);
 
-		UI_Box* compile_button = UI_BOX();
+		UI_Box* compile_button = UI_KBOX(key);
 		UI_AddButton(compile_button, UI_SizeFit(), UI_SizeFit(), 0, "Compile");
 		if (UI_Clicked(compile_button)) {
 			RecompilePlugin(s, selected_asset, s->hatch_install_directory);
@@ -649,7 +638,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	if (has_hovered_tab && UI_InputWasPressed(UI_Input_MouseRight)) {
 		s->rmb_menu_pos = UI_STATE.mouse_pos;
 		s->rmb_menu_open = true;
-		s->rmb_menu_tab_kind = TabKind_Assets;
+		s->rmb_menu_tab_class = s->assets_tab_class;
 	}
 
 	UI_Box* rmb_menu = UI_BOX();
@@ -657,7 +646,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		if (UIOrderedDropdownShouldClose(&s->dropdown_state, rmb_menu)) s->rmb_menu_open = false;
 	}
 
-	if (s->rmb_menu_open && s->rmb_menu_tab_kind == TabKind_Assets) {
+	if (s->rmb_menu_open && s->rmb_menu_tab_class == s->assets_tab_class) {
 		UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
 
 		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
@@ -768,7 +757,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			UI_DrawBox(rmb_menu);
 		}
 	}
-	else if (s->rmb_menu_open && s->rmb_menu_tab_kind == TabKind_Properties) {
+	else if (s->rmb_menu_open && s->rmb_menu_tab_class == s->properties_tab_class) {
 		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
 		if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 			UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
@@ -811,7 +800,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			UI_DrawBox(rmb_menu);
 		}
 	}
-	else if (s->rmb_menu_open && s->rmb_menu_tab_kind == TabKind_Log) {
+	else if (s->rmb_menu_open && s->rmb_menu_tab_class == s->log_tab_class) {
 		//UI_Key rmb_menu_key = UI_BOX();
 		//rmb_menu_open = UI_DropdownShouldKeepOpen(rmb_menu_key);
 		//UI_Box* box = UIPushDropdown(rmb_menu_key, UI_SizeFit(), UI_SizeFit());
@@ -840,7 +829,6 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 
 	if (s->frame.window_dropdown) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
-		s->frame.window_dropdown->size[0] = s->frame.window_dropdown_button->computed_expanded_size.x;
 		UI_BoxComputeRects(s->frame.window_dropdown, {s->frame.window_dropdown_button->computed_rect.min.x, s->frame.window_dropdown_button->computed_rect.max.y});
 		UI_DrawBox(s->frame.window_dropdown);
 	}
@@ -930,30 +918,43 @@ EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
 	UI_Tab* tab;
 	NEW_SLOT(&tab, &s->tab_classes, &s->first_free_tab_class, freelist_next);
 	*tab = {};
-	tab->kind = TabKind_Custom;
 	tab->name = STR_Clone(DS_HEAP, name);
 	return tab;
 }
 
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
-	tab->kind = TabKind_FreeSlot;
+	STR_Free(DS_HEAP, tab->name);
+	tab->name = {}; // mark free slot with this
 	FREE_SLOT(tab, &s->first_free_tab_class, freelist_next);
 }
 
 static HT_TabClass* HT_CreateTabClass(STR_View name) {
-	TODO();
 	UI_Tab* tab_class = CreateTabClass(g_plugin_call_ctx->s, name);
 	tab_class->owner_plugin = GetAssetHandle(g_plugin_call_ctx->plugin);
 	return (HT_TabClass*)tab_class;
 }
 
 static void HT_DestroyTabClass(HT_TabClass* tab) {
-	TODO();
-	//UI_Tab* tab_class = (UI_Tab*)tab;
-	//assert(tab_class->owner_plugin.asset == g_plugin_call_ctx->plugin); // a plugin may only destroy its own tab classes.
-	//STR_Free(DS_HEAP, tab_class->name);
-	//*tab_class = {};
-	//DS_FreeSlot(&g_plugin_call_ctx->s->tab_classes, tab_class);
+	UI_Tab* tab_class = (UI_Tab*)tab;
+	assert(tab_class->owner_plugin.asset == g_plugin_call_ctx->plugin); // a plugin may only destroy its own tab classes.
+	DestroyTabClass(g_plugin_call_ctx->s, tab_class);
+}
+
+static bool HT_PollNextTabUpdate(HT_TabUpdate* tab_update) {
+	EditorState* s = g_plugin_call_ctx->s;
+	
+	for (int i = 0; i < s->frame.queued_tab_updates.count; i++) {
+		HT_TabUpdate* update = &s->frame.queued_tab_updates[i];
+		UI_Tab* tab = (UI_Tab*)update->tab_class;
+		if (tab->owner_plugin.asset == g_plugin_call_ctx->plugin) {
+			// Remove from the queue
+			*tab_update = *update;
+			s->frame.queued_tab_updates[i] = DS_ArrPop(&s->frame.queued_tab_updates);
+			return true;
+		}
+	}
+	
+	return false;
 }
 
 EXPORT void InitAPI(EditorState* s) {
@@ -965,6 +966,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.AllocatorProc = HT_AllocatorProc;
 	api.TempArenaPush = HT_TempArenaPush;
 	api.GetPluginData = HT_GetPluginData_;
+	api.PollNextTabUpdate = HT_PollNextTabUpdate;
 	api.D3DCompile = D3DCompile;
 	api.D3DCompileFromFile = D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;

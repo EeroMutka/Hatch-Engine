@@ -137,12 +137,7 @@ static const DS_AllocatorBase DS_HEAP_ = { DS_HeapAllocatorProc };
 #define DS_MapKOffset(MAP) (int)((uintptr_t)&(MAP)->data->key - (uintptr_t)(MAP)->data)
 #define DS_MapVOffset(MAP) (int)((uintptr_t)&(MAP)->data->value - (uintptr_t)(MAP)->data)
 
-#define DS_SlotN(ALLOCATOR) sizeof((ALLOCATOR)->buckets[0]->slots) / sizeof((ALLOCATOR)->buckets[0]->slots[0])
-#define DS_SlotBucketSize(ALLOCATOR) sizeof(*(ALLOCATOR)->buckets[0])
-#define DS_SlotBucketNextPtrOffset(ALLOCATOR) (uint32_t)((uintptr_t)&(ALLOCATOR)->buckets[0]->next_bucket - (uintptr_t)(ALLOCATOR)->buckets[0])
-#define DS_SlotSize(ALLOCATOR) sizeof((ALLOCATOR)->buckets[0]->slots[0])
-
-#define DS_BucketElemSize(ARRAY) (sizeof((ARRAY)->buckets[0]->dummy_T))
+#define DS_BucketElemSize(ARRAY) sizeof((ARRAY)->first_bucket->first_elem)
 #define DS_BucketNextPtrOffset(ARRAY) ((ARRAY)->elems_per_bucket * DS_BucketElemSize(ARRAY))
 
 #ifdef __cplusplus
@@ -548,7 +543,8 @@ typedef struct DS_BucketArrayIndex {
 
 #define DS_BucketArray(T) struct { \
 	DS_Allocator* allocator; \
-	struct {T dummy_T; void* dummy_ptr;}* buckets[2]; /* first and last bucket */ \
+	struct { T first_elem; }* first_bucket; \
+	struct { T first_elem; }* last_bucket; \
 	uint32_t count; \
 	uint32_t last_bucket_end; \
 	uint32_t elems_per_bucket; }
@@ -561,7 +557,7 @@ typedef DS_BucketArray(char) DS_BucketArrayRaw;
 
 #define DS_BucketArrayPush(ARRAY, ...) do { \
 	DS_BucketArrayPushRaw((DS_BucketArrayRaw*)(ARRAY), DS_BucketElemSize(ARRAY), (uint32_t)DS_BucketNextPtrOffset(ARRAY)); \
-	(&(ARRAY)->buckets[1]->dummy_T)[(ARRAY)->last_bucket_end - 1] = (__VA_ARGS__); \
+	(&(ARRAY)->last_bucket->first_elem)[(ARRAY)->last_bucket_end - 1] = (__VA_ARGS__); \
 	} while (0)
 
 #define DS_BucketArrayPushUndef(ARRAY) DS_BucketArrayPushRaw((DS_BucketArrayRaw*)(ARRAY), DS_BucketElemSize(ARRAY), (uint32_t)DS_BucketNextPtrOffset(ARRAY))
@@ -570,7 +566,7 @@ typedef DS_BucketArray(char) DS_BucketArrayRaw;
 
 #define DS_ForBucketArrayEach(T, ARRAY, IT) \
 	struct DS_Concat(_dummy_, __LINE__) {void *bucket; uint32_t slot_index; T *elem;}; \
-	for (struct DS_Concat(_dummy_, __LINE__) IT = {(ARRAY)->buckets[0]}; DS_BucketArrayIter((DS_BucketArrayRaw*)ARRAY, &IT.bucket, &IT.slot_index, (void**)&IT.elem, DS_BucketElemSize(ARRAY), DS_BucketNextPtrOffset(ARRAY));)
+	for (struct DS_Concat(_dummy_, __LINE__) IT = {(ARRAY)->first_bucket}; DS_BucketArrayIter((DS_BucketArrayRaw*)ARRAY, &IT.bucket, &IT.slot_index, (void**)&IT.elem, DS_BucketElemSize(ARRAY), DS_BucketNextPtrOffset(ARRAY));)
 
 #define DS_BucketArrayGetPtr(ARRAY, INDEX) \
 	(void*)((char*)(INDEX).bucket + DS_BucketElemSize(ARRAY)*(INDEX).slot_index)
@@ -612,7 +608,7 @@ struct DS_ArrayView {
 // -- IMPLEMENTATION ------------------------------------------------------------------
 
 static inline bool DS_BucketArrayIter(DS_BucketArrayRaw* list, void** bucket, uint32_t* slot_index, void** elem, int elem_size, int next_bucket_ptr_offset) {
-	if (*bucket == list->buckets[1] && *slot_index == list->last_bucket_end) {
+	if (*bucket == list->last_bucket && *slot_index == list->last_bucket_end) {
 		return false; // we're finished
 	}
 
@@ -629,7 +625,7 @@ static inline bool DS_BucketArrayIter(DS_BucketArrayRaw* list, void** bucket, ui
 
 static inline DS_BucketArrayIndex DS_BucketArrayFirstIndexRaw(DS_BucketArrayRaw* array) {
 	assert(array->count > 0);
-	DS_BucketArrayIndex index = {array->buckets[0], 0};
+	DS_BucketArrayIndex index = {array->first_bucket, 0};
 	return index;
 }
 
@@ -651,8 +647,8 @@ static inline void DS_BucketArraySetViewToArrayRaw(DS_BucketArrayRaw* array, con
 	DS_BucketArrayRaw result = {0};
 	result.last_bucket_end = (int)elems_count;
 	result.count = (int)elems_count;
-	*(const void**)&result.buckets[0] = elems_data;
-	*(const void**)&result.buckets[1] = elems_data;
+	*(const void**)&result.first_bucket = elems_data;
+	*(const void**)&result.last_bucket = elems_data;
 	*array = result;
 }
 
@@ -665,7 +661,7 @@ static inline void DS_BucketArrayInitRaw(DS_BucketArrayRaw* array, DS_Allocator*
 
 static inline void DS_BucketArrayDeinitRaw(DS_BucketArrayRaw* array, int next_bucket_ptr_offset) {
 	DS_ProfEnter();
-	void* bucket = array->buckets[0];
+	void* bucket = array->first_bucket;
 	for (; bucket;) {
 		void* next_bucket = *(void**)((char*)bucket + next_bucket_ptr_offset);
 		DS_MemFree(array->allocator, bucket);
@@ -697,18 +693,18 @@ static void* DS_BucketArrayGetNextBucket(DS_BucketArrayRaw* array, void* bucket,
 		*(void**)((char*)bucket + next_bucket_ptr_offset) = new_bucket;
 	}
 	else {
-		*(void**)&array->buckets[0] = new_bucket;
+		*(void**)&array->first_bucket = new_bucket;
 		*(void**)((char*)new_bucket + next_bucket_ptr_offset) = NULL;
 	}
 
 	array->last_bucket_end = 0;
-	*(void**)&array->buckets[1] = new_bucket;
+	*(void**)&array->last_bucket = new_bucket;
 	return new_bucket;
 }
 
 static void DS_BucketArrayGetNRaw(const DS_BucketArrayRaw* array, void* dst, uint32_t elems_count, DS_BucketArrayIndex* index, uint32_t elem_size, uint32_t next_bucket_ptr_offset) {
 	while (elems_count > 0) {
-		uint32_t elems_in_bucket = index->bucket == array->buckets[1] ? array->last_bucket_end : array->elems_per_bucket;
+		uint32_t elems_in_bucket = index->bucket == array->last_bucket ? array->last_bucket_end : array->elems_per_bucket;
 		uint32_t slots_left_in_bucket = elems_in_bucket - index->slot_index;
 		
 		if (elems_count >= slots_left_in_bucket) { // go past this bucket
@@ -732,7 +728,7 @@ static void DS_BucketArrayGetNRaw(const DS_BucketArrayRaw* array, void* dst, uin
 
 static void DS_BucketArrayPushNRaw(DS_BucketArrayRaw* array, const void* elems_data, uint32_t elems_count, uint32_t elem_size, uint32_t next_bucket_ptr_offset) {
 	DS_ProfEnter();
-	void* bucket = array->buckets[1];
+	void* bucket = array->last_bucket;
 
 	array->count += elems_count;
 	while (elems_count > 0) {
@@ -767,7 +763,7 @@ static void DS_BucketArrayPushNRaw(DS_BucketArrayRaw* array, const void* elems_d
 
 static inline void* DS_BucketArrayPushRaw(DS_BucketArrayRaw* array, uint32_t elem_size, uint32_t next_bucket_ptr_offset) {
 	DS_ProfEnter();
-	void* bucket = array->buckets[1];
+	void* bucket = array->last_bucket;
 
 	if (bucket == NULL || array->last_bucket_end == array->elems_per_bucket) {
 		bucket = DS_BucketArrayGetNextBucket(array, bucket, next_bucket_ptr_offset);

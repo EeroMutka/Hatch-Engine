@@ -310,7 +310,7 @@ struct UIDropdownState {
 EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string, UI_Font icons_font);
 
 EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator);
-EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered);
+EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered);
 
 EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree);
 EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel);
@@ -332,26 +332,15 @@ EXPORT void UIAddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, STR_View stri
 
 EXPORT UI_Panel* SplitPanel(UI_PanelTree* tree, UI_Panel* panel, UI_Axis split_along);
 EXPORT void ClosePanel(UI_PanelTree* tree, UI_Panel* panel);
-EXPORT void AddNewTabToActivePanel(UI_PanelTree* tree, UI_Tab tab);
+EXPORT void AddNewTabToActivePanel(UI_PanelTree* tree, UI_Tab* tab);
 
 // -- ht_editor.cpp ---------------------------------------------------
 
 struct RenderState;
 
-#define TabKind_FreeSlot (TabKind)0
-enum TabKind {
-	TabKind_Assets = 1,
-	TabKind_Properties,
-	TabKind_Log,
-	TabKind_Custom,
-};
-
 struct UI_Tab {
-	TabKind kind;
-	
+	STR_View name; // empty string means free slot
 	AssetRef owner_plugin;
-	STR_View name;
-
 	UI_Tab* freelist_next;
 };
 
@@ -365,6 +354,8 @@ struct PerFrameState {
 	
 	UI_Box* type_dropdown;
 	UI_Box* type_dropdown_button;
+
+	DS_DynArray(HT_TabUpdate) queued_tab_updates;
 };
 
 struct EditorState {
@@ -398,13 +389,17 @@ struct EditorState {
 
 	DS_BucketArray(UI_Tab) tab_classes;
 	UI_Tab* first_free_tab_class;
+	
+	UI_Tab* properties_tab_class;
+	UI_Tab* assets_tab_class;
+	UI_Tab* log_tab_class;
 
 	UI_PanelTree panel_tree;
 
 	// ------------------
 	
 	vec2 rmb_menu_pos;
-	TabKind rmb_menu_tab_kind;
+	UI_Tab* rmb_menu_tab_class;
 	bool rmb_menu_open;
 
 	bool window_dropdown_open;

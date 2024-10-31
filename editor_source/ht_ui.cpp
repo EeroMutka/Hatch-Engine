@@ -86,7 +86,7 @@ EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel) {
 	tree->first_free_panel = panel;
 }
 
-EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered) {
+EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered) {
 	if (panel->end_child[0] == NULL) {
 		// leaf panel
 		
@@ -97,12 +97,11 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Re
 
 		UI_Vec2 panel_size = UI_RectSize(area_rect);
 
+		// what if we want to make this whole tree unclickable?
 		UI_Box* root = UI_KBOX(UI_HashPtr(UI_KEY(), panel));
 		UI_InitRootBox(root, panel_size.x, panel_size.y, UI_BoxFlag_DrawBorder);
-		// TODO:  //UIRegisterOrderedRoot(root);
+		UIRegisterOrderedRoot(s, root);
 		assert(root->parent == NULL);
-
-		//UI_PushBox(root); // UI_PushRootBox(UI_KEY1(panel_key), area_rect.min, UI_SizePx(panel_size.x), UI_SizePx(panel_size.y), flags);
 
 		if (!splitter_is_hovered && (UI_Pressed(root) || UI_PressedEx(root, UI_Input_MouseRight))) {
 			tree->active_panel = panel;
@@ -120,9 +119,9 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Re
 		UI_DrawBox(root);
 
 		// tab area
-		UI_Box* tab_area = UI_BBOX(root);
+		UI_Box* tab_area = UI_KBOX(UI_HashPtr(UI_KEY(), panel));
 		UI_InitRootBox(tab_area, panel_size.x, tab_area_height, UI_BoxFlag_Horizontal | UI_BoxFlag_DrawBorder);
-		// TODO: //UIRegisterOrderedRoot(tab_area);
+		UIRegisterOrderedRoot(s, tab_area);
 		UI_PushBox(tab_area);
 
 		int should_close_tab = -1;
@@ -220,7 +219,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Re
 			UI_Rect rect = area_rect;
 			rect.min._[X] = area_rect.min._[X] + start + 1.f;
 			rect.max._[X] = area_rect.min._[X] + end - 1.f;
-			UI_PanelTreeUpdateAndDraw(tree, child, rect, splitter_is_hovered, icons_font, out_hovered);
+			UI_PanelTreeUpdateAndDraw(s, tree, child, rect, splitter_is_hovered, icons_font, out_hovered);
 
 			start = end;
 			i++;
