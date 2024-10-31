@@ -113,6 +113,14 @@ typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 // #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
 #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData()
 
+typedef struct HT_TabClass HT_TabClass;
+
+typedef struct HT_TabUpdate {
+	HT_TabClass* tab_class;
+	vec2 rect_min;
+	vec2 rect_max;
+} HT_TabUpdate;
+
 struct HT_API {
 	void (*DebugPrint)(const char* str);
 
@@ -161,7 +169,12 @@ struct HT_API {
 	// The returned memory is uninitialized.
 	void* (*TempArenaPush)(size_t size, size_t align);
 	
-	// -- UI functions --------------------------------
+	// -- UI -----------------------------------------
+	
+	HT_TabClass* (*CreateTabClass)(string name);
+	void (*DestroyTabClass)(HT_TabClass* tab);
+	
+	bool (*PollNextTabUpdate)(HT_TabUpdate* tab_update);
 	
 	// !!! WARNING !!! pointers received from previous calls to AddVertices may be invalid after calling this!
 	// TODO: flip the API around to require passing a pointer to vertices and indices.
@@ -180,8 +193,9 @@ struct HT_API {
 	HT_CachedGlyph (*GetCachedGlyph)(u32 codepoint);
 	
 	// -- D3D12 API -----------------------------------
-#ifdef HT_INCLUDE_D3D12_API
 	
+#ifdef HT_INCLUDE_D3D12_API
+
 	ID3D12Device* D3D_device;
 	
 	HRESULT (*D3DCompile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
@@ -194,6 +208,8 @@ struct HT_API {
 	
 	HRESULT (*D3D12SerializeRootSignature)(const D3D12_ROOT_SIGNATURE_DESC* pRootSignature,
 		D3D_ROOT_SIGNATURE_VERSION Version, ID3DBlob** ppBlob, ID3DBlob** ppErrorBlob);
+		
 #endif
+	
 	// ------------------------------------------------
 };

@@ -44,7 +44,8 @@ EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags 
 }
 
 EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator) {
-	DS_SlotAllocatorInit(&tree->panels, allocator);
+	*tree = {};
+	DS_BucketArrayInit(&tree->panels, allocator, 8);
 }
 
 EXPORT void UIDropdownStateBeginFrame(UIDropdownState* s) {
@@ -66,7 +67,14 @@ EXPORT void UIRegisterOrderedRoot(UIDropdownState* s, UI_Box* dropdown) {
 }
 
 EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree) {
-	UI_Panel* panel = (UI_Panel*)DS_TakeSlot(&tree->panels);
+	UI_Panel* panel;
+	if (tree->first_free_panel) {
+		panel = tree->first_free_panel;
+		tree->first_free_panel = tree->first_free_panel->freelist_next;
+	}
+	else {
+		panel = (UI_Panel*)DS_BucketArrayPushUndef(&tree->panels);
+	}
 	*panel = UI_Panel{0};
 	DS_ArrInit(&panel->tabs, DS_HEAP);
 	return panel;
@@ -74,7 +82,8 @@ EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree) {
 
 EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel) {
 	DS_ArrDeinit(&panel->tabs);
-	DS_FreeSlot(&tree->panels, panel);
+	panel->freelist_next = tree->first_free_panel;
+	tree->first_free_panel = panel;
 }
 
 EXPORT void UI_PanelTreeUpdateAndDraw(UI_PanelTree* tree, UI_Panel* panel, UI_Rect area_rect, bool splitter_is_hovered, UI_Font icons_font, UI_Panel** out_hovered) {

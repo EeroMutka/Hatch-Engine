@@ -11,9 +11,15 @@
 #include "include/ht_internal.h"
 #include "include/ht_editor_render.h" // this should also be cleaned up!
 
+struct PluginCallContext {
+	EditorState* s;
+	Asset* plugin;
+};
+
 // -- GLOBALS ------------------------------------------------------
 
-static Asset* g_currently_updating_plugin;
+// Only valid while calling a plugin DLL function
+static PluginCallContext* g_plugin_call_ctx;
 
 // -----------------------------------------------------------------
 
@@ -86,10 +92,47 @@ EXPORT void AddTopBar(EditorState* s) {
 		s->frame.edit_dropdown_open = true;
 	}
 
-	UI_Box* panel_button = UI_BOX();
-	UIAddTopBarButton(panel_button, UI_SizeFit(), UI_SizeFit(), "Window");
-	if (UI_Pressed(panel_button)) {
-		s->frame.panel_dropdown_open = true;
+	UI_Box* window_button = UI_BOX();
+	UIAddTopBarButton(window_button, UI_SizeFit(), UI_SizeFit(), "Window");
+	
+	s->window_dropdown_open =
+		(s->window_dropdown_open && !(UI_InputWasPressed(UI_Input_MouseLeft) && s->dropdown_state.has_added_deepest_hovered_root)) ||
+		(!s->window_dropdown_open && UI_Pressed(window_button));
+
+	if (s->window_dropdown_open) {
+		s->frame.window_dropdown = UI_BOX();
+		s->frame.window_dropdown_button = window_button;
+		UI_InitRootBox(s->frame.window_dropdown, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
+		UI_PushBox(s->frame.window_dropdown);
+		
+		TODO();
+
+		// remove from the middle
+
+		/*DS_ForBucketArrayEach(UI_Tab, &s->tab_classes, IT) {
+			// ugh.... this stinks.
+			// how can I improve the slot allocator? Somehow we need to ask explicitly for the "next" slot and manually encode liveness.
+			
+			// Can we just have a bucket array instead? with easy free-from-the-middle
+
+
+
+			// 
+			// 
+			// 
+			// 
+			//if (AssetSlotIsEmpty(IT.elem)) continue;
+
+			if (IT.elem->kind != AssetKind_StructData || IT.elem->struct_data.struct_type.asset != struct_type) continue;
+
+			TODO();
+			// we want to also have a DS_Set per struct type that recursively references all struct types it depends on
+		}*/
+
+		// open tab kinds:
+		UI_AddLabel(UI_BOX(), UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable, "Open tab:");
+
+		UI_PopBox(s->frame.window_dropdown);
 	}
 
 	UI_Box* help_button = UI_BOX();
@@ -606,7 +649,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	if (has_hovered_tab && UI_InputWasPressed(UI_Input_MouseRight)) {
 		s->rmb_menu_pos = UI_STATE.mouse_pos;
 		s->rmb_menu_open = true;
-		//rmb_menu_tab_kind = hovered_tab->kind;
+		s->rmb_menu_tab_kind = TabKind_Assets;
 	}
 
 	UI_Box* rmb_menu = UI_BOX();
@@ -795,6 +838,13 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	UpdateAndDrawRMBMenu(s);
 
+	if (s->frame.window_dropdown) {
+		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
+		s->frame.window_dropdown->size[0] = s->frame.window_dropdown_button->computed_expanded_size.x;
+		UI_BoxComputeRects(s->frame.window_dropdown, {s->frame.window_dropdown_button->computed_rect.min.x, s->frame.window_dropdown_button->computed_rect.max.y});
+		UI_DrawBox(s->frame.window_dropdown);
+	}
+
 	if (s->frame.type_dropdown) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.type_dropdown);
 		if (UIOrderedDropdownShouldClose(&s->dropdown_state, s->frame.type_dropdown)) {
@@ -838,7 +888,7 @@ static void HT_DebugPrint(const char* str) {
 static void* HT_AllocatorProc(void* ptr, size_t size) {
 	// We track all plugin allocations so that we can free them at once when the plugin is unloaded.
 
-	Asset_Plugin* plugin = &g_currently_updating_plugin->plugin;
+	Asset_Plugin* plugin = &g_plugin_call_ctx->plugin->plugin;
 	if (size == 0) {
 		// Move last allocation to the place of the allocation we want to free in the allocations array
 		PluginAllocationHeader* header = (PluginAllocationHeader*)((char*)ptr - 16);
@@ -871,9 +921,39 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 }
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
-	AssetRef data = g_currently_updating_plugin->plugin.options.Data;
+	AssetRef data = g_plugin_call_ctx->plugin->plugin.options.Data;
 	if (!AssetIsValid(data)) return NULL;
 	return data.asset->struct_data.data;
+}
+
+EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
+	UI_Tab* tab;
+	NEW_SLOT(&tab, &s->tab_classes, &s->first_free_tab_class, freelist_next);
+	*tab = {};
+	tab->kind = TabKind_Custom;
+	tab->name = STR_Clone(DS_HEAP, name);
+	return tab;
+}
+
+EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
+	tab->kind = TabKind_FreeSlot;
+	FREE_SLOT(tab, &s->first_free_tab_class, freelist_next);
+}
+
+static HT_TabClass* HT_CreateTabClass(STR_View name) {
+	TODO();
+	UI_Tab* tab_class = CreateTabClass(g_plugin_call_ctx->s, name);
+	tab_class->owner_plugin = GetAssetHandle(g_plugin_call_ctx->plugin);
+	return (HT_TabClass*)tab_class;
+}
+
+static void HT_DestroyTabClass(HT_TabClass* tab) {
+	TODO();
+	//UI_Tab* tab_class = (UI_Tab*)tab;
+	//assert(tab_class->owner_plugin.asset == g_plugin_call_ctx->plugin); // a plugin may only destroy its own tab classes.
+	//STR_Free(DS_HEAP, tab_class->name);
+	//*tab_class = {};
+	//DS_FreeSlot(&g_plugin_call_ctx->s->tab_classes, tab_class);
 }
 
 EXPORT void InitAPI(EditorState* s) {
@@ -889,19 +969,39 @@ EXPORT void InitAPI(EditorState* s) {
 	api.D3DCompileFromFile = D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
+	*(void**)&api.CreateTabClass = HT_CreateTabClass;
+	api.DestroyTabClass = HT_DestroyTabClass;
 	s->api = &api;
 }
 
+EXPORT void UnloadPlugin(EditorState* s, Asset* plugin) {
+	if (plugin->plugin.UnloadPlugin) {
+		PluginCallContext ctx = {s, plugin};
+		g_plugin_call_ctx = &ctx;
+		plugin->plugin.UnloadPlugin(s->api);
+		g_plugin_call_ctx = NULL;
+	}
+}
+
+EXPORT void LoadPlugin(EditorState* s, Asset* plugin) {
+	if (plugin->plugin.LoadPlugin) {
+		PluginCallContext ctx = {s, plugin};
+		g_plugin_call_ctx = &ctx;
+		plugin->plugin.LoadPlugin(s->api);
+		g_plugin_call_ctx = NULL;
+	}
+}
+
 EXPORT void UpdatePlugins(EditorState* s) {
-	DS_ForSlotAllocatorEachSlot(Asset, &s->asset_tree.assets, IT) {
+	DS_ForBucketArrayEach(Asset, &s->asset_tree.assets, IT) {
+		if (IT.elem->kind != AssetKind_Plugin) continue;
 		Asset* plugin = IT.elem;
-		if (AssetSlotIsEmpty(plugin)) continue;
-		if (plugin->kind != AssetKind_Plugin) continue;
 
 		if (plugin->plugin.dll_handle && plugin->plugin.UpdatePlugin != NULL) {
-			g_currently_updating_plugin = plugin;
+			PluginCallContext ctx = {s, plugin};
+			g_plugin_call_ctx = &ctx;
 			plugin->plugin.UpdatePlugin(s->api);
-			g_currently_updating_plugin = NULL;
+			g_plugin_call_ctx = NULL;
 		}
 	}
 }

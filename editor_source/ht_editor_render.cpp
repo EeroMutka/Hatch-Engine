@@ -200,14 +200,11 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
         UI_DX12_Draw(ui_outputs, {(float)s->window_size.x, (float)s->window_size.y}, s->command_list);
 
         // Then populate the command list for plugin defined things
-        DS_ForSlotAllocatorEachSlot(Asset, &editor_state->asset_tree.assets, IT) {
-            Asset* plugin = IT.elem;
-            if (AssetSlotIsEmpty(plugin)) continue;
-            if (plugin->kind != AssetKind_Plugin) continue;
-
-            if (plugin->plugin.dll_handle) {
+        DS_ForBucketArrayEach(Asset, &editor_state->asset_tree.assets, IT) {
+            if (IT.elem->kind != AssetKind_Plugin) continue;
+            if (IT.elem->plugin.dll_handle) {
                 void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
-                *(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(plugin->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
+                *(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(IT.elem->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
                 if (BuildPluginD3DCommandList) {
                     BuildPluginD3DCommandList(editor_state->api, s->command_list);
                 }

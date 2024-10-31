@@ -157,6 +157,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	if (plugin->plugin.dll_handle) {
 		printf("Unloading plugin with %d allocations\n", plugin->plugin.allocations.count);
+		UnloadPlugin(s, plugin);
 
 		OS_UnloadDLL(plugin->plugin.dll_handle);
 		
@@ -268,9 +269,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 		*(void**)&plugin->plugin.UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
 		*(void**)&plugin->plugin.UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
 
-		if (plugin->plugin.LoadPlugin) {
-			plugin->plugin.LoadPlugin(s->api);
-		}
+		LoadPlugin(s, plugin);
 	}
 
 	BUILD_ProjectDeinit(&project);

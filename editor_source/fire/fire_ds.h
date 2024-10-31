@@ -539,39 +539,6 @@ DS_API void DS_ArrReserveRaw(DS_DynArrayRaw* array, int capacity, int elem_size)
 DS_API void DS_ArrCloneRaw(DS_Arena* arena, DS_DynArrayRaw* array, int elem_size);
 DS_API void DS_ArrResizeRaw(DS_DynArrayRaw* array, int count, const void* value, int elem_size); // set value to NULL to not initialize the memory
 
-// -- Slot Allocator --------------------------------------------------------------------
-
-#define DS_SlotAllocator(T, N) struct { \
-	DS_Allocator* allocator; \
-	struct { union {T value; T* next_free_slot;} slots[N]; void* next_bucket; }* buckets[2]; /* first and last bucket */ \
-	T* first_free_elem; \
-	uint32_t last_bucket_end; \
-	uint32_t bucket_next_ptr_offset; \
-	uint32_t slot_size; \
-	uint32_t bucket_size; \
-	uint32_t num_slots_per_bucket; }
-
-typedef DS_SlotAllocator(char, 1) SlotAllocatorRaw;
-
-// Iterate through all slots in a slot allocator, even the destroyed ones. To detect whether or not a slot is destroyed,
-// you must encode it yourself in the slot data. However, you shouldn't encode it within the first (pointer-size) bytes,
-// because the slot allocator internally stores a pointer there on destroyed slots.
-#define DS_ForSlotAllocatorEachSlot(T, ALLOCATOR, IT) \
-	struct DS_Concat(_dummy_, __LINE__) {void* bucket; uint32_t slot_index; T* elem;}; \
-	for (struct DS_Concat(_dummy_, __LINE__) IT = {(ALLOCATOR)->buckets[0]}; DS_SlotAllocatorIter((SlotAllocatorRaw*)(ALLOCATOR), &IT.bucket, &IT.slot_index, (void**)&IT.elem);)
-
-#define DS_SlotAllocatorInit(ALLOCATOR, BACKING_ALLOCATOR) \
-	DS_SlotAllocatorInitRaw((SlotAllocatorRaw*)(ALLOCATOR), DS_SlotBucketNextPtrOffset(ALLOCATOR), DS_SlotSize(ALLOCATOR), DS_SlotBucketSize(ALLOCATOR), DS_SlotN(ALLOCATOR), BACKING_ALLOCATOR)
-
-#define DS_SlotAllocatorDeinit(ALLOCATOR)  DS_SlotAllocatorDeinitRaw((SlotAllocatorRaw*)(ALLOCATOR))
-
-// The slot's memory won't be initialized or overridden if it existed before.
-#define DS_TakeSlot(ALLOCATOR) \
-	DS_TakeSlotRaw((SlotAllocatorRaw*)(ALLOCATOR))
-
-#define DS_FreeSlot(ALLOCATOR, SLOT) \
-	DS_FreeSlotRaw((SlotAllocatorRaw*)(ALLOCATOR), SLOT)
-
 // -- Bucket Array --------------------------------------------------------------------
 
 typedef struct DS_BucketArrayIndex {
@@ -581,7 +548,6 @@ typedef struct DS_BucketArrayIndex {
 
 #define DS_BucketArray(T) struct { \
 	DS_Allocator* allocator; \
-	SlotAllocatorRaw* slot_allocator; \
 	struct {T dummy_T; void* dummy_ptr;}* buckets[2]; /* first and last bucket */ \
 	uint32_t count; \
 	uint32_t last_bucket_end; \
@@ -589,9 +555,7 @@ typedef struct DS_BucketArrayIndex {
 
 typedef DS_BucketArray(char) DS_BucketArrayRaw;
 
-
 #define DS_BucketArrayInit(ARRAY, ALLOCATOR, ELEMS_PER_BUCKET) DS_BucketArrayInitRaw((DS_BucketArrayRaw*)(ARRAY), (ALLOCATOR), (ELEMS_PER_BUCKET));
-//#define BucketArrayInitUsingSlotAllocator(ARRAY, SLOT_ALLOCATOR) BucketArrayInitUsingSlotAllocatorRaw((DS_BucketArrayRaw*)(ARRAY), (SlotAllocatorRaw*)(SLOT_ALLOCATOR), DS_BucketElemSize(ARRAY))
 
 #define DS_BucketArraySetViewToArray(ARRAY, ELEMS_DATA, ELEMS_COUNT) DS_BucketArraySetViewToArrayRaw((DS_BucketArrayRaw*)(ARRAY), (ELEMS_DATA), (uint32_t)(ELEMS_COUNT))
 
@@ -599,6 +563,8 @@ typedef DS_BucketArray(char) DS_BucketArrayRaw;
 	DS_BucketArrayPushRaw((DS_BucketArrayRaw*)(ARRAY), DS_BucketElemSize(ARRAY), (uint32_t)DS_BucketNextPtrOffset(ARRAY)); \
 	(&(ARRAY)->buckets[1]->dummy_T)[(ARRAY)->last_bucket_end - 1] = (__VA_ARGS__); \
 	} while (0)
+
+#define DS_BucketArrayPushUndef(ARRAY) DS_BucketArrayPushRaw((DS_BucketArrayRaw*)(ARRAY), DS_BucketElemSize(ARRAY), (uint32_t)DS_BucketNextPtrOffset(ARRAY))
 
 #define DS_BucketArrayPushN(ARRAY, ELEMS_DATA, ELEMS_COUNT)  DS_BucketArrayPushNRaw((DS_BucketArrayRaw*)(ARRAY), (ELEMS_DATA), (uint32_t)(ELEMS_COUNT), DS_BucketElemSize(ARRAY), (uint32_t)DS_BucketNextPtrOffset(ARRAY))
 
@@ -645,22 +611,6 @@ struct DS_ArrayView {
 
 // -- IMPLEMENTATION ------------------------------------------------------------------
 
-static inline bool DS_SlotAllocatorIter(SlotAllocatorRaw* allocator, void** bucket, uint32_t* slot_index, void** elem) {
-	if (*bucket == allocator->buckets[1] && *slot_index == allocator->last_bucket_end) {
-		return false; // we're finished
-	}
-
-	if (*slot_index == allocator->num_slots_per_bucket) {
-		// go to the next bucket
-		*bucket = *(void**)((char*)*bucket + allocator->bucket_next_ptr_offset);
-		*slot_index = 0;
-	}
-
-	*elem = (void*)((char*)*bucket + allocator->slot_size * (*slot_index));
-	*slot_index += 1;
-	return true;
-}
-
 static inline bool DS_BucketArrayIter(DS_BucketArrayRaw* list, void** bucket, uint32_t* slot_index, void** elem, int elem_size, int next_bucket_ptr_offset) {
 	if (*bucket == list->buckets[1] && *slot_index == list->last_bucket_end) {
 		return false; // we're finished
@@ -675,83 +625,6 @@ static inline bool DS_BucketArrayIter(DS_BucketArrayRaw* list, void** bucket, ui
 	*elem = (void*)((char*)*bucket + elem_size * (*slot_index));
 	*slot_index += 1;
 	return true;
-}
-
-static inline void DS_SlotAllocatorInitRaw(SlotAllocatorRaw* allocator,
-	uint32_t bucket_next_ptr_offset, uint32_t slot_size, uint32_t bucket_size,
-	uint32_t num_slots_per_bucket, DS_Allocator* backing_allocator)
-{
-	DS_ProfEnter();
-	SlotAllocatorRaw result = {0};
-	result.bucket_next_ptr_offset = bucket_next_ptr_offset;
-	result.slot_size = slot_size;
-	result.bucket_size = bucket_size;
-	result.num_slots_per_bucket = num_slots_per_bucket;
-	result.allocator = backing_allocator;
-	*allocator = result;
-	DS_ProfExit();
-}
-
-static inline void DS_SlotAllocatorDeinitRaw(SlotAllocatorRaw* allocator) {
-	DS_ProfEnter();
-	void* bucket = allocator->buckets[0];
-	for (; bucket;) {
-		void* next_bucket = *(void**)((char*)bucket + allocator->bucket_next_ptr_offset);
-		DS_MemFree(allocator->allocator, bucket);
-		bucket = next_bucket;
-	}
-	DS_DebugFillGarbage(allocator, sizeof(*allocator));
-	DS_ProfExit();
-}
-
-static inline void* DS_TakeSlotRaw(SlotAllocatorRaw* allocator) {
-	DS_ProfEnter();
-	void* result = NULL;
-	DS_ASSERT(allocator->allocator != NULL); // Did you forget to call DS_SlotAllocatorInit?
-
-	if (allocator->first_free_elem) {
-		// Take an existing slot
-		result = allocator->first_free_elem;
-		allocator->first_free_elem = *(char**)((char*)result);
-	}
-	else {
-		// Allocate from the end
-
-		void* bucket = allocator->buckets[1];
-
-		if (bucket == NULL || allocator->last_bucket_end == allocator->num_slots_per_bucket) {
-			// We need to allocate a new bucket
-
-			void* new_bucket = DS_MemAlloc(allocator->allocator, allocator->bucket_size);
-			if (bucket) {
-				// set the `next` pointer of the previous bucket to point to the new bucket
-				*(void**)((char*)bucket + allocator->bucket_next_ptr_offset) = new_bucket;
-			}
-			else {
-				// set the `first bucket` pointer to point to the new bucket
-				memcpy(&allocator->buckets[0], &new_bucket, sizeof(void*));
-				*(void**)((char*)new_bucket + allocator->bucket_next_ptr_offset) = NULL;
-			}
-
-			allocator->last_bucket_end = 0;
-			memcpy(&allocator->buckets[1], &new_bucket, sizeof(void*));
-			bucket = new_bucket;
-		}
-
-		uint32_t slot_idx = allocator->last_bucket_end++;
-		result = (char*)bucket + allocator->slot_size * slot_idx;
-	}
-
-	DS_ProfExit();
-	return result;
-}
-
-static inline void DS_FreeSlotRaw(SlotAllocatorRaw* allocator, void* slot) {
-	// It'd be nice to provide some debug checking thing to detect double frees
-	DS_ASSERT(allocator->first_free_elem != (char*)slot);
-
-	*(char**)((char*)slot) = allocator->first_free_elem;
-	allocator->first_free_elem = (char*)slot;
 }
 
 static inline DS_BucketArrayIndex DS_BucketArrayFirstIndexRaw(DS_BucketArrayRaw* array) {
@@ -789,28 +662,13 @@ static inline void DS_BucketArrayInitRaw(DS_BucketArrayRaw* array, DS_Allocator*
 	result.elems_per_bucket = elems_per_bucket;
 	*array = result;
 }
-//static inline void BucketArrayInitUsingSlotAllocatorRaw(DS_BucketArrayRaw *list, SlotAllocatorRaw *slot_allocator, uint32_t elem_size) {
-//	DS_ASSERT(slot_allocator->slot_next_ptr_offset > elem_size); // The slot allocator slot size must be >= bucket list element size
-//
-//	DS_BucketArrayRaw result = {0};
-//	result.slot_allocator = slot_allocator;
-//	result.elems_per_bucket = slot_allocator->slot_next_ptr_offset / elem_size; // round down
-//	*list = result;
-//}
 
 static inline void DS_BucketArrayDeinitRaw(DS_BucketArrayRaw* array, int next_bucket_ptr_offset) {
 	DS_ProfEnter();
 	void* bucket = array->buckets[0];
 	for (; bucket;) {
 		void* next_bucket = *(void**)((char*)bucket + next_bucket_ptr_offset);
-
-		if (array->slot_allocator) {
-			DS_FreeSlotRaw(array->slot_allocator, bucket);
-		}
-		else {
-			DS_MemFree(array->allocator, bucket);
-		}
-
+		DS_MemFree(array->allocator, bucket);
 		bucket = next_bucket;
 	}
 
@@ -831,13 +689,7 @@ static void* DS_BucketArrayGetNextBucket(DS_BucketArrayRaw* array, void* bucket,
 
 	if (new_bucket == NULL) {
 		int bucket_size = next_bucket_ptr_offset + sizeof(void*);
-		if (array->slot_allocator) {
-			DS_ASSERT(array->slot_allocator->slot_size >= (uint32_t)bucket_size);
-			new_bucket = DS_TakeSlotRaw(array->slot_allocator);
-		}
-		else {
-			new_bucket = DS_MemAlloc(array->allocator, bucket_size);
-		}
+		new_bucket = DS_MemAlloc(array->allocator, bucket_size);
 		*(void**)((char*)new_bucket + next_bucket_ptr_offset) = NULL;
 	}
 

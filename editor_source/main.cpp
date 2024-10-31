@@ -22,6 +22,7 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 	case TabKind_Assets:     return "Assets";
 	case TabKind_Properties: return "Properties";
 	case TabKind_Log:        return "Log";
+	case TabKind_Custom:     return tab->name;
 	}
 	return "";
 }
@@ -32,6 +33,7 @@ void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_
 	case TabKind_Assets:     UIAssetsBrowserTab(s, key, area_rect); break;
 	case TabKind_Properties: UIPropertiesTab(s, key, area_rect); break;
 	case TabKind_Log:        UILogTab(s, key, area_rect); break;
+	case TabKind_Custom: TODO(); break;
 	}
 }
 
@@ -71,9 +73,11 @@ static void AppInit(EditorState* s) {
 	s->panel_tree.update_and_draw_tab = UpdateAndDrawTab;
 	s->panel_tree.user_data = s;
 	
-	DS_SlotAllocatorInit(&s->asset_tree.assets, persist);
+	DS_BucketArrayInit(&s->tab_classes, persist, 16);
+
+	DS_BucketArrayInit(&s->asset_tree.assets, persist, 16);
 	s->asset_tree.next_asset_generation = 1;
-	s->asset_tree.root = (Asset*)DS_TakeSlot(&s->asset_tree.assets);
+	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
 	*s->asset_tree.root = {};
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);

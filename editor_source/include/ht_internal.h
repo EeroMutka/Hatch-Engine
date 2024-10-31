@@ -29,6 +29,22 @@ typedef vec2 UI_Vec2;
 #include "../utils/os_misc.h"
 #include "../utils/os_directory_watch.h"
 
+// -- Utility macros --------------------------------------------------
+
+// Allocate a slot from a bucket array with a freelist
+#define NEW_SLOT(OUT_SLOT, BUCKET_ARRAY, FIRST_FREE_SLOT, NEXT) \
+	if (*FIRST_FREE_SLOT) { \
+		*OUT_SLOT = *FIRST_FREE_SLOT; \
+		*FIRST_FREE_SLOT = (*FIRST_FREE_SLOT)->NEXT; \
+	} else { \
+		*(void**)OUT_SLOT = DS_BucketArrayPushUndef(BUCKET_ARRAY); \
+	}
+
+// Free a slot from a bucket array with a freelist
+#define FREE_SLOT(SLOT, FIRST_FREE_SLOT, NEXT) \
+	SLOT->NEXT = *FIRST_FREE_SLOT; \
+	*FIRST_FREE_SLOT = SLOT;
+
 // -- Globals ---------------------------------------------------------
 
 extern DS_Arena* TEMP;
@@ -86,7 +102,9 @@ struct Type {
 	AssetRef _struct;
 };
 
+#define AssetKind_FreeSlot (AssetKind)0
 enum AssetKind {
+	AssetKind_Root = 1,
 	AssetKind_Package, // Packages are root-level folders. Packages can be saved to disk. Packages cannot contain other packages.
 	AssetKind_Folder,
 	//AssetKind_C,
@@ -146,9 +164,6 @@ struct Asset_StructData {
 	void* data;
 };
 
-#define AssetSlotIsEmpty(ASSET)  ((ASSET)->generation == 0)
-#define AssetSlotSetEmpty(ASSET) ((ASSET)->generation = 0)
-
 struct Asset {
 	AssetKind kind;
 	UI_Text name; // not used for AssetKind_Package
@@ -159,7 +174,10 @@ struct Asset {
 	Asset* first_child;
 	Asset* last_child;
 
-	uint64_t generation;
+	union {
+		Asset* freelist_next;
+		uint64_t generation;
+	};
 
 	// For packages, filesys_path stores the full absolute path.
 	uint64_t filesys_modtime;
@@ -178,7 +196,9 @@ struct Asset {
 };
 
 struct AssetTree {
-	DS_SlotAllocator(Asset, 16) assets;
+	DS_BucketArray(Asset) assets;
+	Asset* first_free_asset;
+
 	uint64_t next_asset_generation;
 	Asset* root;
 
@@ -251,7 +271,10 @@ EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path);
 struct UI_Tab; // Placeholder for the user
 
 struct UI_Panel {
-	UI_Panel* parent;
+	union {
+		UI_Panel* parent;
+		UI_Panel* freelist_next;
+	};
 	UI_Panel* end_child[2]; // 0 is first, 1 is last
 	UI_Panel* link[2];      // 0 is prev, 1 is next
 
@@ -267,7 +290,8 @@ struct UI_Panel {
 };
 
 struct UI_PanelTree {
-	DS_SlotAllocator(UI_Panel, 16) panels;
+	DS_BucketArray(UI_Panel) panels;
+	UI_Panel* first_free_panel;
 	UI_Panel* root;
 	UI_Panel* active_panel; // NULL by default
 
@@ -314,24 +338,33 @@ EXPORT void AddNewTabToActivePanel(UI_PanelTree* tree, UI_Tab tab);
 
 struct RenderState;
 
+#define TabKind_FreeSlot (TabKind)0
 enum TabKind {
-	TabKind_Assets,
+	TabKind_Assets = 1,
 	TabKind_Properties,
 	TabKind_Log,
+	TabKind_Custom,
 };
 
 struct UI_Tab {
 	TabKind kind;
+	
+	AssetRef owner_plugin;
+	STR_View name;
+
+	UI_Tab* freelist_next;
 };
 
 struct PerFrameState {
 	UI_Panel* hovered_panel;
 	bool file_dropdown_open;
-	bool panel_dropdown_open;
 	bool edit_dropdown_open;
 
-	UI_Box* type_dropdown_button;
+	UI_Box* window_dropdown;
+	UI_Box* window_dropdown_button;
+	
 	UI_Box* type_dropdown;
+	UI_Box* type_dropdown_button;
 };
 
 struct EditorState {
@@ -363,7 +396,9 @@ struct EditorState {
 
 	UIDropdownState dropdown_state;
 
-	DS_SlotAllocator(UI_Tab, 8) all_tabs;
+	DS_BucketArray(UI_Tab) tab_classes;
+	UI_Tab* first_free_tab_class;
+
 	UI_PanelTree panel_tree;
 
 	// ------------------
@@ -372,6 +407,7 @@ struct EditorState {
 	TabKind rmb_menu_tab_kind;
 	bool rmb_menu_open;
 
+	bool window_dropdown_open;
 	UI_Key type_dropdown_open = UI_INVALID_KEY;
 	
 	// ------------------
@@ -383,6 +419,9 @@ struct EditorState {
 	PerFrameState frame; // cleared at the beginning of a frame
 };
 
+EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name);
+EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab);
+
 EXPORT void AddTopBar(EditorState* s);
 EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
@@ -390,9 +429,13 @@ EXPORT void UILogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 
 EXPORT void InitAPI(EditorState* s);
 
+EXPORT void LoadPlugin(EditorState* s, Asset* plugin);
+EXPORT void UnloadPlugin(EditorState* s, Asset* plugin);
+
 EXPORT void UpdatePlugins(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
+
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
 

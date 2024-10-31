@@ -83,13 +83,16 @@ EXPORT AssetRef GetAssetHandle(Asset* asset) {
 }
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
-	Asset* asset = (Asset*)DS_TakeSlot(&tree->assets);
+	Asset* asset;
+	NEW_SLOT(&asset, &tree->assets, &tree->first_free_asset, freelist_next);
+
 	*asset = {};
 	asset->kind = kind;
 	asset->generation = tree->next_asset_generation++;
 
 	STR_View name = "";
 	switch (kind) {
+	case AssetKind_Root: break;
 	case AssetKind_Package: break;
 	case AssetKind_Folder:  { name = "Untitled Folder"; }break;
 	case AssetKind_Plugin: {
@@ -133,8 +136,7 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 	ComputeStructLayout(struct_type);
 
 	// Sync all struct assets data to the new type layout
-	DS_ForSlotAllocatorEachSlot(Asset, &tree->assets, IT) {
-		if (AssetSlotIsEmpty(IT.elem)) continue;
+	DS_ForBucketArrayEach(Asset, &tree->assets, IT) {
 		if (IT.elem->kind != AssetKind_StructData || IT.elem->struct_data.struct_type.asset != struct_type) continue;
 
 		TODO();
@@ -274,6 +276,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}
 
 	switch (asset->kind) {
+	case AssetKind_Root: break;
 	case AssetKind_Package: {
 		STR_Free(DS_HEAP, asset->package_filesys_path);
 	}break;
@@ -294,8 +297,9 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}break;
 	}
 
-	DS_FreeSlot(&tree->assets, asset);
-	AssetSlotSetEmpty(asset);
+	asset->kind = AssetKind_FreeSlot;
+	asset->freelist_next = tree->first_free_asset;
+	tree->first_free_asset = asset;
 }
 
 EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {

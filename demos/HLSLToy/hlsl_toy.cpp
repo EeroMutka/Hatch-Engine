@@ -25,6 +25,7 @@ struct Allocator {
 struct Globals {
 	ID3D12RootSignature* root_signature;
 	ID3D12PipelineState* pipeline_state;
+	HT_TabClass* my_tab_class;
 };
 
 // -----------------------------------------------------
@@ -42,7 +43,8 @@ static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, si
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	// Compile shaders
 	
-
+	GLOBALS.my_tab_class = ht->CreateTabClass("MyCoolTab");
+	
 	// So we want to load this plugin data once and make root signature once...
 	// Well we could just use a global I suppose.
 	
@@ -139,6 +141,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
+	ht->DestroyTabClass(GLOBALS.my_tab_class);
+	
 	GLOBALS.pipeline_state->Release();
 	GLOBALS.root_signature->Release();
 }
@@ -146,6 +150,13 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
+	
+	HT_TabUpdate tab_update;
+	while (ht->PollNextTabUpdate(&tab_update)) {
+		if (tab_update.tab_class == GLOBALS.my_tab_class) {
+			// update tab!
+		}
+	}
 	
 	// TODO: type safety
 	params_type* params = HT_GetPluginData(params_type, ht);
