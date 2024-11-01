@@ -94,7 +94,7 @@ struct Asset;
 
 #define ASSET_FREELIST_END 0xFFFFFFFFFFFFFFFF
 
-union AssetHandle {
+union AssetHandleDecoded {
 	struct {
 		u16 bucket_index;
 		u16 elem_index;
@@ -103,13 +103,13 @@ union AssetHandle {
 	u64 val;
 };
 
-static inline HT_AssetHandle AssetHandleEncode(AssetHandle handle) { return *(HT_AssetHandle*)&handle; }
-static inline AssetHandle AssetHandleDecode(HT_AssetHandle handle) { return *(AssetHandle*)&handle; }
+static inline HT_AssetHandle EncodeAssetHandle(AssetHandleDecoded handle) { return *(HT_AssetHandle*)&handle; }
+static inline AssetHandleDecoded DecodeAssetHandle(HT_AssetHandle handle) { return *(AssetHandleDecoded*)&handle; }
 
 struct Type {
 	TypeKind kind;
 	TypeKind subkind; // for arrays, this is the element type
-	AssetHandle _struct;
+	HT_AssetHandle _struct;
 };
 
 #define AssetKind_FreeSlot (AssetKind)0
@@ -139,7 +139,7 @@ struct Asset_StructType {
 	DS_DynArray(StructMember) members;
 	i32 size;
 	i32 alignment;
-	AssetHandle asset_viewer_registered_by_plugin;
+	HT_AssetHandle asset_viewer_registered_by_plugin;
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
 
@@ -150,7 +150,7 @@ struct Asset_Package {
 
 struct PluginOptions {
 	Array source_files; // Array<AssetRef>
-	AssetHandle data;
+	HT_AssetHandle data;
 };
 
 struct PluginAllocationHeader {
@@ -171,7 +171,7 @@ struct Asset_Plugin {
 };
 
 struct Asset_StructData {
-	AssetHandle struct_type;
+	HT_AssetHandle struct_type;
 
 	// When editing a type, just loop through all structs of that type and update the data layout.
 	// ... When changing a member type in the struct type, removing a member, or destroying the struct type asset, that is a destructive change.
@@ -183,7 +183,7 @@ struct Asset_StructData {
 struct Asset {
 	AssetKind kind;
 	UI_Text name; // not used for AssetKind_Package
-	AssetHandle handle;
+	HT_AssetHandle handle;
 	u64 modtime;
 
 	Asset* parent;
@@ -193,7 +193,7 @@ struct Asset {
 	Asset* last_child;
 
 	union {
-		AssetHandle freelist_next; // end of the list is marked with ASSET_FREELIST_END
+		AssetHandleDecoded freelist_next; // end of the list is marked with ASSET_FREELIST_END
 		Asset_StructType struct_type;
 		Asset_StructData struct_data;
 		Asset_Plugin plugin;
@@ -215,7 +215,7 @@ struct AssetBucket {
 struct AssetTree {
 	DS_DynArray(AssetBucket*) asset_buckets;
 	int assets_num_allocated;
-	AssetHandle first_free_asset; // ASSET_FREELIST_END
+	AssetHandleDecoded first_free_asset; // ASSET_FREELIST_END
 
 	Asset* root;
 
@@ -230,8 +230,8 @@ struct AssetTree {
 EXPORT STR_View TypeKindToString(TypeKind type);
 EXPORT TypeKind StringToTypeKind(STR_View str); // may return TypeKind_INVALID
 
-EXPORT bool AssetIsValid(AssetTree* tree, AssetHandle handle);
-EXPORT Asset* GetAsset(AssetTree* tree, AssetHandle handle); // returns NULL if the handle is invalid
+EXPORT bool AssetIsValid(AssetTree* tree, HT_AssetHandle handle);
+EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle); // returns NULL if the handle is invalid
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
 
@@ -363,7 +363,7 @@ struct RenderState;
 
 struct UI_Tab {
 	STR_View name; // empty string means free slot
-	AssetHandle owner_plugin;
+	HT_AssetHandle owner_plugin;
 	UI_Tab* freelist_next;
 };
 

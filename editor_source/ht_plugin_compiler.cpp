@@ -207,7 +207,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 				case TypeKind_Float: { fprintf(header, "float"); }break;
 				case TypeKind_Int: { fprintf(header, "int"); }break;
 				case TypeKind_Bool: { fprintf(header, "bool"); }break;
-				case TypeKind_AssetRef: { fprintf(header, "HT_AssetRef"); }break;
+				case TypeKind_AssetRef: { fprintf(header, "HT_AssetHandle"); }break;
 				default: assert(0); break;
 				}
 				STR_View member_name = UI_TextToStr(member.name.text);
@@ -238,7 +238,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", hatch_install_directory)); // for hatch_types.h
 
 	for (int i = 0; i < plugin_opts->source_files.count; i++) {
-		AssetHandle source_file = *((AssetHandle*)plugin_opts->source_files.data + i);
+		HT_AssetHandle source_file = *((HT_AssetHandle*)plugin_opts->source_files.data + i);
 		Asset* source_file_asset = GetAsset(&s->asset_tree, source_file);
 		if (source_file_asset) {
 			const char* file_name = STR_ToC(TEMP, UI_TextToStr(source_file_asset->name));

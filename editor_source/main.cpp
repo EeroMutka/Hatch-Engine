@@ -36,7 +36,7 @@ void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_
 		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
 		if (selected_asset) {
 			HT_AssetViewerTabUpdate update = {};
-			*(AssetHandle*)&update.data_asset = selected_asset->handle;
+			update.data_asset = selected_asset->handle;
 			update.rect_min = area_rect.min;
 			update.rect_max = area_rect.max;
 			DS_ArrPush(&s->frame.queued_asset_viewer_tab_updates, update);
@@ -150,13 +150,13 @@ static void AppInit(EditorState* s) {
 		s->asset_tree.plugin_options_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 
 		StructMember member_source_files = {0};
-		UI_TextInit(DS_HEAP, &member_source_files.name.text, "SourceFiles");
+		UI_TextInit(DS_HEAP, &member_source_files.name.text, "Source Files");
 		member_source_files.type.kind = TypeKind_Array;
 		member_source_files.type.subkind = TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_source_files);
 
 		StructMember member_data = {0};
-		UI_TextInit(DS_HEAP, &member_data.name.text, "Data");
+		UI_TextInit(DS_HEAP, &member_data.name.text, "Data Asset");
 		member_data.type.kind = TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
 		

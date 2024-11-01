@@ -154,15 +154,15 @@ struct HT_API {
 	HT_GeneratedTypeTable* type_table;
 	
 	// Returns NULL if data asset is invalid or of different type than `type_id`
-	void* (*GetPluginData)(/*HT_AssetRef type_id*/);
-	
+	void* (*GetPluginData)(/*HT_AssetHandle type_id*/);
+
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
-	// void* (*AssetGetData)(HT_AssetRef asset);
-	
+	// void* (*AssetGetData)(HT_AssetHandle asset);
+
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
 	HT_AssetHandle (*AssetGetType)(HT_AssetHandle asset);
-	
-	// bool (*AssetIsValid)(/*HT_AssetRef type_id, */HT_AssetRef asset);
+
+	// bool (*AssetIsValid)(/*HT_AssetHandle type_id, */HT_AssetHandle asset);
 	
 	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
 	// The returned string is valid for this frame only.

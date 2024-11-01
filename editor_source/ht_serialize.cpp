@@ -401,9 +401,9 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, Type* 
 		assert(ok);
 	}break;
 	case TypeKind_AssetRef: {
-		AssetHandle* val = (AssetHandle*)dst;
+		HT_AssetHandle* val = (HT_AssetHandle*)dst;
 		Asset* found_asset = FindAssetFromPath(package, StrFromMD(value_node->string));
-		*val = found_asset ? found_asset->handle : AssetHandle{};
+		*val = found_asset ? found_asset->handle : NULL;
 	}break;
 	default: TODO();
 	}
@@ -425,21 +425,25 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		
 		if (asset->kind == AssetKind_Plugin) {
 			Array* source_files = &asset->plugin.options.source_files;
-			ArrayClear(source_files, sizeof(AssetHandle));
+			ArrayClear(source_files, sizeof(HT_AssetHandle));
 
 			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
-			Asset* data_asset = MD_NodeIsNil(data_node) ? NULL : FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
-			asset->plugin.options.data = data_asset ? data_asset->handle : AssetHandle{};
+			
+			Asset* data_asset = NULL;
+			if (!MD_NodeIsNil(data_node)) {
+				data_asset = FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
+			}
+			asset->plugin.options.data = data_asset ? data_asset->handle : NULL;
 
 			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("source_files"), 0);
 			if (!MD_NodeIsNil(source_files_node)) {
 				for (MD_EachNode(it, source_files_node->first_child)) {
 					STR_View path = StrFromMD(it->string);
 					Asset* elem = FindAssetFromPath(ctx->package, path);
-					AssetHandle elem_ref = elem ? elem->handle : AssetHandle{};
+					HT_AssetHandle elem_ref = elem ? elem->handle : NULL;
 
-					ArrayPush(source_files, sizeof(AssetHandle));
-					((AssetHandle*)source_files->data)[source_files->count - 1] = elem_ref;
+					ArrayPush(source_files, sizeof(HT_AssetHandle));
+					((HT_AssetHandle*)source_files->data)[source_files->count - 1] = elem_ref;
 				}
 			}
 		}

@@ -74,15 +74,16 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 	parent->last_child = asset;
 }
 
-EXPORT bool AssetIsValid(AssetTree* tree, AssetHandle handle) {
+EXPORT bool AssetIsValid(AssetTree* tree, HT_AssetHandle handle) {
 	return GetAsset(tree, handle) != NULL;
 }
 
-EXPORT Asset* GetAsset(AssetTree* tree, AssetHandle handle) {
-	if (handle.bucket_index < tree->asset_buckets.count) {
-		AssetBucket* bucket = tree->asset_buckets.data[handle.bucket_index];
-		Asset* asset = &bucket->assets[handle.elem_index];
-		if (asset->handle.val == handle.val) {
+EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle) {
+	AssetHandleDecoded decoded = *(AssetHandleDecoded*)&handle;
+	if (decoded.bucket_index < tree->asset_buckets.count) {
+		AssetBucket* bucket = tree->asset_buckets.data[decoded.bucket_index];
+		Asset* asset = &bucket->assets[decoded.elem_index];
+		if (asset->handle == handle) {
 			return asset;
 		}
 	}
@@ -90,7 +91,7 @@ EXPORT Asset* GetAsset(AssetTree* tree, AssetHandle handle) {
 }
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
-	AssetHandle handle;
+	AssetHandleDecoded handle;
 	if (tree->first_free_asset.val != ASSET_FREELIST_END) {
 		// Take from the freelist
 		handle = tree->first_free_asset;
@@ -109,11 +110,11 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 	}
 
 	Asset* asset = &tree->asset_buckets[handle.bucket_index]->assets[handle.elem_index];
-	handle.generation = asset->handle.generation + 1; // first valid asset generation is always 1
+	handle.generation = DecodeAssetHandle(asset->handle).generation + 1; // first valid asset generation is always 1
 
 	*asset = {};
 	asset->kind = kind;
-	asset->handle = handle;
+	asset->handle = EncodeAssetHandle(handle);
 	
 	STR_View name = "";
 	switch (kind) {
@@ -164,7 +165,7 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 	for (int bucket_i = 0; bucket_i < tree->asset_buckets.count; bucket_i++) {
 		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
 			Asset* asset = &tree->asset_buckets[bucket_i]->assets[elem_i];
-			if (asset->kind != AssetKind_StructData || asset->struct_data.struct_type.val != struct_type->handle.val) continue;
+			if (asset->kind != AssetKind_StructData || asset->struct_data.struct_type != struct_type->handle) continue;
 			
 			TODO();
 		}
@@ -209,7 +210,7 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, Type* type, i32* out_size, 
 	case TypeKind_Int:        { *out_size = 4; *out_alignment = 4; } return;
 	case TypeKind_Float:      { *out_size = 4; *out_alignment = 4; } return;
 	case TypeKind_Bool:       { *out_size = 1; *out_alignment = 1; } return;
-	case TypeKind_AssetRef:   { *out_size = sizeof(AssetHandle); *out_alignment = alignof(AssetHandle); } return;
+	case TypeKind_AssetRef:   { *out_size = sizeof(HT_AssetHandle); *out_alignment = alignof(HT_AssetHandle); } return;
 	case TypeKind_Array:      { *out_size = sizeof(Array); *out_alignment = alignof(Array); } return;
 	case TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
 	case TypeKind_Struct:     {
@@ -328,7 +329,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	
 	TODO();
 	asset->freelist_next = tree->first_free_asset;
-	tree->first_free_asset = asset->handle;
+	tree->first_free_asset = DecodeAssetHandle(asset->handle);
 }
 
 EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {

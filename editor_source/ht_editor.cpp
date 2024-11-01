@@ -11,6 +11,8 @@
 #include "include/ht_internal.h"
 #include "include/ht_editor_render.h" // this should also be cleaned up!
 
+#include <stdio.h> // temporarily here just for HT_DebugPrint
+
 struct PluginCallContext {
 	EditorState* s;
 	Asset* plugin;
@@ -192,16 +194,18 @@ struct StructMemberValNode {
 	STR_View name;
 };
 
-static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, AssetHandle* handle) {
+static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, HT_AssetHandle* handle) {
 	STR_View asset_name = "(None)";
 	UI_Color asset_name_color = UI_GRAY;
 	
-	Asset* asset_val = GetAsset(&s->asset_tree, *handle);
-	if (asset_val) {
-		asset_name = UI_TextToStr(asset_val->name);
-		asset_name_color = UI_WHITE;
-	} else {
-		asset_name = "(Deleted Asset)";
+	if (*handle) {
+		Asset* asset_val = GetAsset(&s->asset_tree, *handle);
+		if (asset_val) {
+			asset_name = UI_TextToStr(asset_val->name);
+			asset_name_color = UI_WHITE;
+		} else {
+			asset_name = "(Deleted Asset)";
+		}
 	}
 
 	UI_AddBox(box, w, h, UI_BoxFlag_Clickable | UI_BoxFlag_DrawBorder | UI_BoxFlag_DrawOpaqueBackground | UI_BoxFlag_Horizontal);
@@ -222,7 +226,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 
 	UI_PushBox(box);
 
-	asset_val = GetAsset(&s->asset_tree, *handle);
+	Asset* asset_val = GetAsset(&s->asset_tree, *handle);
 	if (asset_val) {
 		UI_AddBox(UI_BBOX(box), 8.f, 0.f, 0); // padding
 		UIAddAssetIcon(UI_BBOX(box), asset_val, s->icons_font);
@@ -397,7 +401,7 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			}
 		}break;
 		case TypeKind_AssetRef: {
-			AssetHandle* val = (AssetHandle*)member_val->data;
+			HT_AssetHandle* val = (HT_AssetHandle*)member_val->data;
 			UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), val);
 		}break;
 		case TypeKind_String: {
@@ -876,15 +880,9 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	}
 }
 
-#include <stdio.h>
 static void HT_DebugPrint(const char* str) {
-	//TODO();
 	printf("DEBUG PRINT: %s\n", str);
 }
-
-//static void HT_DrawText(STR_View text, vec2 pos, UI_AlignH align_h, int font_size, UI_Color color) {
-//	UI_DrawText(text, {UI_STATE.default_font.id, (uint16_t)font_size}, pos, align_h, color, NULL);
-//}
 
 static void* HT_AllocatorProc(void* ptr, size_t size) {
 	// We track all plugin allocations so that we can free them at once when the plugin is unloaded.
@@ -923,7 +921,7 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
 	EditorState* s = g_plugin_call_ctx->s;
-	AssetHandle data = g_plugin_call_ctx->plugin->plugin.options.data;
+	HT_AssetHandle data = g_plugin_call_ctx->plugin->plugin.options.data;
 
 	Asset* data_asset = GetAsset(&s->asset_tree, data);
 	return data_asset ? data_asset->struct_data.data : NULL;
@@ -951,7 +949,7 @@ static HT_TabClass* HT_CreateTabClass(STR_View name) {
 
 static void HT_DestroyTabClass(HT_TabClass* tab) {
 	UI_Tab* tab_class = (UI_Tab*)tab;
-	assert(tab_class->owner_plugin.val == g_plugin_call_ctx->plugin->handle.val); // a plugin may only destroy its own tab classes.
+	assert(tab_class->owner_plugin == g_plugin_call_ctx->plugin->handle); // a plugin may only destroy its own tab classes.
 	DestroyTabClass(g_plugin_call_ctx->s, tab_class);
 }
 
@@ -961,7 +959,7 @@ static bool HT_PollNextCustomTabUpdate(HT_CustomTabUpdate* tab_update) {
 	for (int i = 0; i < s->frame.queued_custom_tab_updates.count; i++) {
 		HT_CustomTabUpdate* update = &s->frame.queued_custom_tab_updates[i];
 		UI_Tab* tab = (UI_Tab*)update->tab_class;
-		if (tab->owner_plugin.val == g_plugin_call_ctx->plugin->handle.val) {
+		if (tab->owner_plugin == g_plugin_call_ctx->plugin->handle) {
 			// Remove from the queue
 			*tab_update = *update;
 			s->frame.queued_custom_tab_updates[i] = DS_ArrPop(&s->frame.queued_custom_tab_updates);
@@ -975,38 +973,56 @@ static bool HT_PollNextCustomTabUpdate(HT_CustomTabUpdate* tab_update) {
 static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update) {
 	EditorState* s = g_plugin_call_ctx->s;
 
-	TODO();
-	//for (int i = 0; i < s->frame.queued_tab_updates.count; i++) {
-	//	HT_CustomTabUpdate* update = &s->frame.queued_tab_updates[i];
-	//	UI_Tab* tab = (UI_Tab*)update->tab_class;
-	//	if (tab->owner_plugin.asset == g_plugin_call_ctx->plugin) {
-	//		// Remove from the queue
-	//		*tab_update = *update;
-	//		s->frame.queued_tab_updates[i] = DS_ArrPop(&s->frame.queued_tab_updates);
-	//		return true;
-	//	}
-	//}
+	for (int i = 0; i < s->frame.queued_asset_viewer_tab_updates.count; i++)
+	{
+		HT_AssetViewerTabUpdate* update = &s->frame.queued_asset_viewer_tab_updates[i];
+		Asset* data_asset = GetAsset(&s->asset_tree, update->data_asset);
+		if (data_asset && data_asset->kind == AssetKind_StructData)
+		{
+			Asset* type_asset = GetAsset(&s->asset_tree, data_asset->struct_data.struct_type);
+			if (type_asset && type_asset->struct_type.asset_viewer_registered_by_plugin == g_plugin_call_ctx->plugin->handle) {
+				// Remove from the queue
+				*tab_update = *update;
+				s->frame.queued_asset_viewer_tab_updates[i] = DS_ArrPop(&s->frame.queued_asset_viewer_tab_updates);
+				return true;
+			}
+		}
+	}
 
 	return false;
 }
 
-static STR_View HT_AssetGetFilepath(AssetHandle asset) {
+static STR_View HT_AssetGetFilepath(HT_AssetHandle asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
 	return ptr ? AssetGetFilepath(TEMP, ptr) : STR_View{};
 }
 
-static u64 HT_AssetGetModtime(AssetHandle asset) {
+static u64 HT_AssetGetModtime(HT_AssetHandle asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
 	return ptr ? ptr->modtime : 0;
 }
 
 static bool HT_RegisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
-	TODO();
-	return true;
+	EditorState* s = g_plugin_call_ctx->s;
+	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
+	if (asset && asset->kind == AssetKind_StructType) {
+		Asset* already_registered_by = GetAsset(&s->asset_tree, asset->struct_type.asset_viewer_registered_by_plugin);
+		if (already_registered_by == NULL || already_registered_by == g_plugin_call_ctx->plugin) {
+			asset->struct_type.asset_viewer_registered_by_plugin = g_plugin_call_ctx->plugin->handle;
+			return true;
+		}
+	}
+	return false;
 }
 
 static void HT_DeregisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
-	TODO();
+	EditorState* s = g_plugin_call_ctx->s;
+	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
+	if (asset && asset->kind == AssetKind_StructType) {
+		if (struct_type_asset == asset->struct_type.asset_viewer_registered_by_plugin) {
+			asset->struct_type.asset_viewer_registered_by_plugin = NULL;
+		}
+	}
 }
 
 static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* pDefines,
@@ -1019,6 +1035,15 @@ static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* 
 
 static void HT_AddIndices(u32* indices, int count) {
 	UI_AddIndices(indices, count, NULL);
+}
+
+static HT_AssetHandle HT_AssetGetType(HT_AssetHandle asset) {
+	EditorState* s = g_plugin_call_ctx->s;
+	Asset* ptr = GetAsset(&s->asset_tree, asset);
+	if (ptr != NULL && ptr->kind == AssetKind_StructData) {
+		return ptr->struct_data.struct_type;
+	}
+	return NULL;
 }
 
 EXPORT void InitAPI(EditorState* s) {
@@ -1038,6 +1063,7 @@ EXPORT void InitAPI(EditorState* s) {
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
+	*(void**)&api.AssetGetType = HT_AssetGetType;
 	*(void**)&api.AssetGetModtime = HT_AssetGetModtime;
 	*(void**)&api.AssetGetFilepath = HT_AssetGetFilepath;
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;

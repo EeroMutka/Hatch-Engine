@@ -168,9 +168,6 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
-	params_type* params = HT_GetPluginData(params_type, ht);
-	ht->DeregisterAssetViewerForType(params->texture_type);
-
 	GLOBALS.pipeline_state->Release();
 	GLOBALS.root_signature->Release();
 }
@@ -179,28 +176,18 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
-	params_type* params = HT_GetPluginData(params_type, ht);
-	ht->DeregisterAssetViewerForType(params->texture_type);
-	
 	HT_AssetViewerTabUpdate update;
 	while (ht->PollNextAssetViewerTabUpdate(&update)) {
-		// update
+		D3D12_VIEWPORT viewport = {};
+		viewport.TopLeftX = update.rect_min.x;
+		viewport.TopLeftY = update.rect_min.y;
+		viewport.Width = update.rect_max.x - update.rect_min.x;
+		viewport.Height = update.rect_max.y - update.rect_min.y;
+		command_list->RSSetViewports(1, &viewport);
 		
-				// HT_AssetRef type_asset (*AssetGetType)(HT_AssetRef asset);
+		command_list->SetPipelineState(GLOBALS.pipeline_state);
+		command_list->SetGraphicsRootSignature(GLOBALS.root_signature);
 		
-		// asset type...
-		{ // if (update.data_asset) {
-			D3D12_VIEWPORT viewport = {};
-			viewport.TopLeftX = 200.f;
-			viewport.TopLeftY = 200.f;
-			viewport.Width = 300.f;
-			viewport.Height = 300.f;
-			command_list->RSSetViewports(1, &viewport);
-			
-			command_list->SetPipelineState(GLOBALS.pipeline_state);
-			command_list->SetGraphicsRootSignature(GLOBALS.root_signature);
-			
-			command_list->DrawInstanced(3, 1, 0, 0);
-		}
+		command_list->DrawInstanced(3, 1, 0, 0);
 	}
 }
