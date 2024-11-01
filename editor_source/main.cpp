@@ -79,7 +79,6 @@ static void AppInit(EditorState* s) {
 	DS_BucketArrayInit(&s->asset_tree.assets, persist, 16);
 	s->asset_tree.next_asset_generation = 1;
 	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
-	*s->asset_tree.root = {};
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
 	UI_Panel* root_left_panel = NewUIPanel(&s->panel_tree);
@@ -158,7 +157,9 @@ static void UpdateAndDraw(EditorState* s) {
 	
 	UIDropdownStateBeginFrame(&s->dropdown_state);
 	
-	if (UI_InputIsDown(UI_Input_Shift)) __debugbreak();
+	//if (UI_InputIsDown(UI_Input_Shift)) __debugbreak();
+
+	HotreloadPackages(&s->asset_tree);
 
 	UI_Rect panel_area_rect = {0};
 	panel_area_rect.min.y = TOP_BAR_HEIGHT;
@@ -169,14 +170,14 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_InitRootBox(root_box, (float)s->window_size.x, (float)s->window_size.y, 0);
 	UI_PushBox(root_box);
 
-	// Add top bar after panel tree to make the top bar dropdowns "in front" of the root
-	AddTopBar(s);
-
 	UI_PopBox(root_box);
 	UI_BoxComputeRects(root_box, vec2{0, 0});
 	UI_DrawBox(root_box);
 
 	UpdatePlugins(s);
+	
+	// Add top bar after panel tree to make the top bar dropdowns "in front" of the root
+	AddTopBar(s);
 
 	UpdateAndDrawDropdowns(s);
 

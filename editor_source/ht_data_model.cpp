@@ -278,7 +278,8 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	switch (asset->kind) {
 	case AssetKind_Root: break;
 	case AssetKind_Package: {
-		STR_Free(DS_HEAP, asset->package_filesys_path);
+		OS_DeinitDirectoryWatch(&asset->package.dir_watch);
+		STR_Free(DS_HEAP, asset->package.filesys_path);
 	}break;
 	case AssetKind_Folder: {
 	}break;

@@ -49,7 +49,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 	else {
 		STR_View name = UI_TextToStr(asset->name);
 		if (asset->kind == AssetKind_Package) {
-			name = asset->package_filesys_path.size > 0 ? STR_AfterLast(asset->package_filesys_path, '/') : "* Untitled Package";
+			name = asset->package.filesys_path.size > 0 ? STR_AfterLast(asset->package.filesys_path, '/') : "* Untitled Package";
 		}
 		
 		UI_AddLabel(text_box, UI_SizeFlex(1.f), UI_SizeFit(), 0, name);
@@ -76,8 +76,15 @@ static UI_DataTreeNode* AddAssetUITreeNode(UI_DataTreeNode* parent, Asset* asset
 }
 
 EXPORT void AddTopBar(EditorState* s) {
+	//UI_Box* root_box = UI_BOX();
+	//UI_InitRootBox(root_box, (float)s->window_size.x, (float)s->window_size.y, 0);
+	//UI_PushBox(root_box);
+	//
+	//UI_PopBox(root_box);
+	
 	UI_Box* top_bar_box = UI_BOX();
-	UI_AddBox(top_bar_box, UI_SizeFlex(1.f), TOP_BAR_HEIGHT, UI_BoxFlag_Horizontal|UI_BoxFlag_DrawTransparentBackground);
+	UI_InitRootBox(top_bar_box, (float)s->window_size.x, TOP_BAR_HEIGHT, UI_BoxFlag_Horizontal|UI_BoxFlag_DrawTransparentBackground);
+	UIRegisterOrderedRoot(&s->dropdown_state, top_bar_box);
 	UI_PushBox(top_bar_box);
 
 	UI_Box* file_button = UI_BOX();
@@ -131,6 +138,8 @@ EXPORT void AddTopBar(EditorState* s) {
 	//}
 
 	UI_PopBox(top_bar_box);
+	UI_BoxComputeRects(top_bar_box, vec2{0, 0});
+	UI_DrawBox(top_bar_box);
 }
 
 EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
@@ -957,6 +966,24 @@ static bool HT_PollNextTabUpdate(HT_TabUpdate* tab_update) {
 	return false;
 }
 
+static STR_View HT_AssetGetFilepath(AssetRef asset) {
+	if (!AssetIsValid(asset)) return {};
+	return AssetGetFilepath(TEMP, asset.asset);
+}
+
+static u64 HT_AssetGetModtime(AssetRef asset) {
+	if (!AssetIsValid(asset)) return 0;
+	return asset.asset->modtime;
+}
+
+static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* pDefines,
+	ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
+	u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs)
+{
+	wchar_t* pFileName = OS_UTF8ToWide(MEM_SCOPE(TEMP), FileName, 1);
+	return D3DCompileFromFile(pFileName, pDefines, pInclude, pEntrypoint, pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
@@ -968,9 +995,11 @@ EXPORT void InitAPI(EditorState* s) {
 	api.GetPluginData = HT_GetPluginData_;
 	api.PollNextTabUpdate = HT_PollNextTabUpdate;
 	api.D3DCompile = D3DCompile;
-	api.D3DCompileFromFile = D3DCompileFromFile;
+	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
+	*(void**)&api.AssetGetModtime = HT_AssetGetModtime;
+	*(void**)&api.AssetGetFilepath = HT_AssetGetFilepath;
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;
 	api.DestroyTabClass = HT_DestroyTabClass;
 	s->api = &api;
@@ -991,6 +1020,24 @@ EXPORT void LoadPlugin(EditorState* s, Asset* plugin) {
 		g_plugin_call_ctx = &ctx;
 		plugin->plugin.LoadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
+	}
+}
+
+EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
+	// Then populate the command list for plugin defined things
+	DS_ForBucketArrayEach(Asset, &s->asset_tree.assets, IT) {
+		if (IT.elem->kind != AssetKind_Plugin) continue;
+		if (IT.elem->plugin.dll_handle) {
+			void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
+			*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(IT.elem->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
+			if (BuildPluginD3DCommandList) {
+
+				PluginCallContext ctx = {s, IT.elem};
+				g_plugin_call_ctx = &ctx;
+				BuildPluginD3DCommandList(s->api, s->render_state->command_list);
+				g_plugin_call_ctx = NULL;
+			}
+		}
 	}
 }
 

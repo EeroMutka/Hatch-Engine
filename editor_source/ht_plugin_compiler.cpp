@@ -150,7 +150,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	if (package != plugin->parent) TODO();
 
-	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package_filesys_path);
+	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
 	assert(ok);
 
 	STR_View plugin_name = UI_TextToStr(plugin->name);

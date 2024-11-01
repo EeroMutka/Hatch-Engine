@@ -132,6 +132,11 @@ struct Asset_StructType {
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
 
+struct Asset_Package {
+	STR_View filesys_path;
+	OS_DirectoryWatch dir_watch;
+};
+
 struct PluginOptions {
 	Array SourceFiles; // Array<AssetRef>
 	AssetRef Data;
@@ -168,6 +173,8 @@ struct Asset {
 	AssetKind kind;
 	UI_Text name; // not used for AssetKind_Package
 
+	u64 modtime;
+
 	Asset* parent;
 	Asset* prev;
 	Asset* next;
@@ -176,17 +183,14 @@ struct Asset {
 
 	union {
 		Asset* freelist_next;
-		uint64_t generation;
+		u64 generation;
 	};
-
-	// For packages, filesys_path stores the full absolute path.
-	uint64_t filesys_modtime;
-	STR_View package_filesys_path;
 
 	union {
 		Asset_StructType struct_type;
 		Asset_StructData struct_data;
 		Asset_Plugin plugin;
+		Asset_Package package;
 	};
 
 	STR_View reload_assets_filesys_path; // temporary variable
@@ -262,8 +266,14 @@ EXPORT void LogPrint(STR_View str);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
+EXPORT STR_View AssetGetFilepath(DS_Arena* arena, Asset* asset);
+
+EXPORT void HotreloadPackages(AssetTree* tree);
+
 EXPORT STR_View GetAssetFileExtension(Asset* asset);
+
 EXPORT void SavePackageToDisk(Asset* package);
+
 EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path);
 
 // -- ui.cpp ----------------------------------------------------------
@@ -428,6 +438,7 @@ EXPORT void LoadPlugin(EditorState* s, Asset* plugin);
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin);
 
 EXPORT void UpdatePlugins(EditorState* s);
+EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 

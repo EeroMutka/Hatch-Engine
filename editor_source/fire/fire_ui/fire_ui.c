@@ -1718,14 +1718,6 @@ UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int 
 	return data;
 }
 
-//  --------------------------------------------------------------------------------------------------
-// |                                        Drawing API                                               |
-//  --------------------------------------------------------------------------------------------------
-
-// If a glyph is missing from an atlas, it will be replaced with:
-#define INVALID_GLYPH '?'
-#define INVALID_GLYPH_COLOR UI_MAGENTA
-
 UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font) {
 	UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(codepoint, font);
 	return glyph.advance;

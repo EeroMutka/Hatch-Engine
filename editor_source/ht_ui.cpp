@@ -54,15 +54,15 @@ EXPORT void UIDropdownStateBeginFrame(UIDropdownState* s) {
 	s->has_added_deepest_hovered_root = false;
 }
 
-EXPORT void UIRegisterOrderedRoot(UIDropdownState* s, UI_Box* dropdown) {
-	if (UI_IsMouseInsideOf(dropdown)) {
-		s->deepest_hovered_root_new = dropdown->key;
+EXPORT void UIRegisterOrderedRoot(UIDropdownState* s, UI_Box* root) {
+	if (UI_IsMouseInsideOf(root)) {
+		s->deepest_hovered_root_new = root->key;
 	}
-	if (s->deepest_hovered_root == dropdown->key) {
+	if (s->deepest_hovered_root == root->key) {
 		s->has_added_deepest_hovered_root = true;
 	}
 	else {
-		dropdown->flags |= UI_BoxFlag_NoHover;
+		root->flags |= UI_BoxFlag_NoHover;
 	}
 }
 

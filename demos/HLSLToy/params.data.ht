@@ -1,5 +1,5 @@
 Type: "params_type"
 Data: {
 	shader_file: "test_shader.hlsl"
-	testing: 0.0
+	testing: 0.5
 }

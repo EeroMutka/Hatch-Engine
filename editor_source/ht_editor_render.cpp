@@ -199,17 +199,7 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
 
         UI_DX12_Draw(ui_outputs, {(float)s->window_size.x, (float)s->window_size.y}, s->command_list);
 
-        // Then populate the command list for plugin defined things
-        DS_ForBucketArrayEach(Asset, &editor_state->asset_tree.assets, IT) {
-            if (IT.elem->kind != AssetKind_Plugin) continue;
-            if (IT.elem->plugin.dll_handle) {
-                void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
-                *(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(IT.elem->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
-                if (BuildPluginD3DCommandList) {
-                    BuildPluginD3DCommandList(editor_state->api, s->command_list);
-                }
-            }
-        }
+        BuildPluginD3DCommandLists(editor_state);
 
         D3D12_RESOURCE_BARRIER rt_to_present = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         s->command_list->ResourceBarrier(1, &rt_to_present);

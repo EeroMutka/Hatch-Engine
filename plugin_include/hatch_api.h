@@ -63,7 +63,7 @@ typedef union ivec4 {
 	int _[4];
 } ivec4;
 
-typedef struct string {
+typedef struct string { // utf8-encoded string
 	char* data;
 	int size;
 #ifdef __cplusplus
@@ -95,7 +95,7 @@ typedef struct HT_CachedGlyph {
 
 typedef struct HT_Texture HT_Texture;
 
-typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
+// typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
 
 typedef struct HT_AssetRef {
 	void* internal[2];
@@ -122,6 +122,12 @@ typedef struct HT_TabUpdate {
 } HT_TabUpdate;
 
 struct HT_API {
+	// Exportable functions from a plugin:
+	// HT_EXPORT void HT_LoadPlugin(HT_API* ht)
+	// HT_EXPORT void HT_UnloadPlugin(HT_API* ht)
+	// HT_EXPORT void HT_UpdatePlugin(HT_API* ht) 
+	// HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list)
+	
 	void (*DebugPrint)(const char* str);
 
 	// So, maybe we want to keep the plugin API minimal. Because that is *required* for everyone to use. If we had e.g. string utilities separately, then the user could copy
@@ -148,7 +154,7 @@ struct HT_API {
 	// Returns NULL if data asset is invalid or of different type than `type_id`
 	void* (*GetPluginData)(/*HT_AssetRef type_id*/);
 	
-	// Works on data assets. Returns NULL if asset handle is invalid or not a data asset.
+	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
 	// void* (*AssetGetData)(HT_AssetRef asset);
 	
 	// bool (*AssetIsValid)(/*HT_AssetRef type_id, */HT_AssetRef asset);
@@ -156,6 +162,11 @@ struct HT_API {
 	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
 	// The returned string is valid for this frame only.
 	string (*AssetGetFilepath)(HT_AssetRef asset);
+	
+	// Whenever an asset data is changed, the modtime integer becomes larger.
+	// For folders, the modtime is always the maximum modtime of any asset inside it (applies recursively).
+	// Returns 0 if the asset ref is invalid.
+	u64 (*AssetGetModtime)(HT_AssetRef asset);
 	
 	// -- Memory allocation ---------------------------
 	
@@ -200,7 +211,8 @@ struct HT_API {
 		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
 		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
 	
-	HRESULT (*D3DCompileFromFile)(const wchar_t* pFileName, const D3D_SHADER_MACRO* pDefines,
+	// NOTE: The filename parameter is wchar_t* in the official D3DCompiler API, Hatch does a conversion here.
+	HRESULT (*D3DCompileFromFile)(string FileName, const D3D_SHADER_MACRO* pDefines,
 		ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
 		u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
 	
