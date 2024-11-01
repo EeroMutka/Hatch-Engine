@@ -1,5 +1,5 @@
-Type: "params_type"
-Data: {
+type: "params_type"
+data: {
 	shader_file: "test_shader.hlsl"
 	testing: 0.5
 }

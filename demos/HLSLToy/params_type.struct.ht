@@ -1,4 +1,4 @@
-Members: {
+struct: {
 	shader_file: Asset
 	testing: Float
 }

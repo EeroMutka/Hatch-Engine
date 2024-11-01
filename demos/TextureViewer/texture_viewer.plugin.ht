@@ -1,4 +1,4 @@
 data_asset: ""
 source_files: {
-	"test_main.cpp"
+	"texture_viewer.cpp"
 }

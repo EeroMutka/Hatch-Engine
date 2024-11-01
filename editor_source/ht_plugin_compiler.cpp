@@ -186,8 +186,8 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	PluginOptions* plugin_opts = &plugin->plugin.options;
 
-	if (AssetIsValid(plugin_opts->Data)) {
-		Asset* plugin_data = plugin_opts->Data.asset;
+	if (AssetIsValid(plugin_opts->data)) {
+		Asset* plugin_data = plugin_opts->data.asset;
 
 		assert(AssetIsValid(plugin_data->struct_data.struct_type));
 		Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
@@ -238,8 +238,8 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", hatch_install_directory)); // for hatch_types.h
 
-	for (int i = 0; i < plugin_opts->SourceFiles.count; i++) {
-		AssetRef source_file = *((AssetRef*)plugin_opts->SourceFiles.data + i);
+	for (int i = 0; i < plugin_opts->source_files.count; i++) {
+		AssetRef source_file = *((AssetRef*)plugin_opts->source_files.data + i);
 		if (AssetIsValid(source_file)) {
 			const char* file_name = STR_ToC(TEMP, UI_TextToStr(source_file.asset->name));
 			BUILD_AddSourceFile(&project, file_name);

@@ -138,8 +138,8 @@ struct Asset_Package {
 };
 
 struct PluginOptions {
-	Array SourceFiles; // Array<AssetRef>
-	AssetRef Data;
+	Array source_files; // Array<AssetRef>
+	AssetRef data;
 };
 
 struct PluginAllocationHeader {
@@ -224,6 +224,7 @@ EXPORT AssetRef GetAssetHandle(Asset* asset);
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
 
 EXPORT void InitStructDataAsset(Asset* asset, Asset* struct_type);
+EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset);
 
 //EXPORT void StructMemberNodeInit(StructMemberNode* node);
 //EXPORT void StructMemberNodeDeinit(StructMemberNode* node);
@@ -402,6 +403,7 @@ struct EditorState {
 	
 	UI_Tab* properties_tab_class;
 	UI_Tab* assets_tab_class;
+	UI_Tab* asset_viewer_tab_class;
 	UI_Tab* log_tab_class;
 
 	UI_PanelTree panel_tree;

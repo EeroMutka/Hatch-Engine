@@ -75,6 +75,7 @@ static void AppInit(EditorState* s) {
 	s->assets_tab_class = CreateTabClass(s, "Assets");
 	s->log_tab_class = CreateTabClass(s, "Log");
 	s->properties_tab_class = CreateTabClass(s, "Properties");
+	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
 	DS_BucketArrayInit(&s->asset_tree.assets, persist, 16);
 	s->asset_tree.next_asset_generation = 1;
@@ -87,6 +88,7 @@ static void AppInit(EditorState* s) {
 	UI_Panel* properties_panel = NewUIPanel(&s->panel_tree);
 
 	DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
+	DS_ArrPush(&log_panel->tabs, s->asset_viewer_tab_class);
 	DS_ArrPush(&log_panel->tabs, s->log_tab_class);
 	DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
 	

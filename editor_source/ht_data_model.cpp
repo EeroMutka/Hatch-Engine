@@ -147,7 +147,7 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 EXPORT void InitStructDataAsset(Asset* asset, Asset* struct_type) {
 	assert(asset->kind == AssetKind_StructData);
 	assert(struct_type->kind == AssetKind_StructType);
-	
+
 	asset->struct_data.struct_type = GetAssetHandle(struct_type);
 
 	asset->struct_data.data = DS_MemAlloc(DS_HEAP, struct_type->struct_type.size);
@@ -160,25 +160,15 @@ EXPORT void InitStructDataAsset(Asset* asset, Asset* struct_type) {
 	}*/
 }
 
-//static void StructMemberNodeInit(StructMemberNode* node) {
-//	*node = {};
-//	UI_TextInit(DS_HEAP, &node->name, "Unnamed member");
-//	node->type.kind = TypeKind_Float;
-//	node->ui_state.key = (UI_Key)node; // encode the struct type node as the UI key
-//}
-//static void StructMemberNodeDeinit(StructMemberNode* node) {
-//	UI_TextDeinit(&node->name);
-//}
+EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset) {
+	if (asset->struct_data.data) {
+		// TODO: free all arrays and other stuff!
+		TODO();
 
-//static int StructMemberNodeFindMemberIndex(StructMemberNode* node) {
-//	int i = 0;
-//	for (StructMemberNode* n = node->parent->first_child; n; n = n->next) {
-//		if (n == node) return i;
-//		i++;
-//	}
-//	assert(0);
-//	return 0;
-//}
+		DS_MemFree(DS_HEAP, asset->struct_data.data);
+		asset->struct_data.data = NULL;
+	}
+}
 
 EXPORT void GetTypeSizeAndAlignment(Type* type, i32* out_size, i32* out_alignment) {
 	switch (type->kind) {
@@ -294,7 +284,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 		DS_ArrDeinit(&asset->struct_type.members);
 	}break;
 	case AssetKind_StructData: {
-		DS_MemFree(DS_HEAP, asset->struct_data.data);
+		DeinitStructDataAssetIfInitialized(asset);
 	}break;
 	}
 

@@ -106,7 +106,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 		if (file) {
 			// Serialize file
 			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructType) {
-				fprintf(file, "members: {\n");
+				fprintf(file, "struct: {\n");
 				for (int i = 0; i < asset->struct_type.members.count; i++) {
 					TODO();
 					//StructMember* member = &asset->struct_type.members.data[i];
@@ -118,9 +118,9 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 			}
 
 			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructData) {
-				fprintf(file, "data: {\n");
+				//fprintf(file, "data_asset: {\n");
 					TODO();
-				fprintf(file, "\tTODO,\n");
+				//fprintf(file, "\tTODO,\n");
 				//DataBuffer *data_buffer = DS_ArrGetPtr(g_data_buffers, asset->data_buffer_index);
 				//char *data = data_buffer->base;
 				//uint32_t offset = sizeof(DataBufferHeader) + 8;
@@ -329,15 +329,15 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 
 		
 		if (asset->kind == AssetKind_StructType) {
-			MD_Node* members_node = MD_ChildFromString(parse.node, MD_S8Lit("Members"), 0);
+			MD_Node* struct_node = MD_ChildFromString(parse.node, MD_S8Lit("struct"), 0);
 			for (int i = 0; i < asset->struct_type.members.count; i++) {
 				StructMemberDeinit(&asset->struct_type.members[i]);
 			}
 			DS_ArrClear(&asset->struct_type.members);
 			
 			//DS_ArrClear(&asset->struct_members);
-			assert(!MD_NodeIsNil(members_node));
-			for (MD_EachNode(it, members_node->first_child)) {
+			assert(!MD_NodeIsNil(struct_node));
+			for (MD_EachNode(it, struct_node->first_child)) {
 				StructMember member = {0};
 				StructMemberInit(&member);
 				
@@ -348,11 +348,11 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				STR_View type_name = StrFromMD(it->first_child->string);
 				member.type.kind = StringToTypeKind(type_name);
 				assert(member.type.kind != TypeKind_INVALID);
-
-				///**/ if (MD_S8Match(it->first_child->string, MD_S8Lit("Float"), 0)) member.type.kind = TypeKind_Float;
-				//else if (MD_S8Match(it->first_child->string, MD_S8Lit("Int"), 0))   member.type.kind = TypeKind_Int;
-				//else if (MD_S8Match(it->first_child->string, MD_S8Lit("Bool"), 0))  member.type.kind = TypeKind_Bool;
-				//else assert(0);
+				
+				if (MD_NodeHasTag(it->first_child, MD_S8Lit("Array"), 0)) {
+					member.type.subkind = member.type.kind;
+					member.type.kind = TypeKind_Array;
+				}
 				
 				DS_ArrPush(&asset->struct_type.members, member);
 			}
@@ -361,6 +361,45 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 		}
 		
 		ReloadAssetsPass2(ctx, asset);
+	}
+}
+
+// `dst` is expected to be zero-initialized.
+static void ReadMetadeskValue(Asset* package, void* dst, Type* type, MD_Node* member_node, MD_Node* value_node) {
+	switch (type->kind) {
+	case TypeKind_Array: {
+		Array* val = (Array*)dst;
+		
+		assert(member_node != NULL);
+		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
+		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
+
+		Type elem_type = *type;
+		elem_type.kind = type->subkind;
+		
+		i32 elem_size, elem_align;
+		GetTypeSizeAndAlignment(&elem_type, &elem_size, &elem_align);
+
+		int i = 0;
+		for (MD_Node* child = member_node->first_child; !MD_NodeIsNil(child); child = child->next) {
+			ArrayPush(val, elem_size);
+			char* elem_data = (char*)val->data + elem_size*i;
+			memset(elem_data, 0, elem_size);
+			ReadMetadeskValue(package, elem_data, &elem_type, NULL, child);
+			i++;
+		}
+	}break;
+	case TypeKind_Float: {
+		float* val = (float*)dst;
+		bool ok = ParseMetadeskFloat(value_node, val);
+		assert(ok);
+	}break;
+	case TypeKind_AssetRef: {
+		AssetRef* val = (AssetRef*)dst;
+		Asset* found_asset = FindAssetFromPath(package, StrFromMD(value_node->string));
+		*val = found_asset ? GetAssetHandle(found_asset) : AssetRef{};
+	}break;
+	default: TODO();
 	}
 }
 
@@ -379,15 +418,14 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		}
 		
 		if (asset->kind == AssetKind_Plugin) {
-			Array* source_files = &asset->plugin.options.SourceFiles;
+			Array* source_files = &asset->plugin.options.source_files;
 			ArrayClear(source_files, sizeof(AssetRef));
 
-			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("SourceFiles"), 0);
-			
-			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("Data"), 0);
-			Asset* data_asset = FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
-			asset->plugin.options.Data = data_asset ? GetAssetHandle(data_asset) : AssetRef{};
+			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
+			Asset* data_asset = MD_NodeIsNil(data_node) ? NULL : FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
+			asset->plugin.options.data = data_asset ? GetAssetHandle(data_asset) : AssetRef{};
 
+			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("source_files"), 0);
 			if (!MD_NodeIsNil(source_files_node)) {
 				for (MD_EachNode(it, source_files_node->first_child)) {
 					STR_View path = StrFromMD(it->string);
@@ -401,34 +439,23 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		}
 
 		if (asset->kind == AssetKind_StructData) {
-			MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("Type"), 0);
+			MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("type"), 0);
 			Asset* type_asset = FindAssetFromPath(ctx->package, StrFromMD(type_node->first_child->string));
 			assert(type_asset != NULL);
 			assert(type_asset->kind == AssetKind_StructType);
 			
+			DeinitStructDataAssetIfInitialized(asset);
 			InitStructDataAsset(asset, type_asset);
 
-			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("Data"), 0);
+			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data"), 0);
 			for (int i = 0; i < type_asset->struct_type.members.count; i++) {
 				StructMember member = type_asset->struct_type.members[i];
 				STR_View member_name = UI_TextToStr(member.name.text);
 				
-				MD_Node* child = MD_ChildFromString(data_node, StrToMD(member_name), 0);
-				assert(!MD_NodeIsNil(child));
+				MD_Node* member_node = MD_ChildFromString(data_node, StrToMD(member_name), 0);
+				assert(!MD_NodeIsNil(member_node));
 				
-				switch (member.type.kind) {
-				case TypeKind_Float: {
-					float* val = (float*)((char*)asset->struct_data.data + member.offset);
-					bool ok = ParseMetadeskFloat(child->first_child, val);
-					assert(ok);
-				}break;
-				case TypeKind_AssetRef: {
-					AssetRef* val = (AssetRef*)((char*)asset->struct_data.data + member.offset);
-					Asset* found_asset = FindAssetFromPath(ctx->package, StrFromMD(child->first_child->string));
-					*val = found_asset ? GetAssetHandle(found_asset) : AssetRef{};
-				}break;
-				default: TODO();
-				}
+				ReadMetadeskValue(ctx->package, (char*)asset->struct_data.data + member.offset, &member.type, member_node, member_node->first_child);
 			}
 		}
 

@@ -185,7 +185,14 @@ struct HT_API {
 	HT_TabClass* (*CreateTabClass)(string name);
 	void (*DestroyTabClass)(HT_TabClass* tab);
 	
+	// poll next custom tab update
 	bool (*PollNextTabUpdate)(HT_TabUpdate* tab_update);
+		
+		// hmm... so we need to "claim" an asset type to ourselves.
+		// Really, a struct type should define it.
+		// bool (*PollNextAssetViewerUpdate)(HT_TabUpdate* tab_update);
+	
+	
 	
 	// Returns the index of the first new vertex
 	u32 (*AddVertices)(HT_DrawVertex* vertices, int count);
@@ -211,7 +218,7 @@ struct HT_API {
 		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
 		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
 	
-	// NOTE: The filename parameter is wchar_t* in the official D3DCompiler API, Hatch does a conversion here.
+	// NOTE: The filename parameter is wchar_t* in the official D3DCompiler API, but Hatch does a conversion here.
 	HRESULT (*D3DCompileFromFile)(string FileName, const D3D_SHADER_MACRO* pDefines,
 		ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
 		u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);

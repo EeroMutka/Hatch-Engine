@@ -918,7 +918,7 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 }
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
-	AssetRef data = g_plugin_call_ctx->plugin->plugin.options.Data;
+	AssetRef data = g_plugin_call_ctx->plugin->plugin.options.data;
 	if (!AssetIsValid(data)) return NULL;
 	return data.asset->struct_data.data;
 }

@@ -1,0 +1,11 @@
+asset_viewer_owner: "texture_viewer"
+struct: {
+	size_x: Int
+	size_y: Int
+	
+	// this should be replaced by a buffer... but for now it's a 2x2 texture.
+	data_0: Int
+	data_1: Int
+	data_2: Int
+	data_3: Int
+}

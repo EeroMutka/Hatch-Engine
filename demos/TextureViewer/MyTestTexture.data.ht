@@ -1,0 +1,11 @@
+type: "Texture"
+data: {
+	size_x: 2
+	size_y: 2
+	
+	// this should be replaced by a buffer... but for now it's a 2x2 texture.
+	data_0: 1000000
+	data_1: 0
+	data_2: 1000000
+	data_3: 0
+}

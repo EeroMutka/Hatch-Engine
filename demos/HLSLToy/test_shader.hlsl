@@ -17,5 +17,5 @@ PSInput VSMain(in uint vert_id : SV_VertexID)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return float4(frac(input.uv.x*5.), 0.0, 0.0, 1.0);
+	return float4(frac(input.uv*5.0), 0.0, 1.0);
 }

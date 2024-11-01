@@ -1,4 +1,4 @@
-Members: {
+struct: {
 	X: Float
-	Y: Float
+	Y: @Array Float
 }

@@ -1,4 +1,4 @@
-Data: "params"
-SourceFiles: {
+data_asset: "params"
+source_files: {
 	"hlsl_toy.cpp"
 }
