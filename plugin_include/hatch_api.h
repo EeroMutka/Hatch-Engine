@@ -80,7 +80,7 @@ typedef struct HT_Color {
 
 typedef struct HT_DrawVertex {
 	vec2 position;
-	vec2 uv; // When no texture is used, the uv must be {0, 0}
+	vec2 uv; // UV into the texture atlas. At {0, 0} there is a white pixel in the atlas for easy untextured triangles
 	HT_Color color;
 } HT_DrawVertex;
 #define HT_DRAW_VERTEX HT_LangAgnosticLiteral(HT_DrawVertex)
@@ -93,13 +93,9 @@ typedef struct HT_CachedGlyph {
 	float advance; // X-advance to the next character in pixel coordinates
 } HT_CachedGlyph;
 
-typedef struct HT_Texture HT_Texture;
-
 // typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
 
-typedef struct HT_AssetRef {
-	void* internal[2];
-} HT_AssetRef;
+typedef struct HT_AssetHandle_* HT_AssetHandle;
 
 #ifdef __cplusplus
 #define HT_EXPORT extern "C" __declspec(dllexport)
@@ -113,13 +109,19 @@ typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 // #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
 #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData()
 
+typedef struct HT_AssetViewerTabUpdate {
+	HT_AssetHandle data_asset;
+	vec2 rect_min;
+	vec2 rect_max;
+} HT_AssetViewerTabUpdate;
+
 typedef struct HT_TabClass HT_TabClass;
 
-typedef struct HT_TabUpdate {
+typedef struct HT_CustomTabUpdate {
 	HT_TabClass* tab_class;
 	vec2 rect_min;
 	vec2 rect_max;
-} HT_TabUpdate;
+} HT_CustomTabUpdate;
 
 struct HT_API {
 	// Exportable functions from a plugin:
@@ -157,16 +159,19 @@ struct HT_API {
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
 	// void* (*AssetGetData)(HT_AssetRef asset);
 	
+	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
+	HT_AssetHandle (*AssetGetType)(HT_AssetHandle asset);
+	
 	// bool (*AssetIsValid)(/*HT_AssetRef type_id, */HT_AssetRef asset);
 	
 	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
 	// The returned string is valid for this frame only.
-	string (*AssetGetFilepath)(HT_AssetRef asset);
+	string (*AssetGetFilepath)(HT_AssetHandle asset);
 	
 	// Whenever an asset data is changed, the modtime integer becomes larger.
 	// For folders, the modtime is always the maximum modtime of any asset inside it (applies recursively).
 	// Returns 0 if the asset ref is invalid.
-	u64 (*AssetGetModtime)(HT_AssetRef asset);
+	u64 (*AssetGetModtime)(HT_AssetHandle asset);
 	
 	// -- Memory allocation ---------------------------
 	
@@ -180,27 +185,24 @@ struct HT_API {
 	// The returned memory is uninitialized.
 	void* (*TempArenaPush)(size_t size, size_t align);
 	
+	// -- Asset viewer -------------------------------
+	
+	bool (*RegisterAssetViewerForType)(HT_AssetHandle struct_type_asset);
+	void (*DeregisterAssetViewerForType)(HT_AssetHandle struct_type_asset);
+	bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
+	
 	// -- UI -----------------------------------------
 	
 	HT_TabClass* (*CreateTabClass)(string name);
 	void (*DestroyTabClass)(HT_TabClass* tab);
 	
 	// poll next custom tab update
-	bool (*PollNextTabUpdate)(HT_TabUpdate* tab_update);
-		
-		// hmm... so we need to "claim" an asset type to ourselves.
-		// Really, a struct type should define it.
-		// bool (*PollNextAssetViewerUpdate)(HT_TabUpdate* tab_update);
-	
-	
+	bool (*PollNextCustomTabUpdate)(HT_CustomTabUpdate* tab_update);
 	
 	// Returns the index of the first new vertex
 	u32 (*AddVertices)(HT_DrawVertex* vertices, int count);
 	
-	// Texture may be NULL, in which case the default font atlas will be used.
-	// When the uv is {0, 0} and the default font atlas is used, the triangles
-	// will read a white pixel from the atlas resulting in untextured geometry.
-	void (*AddIndices)(u32* indices, int count, HT_Texture* texture);
+	void (*AddIndices)(u32* indices, int count);
 	
 	// Maybe we can still have a basic 2D drawing lib built into the API.
 	// Like draw text, draw circle, draw rect, etc.

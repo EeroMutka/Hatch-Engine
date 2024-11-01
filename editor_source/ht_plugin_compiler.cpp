@@ -186,11 +186,10 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	PluginOptions* plugin_opts = &plugin->plugin.options;
 
-	if (AssetIsValid(plugin_opts->data)) {
-		Asset* plugin_data = plugin_opts->data.asset;
-
-		assert(AssetIsValid(plugin_data->struct_data.struct_type));
-		Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
+	Asset* plugin_data = GetAsset(&s->asset_tree, plugin_opts->data);
+	if (plugin_data) {
+		assert(AssetIsValid(&s->asset_tree, plugin_data->struct_data.struct_type));
+		//Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
 	}
 
 	// TODO: so we need a recursive list of all types used inside this type...
@@ -239,9 +238,10 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", hatch_install_directory)); // for hatch_types.h
 
 	for (int i = 0; i < plugin_opts->source_files.count; i++) {
-		AssetRef source_file = *((AssetRef*)plugin_opts->source_files.data + i);
-		if (AssetIsValid(source_file)) {
-			const char* file_name = STR_ToC(TEMP, UI_TextToStr(source_file.asset->name));
+		AssetHandle source_file = *((AssetHandle*)plugin_opts->source_files.data + i);
+		Asset* source_file_asset = GetAsset(&s->asset_tree, source_file);
+		if (source_file_asset) {
+			const char* file_name = STR_ToC(TEMP, UI_TextToStr(source_file_asset->name));
 			BUILD_AddSourceFile(&project, file_name);
 		}
 	}

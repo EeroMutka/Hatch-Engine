@@ -74,22 +74,47 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 	parent->last_child = asset;
 }
 
-EXPORT bool AssetIsValid(AssetRef handle) {
-	return handle.asset != NULL && handle.asset->generation == handle.generation;
+EXPORT bool AssetIsValid(AssetTree* tree, AssetHandle handle) {
+	return GetAsset(tree, handle) != NULL;
 }
 
-EXPORT AssetRef GetAssetHandle(Asset* asset) {
-	return {asset, asset->generation};
+EXPORT Asset* GetAsset(AssetTree* tree, AssetHandle handle) {
+	if (handle.bucket_index < tree->asset_buckets.count) {
+		AssetBucket* bucket = tree->asset_buckets.data[handle.bucket_index];
+		Asset* asset = &bucket->assets[handle.elem_index];
+		if (asset->handle.val == handle.val) {
+			return asset;
+		}
+	}
+	return NULL;
 }
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
-	Asset* asset;
-	NEW_SLOT(&asset, &tree->assets, &tree->first_free_asset, freelist_next);
+	AssetHandle handle;
+	if (tree->first_free_asset.val != ASSET_FREELIST_END) {
+		// Take from the freelist
+		handle = tree->first_free_asset;
+		tree->first_free_asset = tree->asset_buckets[handle.bucket_index]->assets[handle.elem_index].freelist_next;
+	}
+	else {
+		// Allocate a new element
+		handle.elem_index = tree->assets_num_allocated % ASSETS_PER_BUCKET;
+		if (handle.elem_index == 0) {
+			AssetBucket* new_bucket = (AssetBucket*)DS_MemAlloc(DS_HEAP, sizeof(AssetBucket));
+			memset(new_bucket, 0, sizeof(AssetBucket));
+			DS_ArrPush(&tree->asset_buckets, new_bucket);
+		}
+		handle.bucket_index = tree->asset_buckets.count - 1;
+		tree->assets_num_allocated++;
+	}
+
+	Asset* asset = &tree->asset_buckets[handle.bucket_index]->assets[handle.elem_index];
+	handle.generation = asset->handle.generation + 1; // first valid asset generation is always 1
 
 	*asset = {};
 	asset->kind = kind;
-	asset->generation = tree->next_asset_generation++;
-
+	asset->handle = handle;
+	
 	STR_View name = "";
 	switch (kind) {
 	case AssetKind_Root: break;
@@ -133,22 +158,31 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 	StructMember member = {0};
 	UI_TextInit(DS_HEAP, &member.name.text, "Unnamed member");
 	DS_ArrPush(&struct_type->struct_type.members, member);
-	ComputeStructLayout(struct_type);
+	ComputeStructLayout(tree, struct_type);
 
 	// Sync all struct assets data to the new type layout
-	DS_ForBucketArrayEach(Asset, &tree->assets, IT) {
-		if (IT.elem->kind != AssetKind_StructData || IT.elem->struct_data.struct_type.asset != struct_type) continue;
-
-		TODO();
-		// we want to also have a DS_Set per struct type that recursively references all struct types it depends on
+	for (int bucket_i = 0; bucket_i < tree->asset_buckets.count; bucket_i++) {
+		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
+			Asset* asset = &tree->asset_buckets[bucket_i]->assets[elem_i];
+			if (asset->kind != AssetKind_StructData || asset->struct_data.struct_type.val != struct_type->handle.val) continue;
+			
+			TODO();
+		}
 	}
+
+	//DS_ForBucketArrayEach(Asset, &tree->assets, IT) {
+	//	if (IT.elem->kind != AssetKind_StructData || IT.elem->struct_data.struct_type.asset != struct_type) continue;
+	//
+	//	TODO();
+	//	// we want to also have a DS_Set per struct type that recursively references all struct types it depends on
+	//}
 }
 
 EXPORT void InitStructDataAsset(Asset* asset, Asset* struct_type) {
 	assert(asset->kind == AssetKind_StructData);
 	assert(struct_type->kind == AssetKind_StructType);
 
-	asset->struct_data.struct_type = GetAssetHandle(struct_type);
+	asset->struct_data.struct_type = struct_type->handle;
 
 	asset->struct_data.data = DS_MemAlloc(DS_HEAP, struct_type->struct_type.size);
 	memset(asset->struct_data.data, 0, struct_type->struct_type.size);
@@ -170,17 +204,19 @@ EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset) {
 	}
 }
 
-EXPORT void GetTypeSizeAndAlignment(Type* type, i32* out_size, i32* out_alignment) {
+EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, Type* type, i32* out_size, i32* out_alignment) {
 	switch (type->kind) {
 	case TypeKind_Int:        { *out_size = 4; *out_alignment = 4; } return;
 	case TypeKind_Float:      { *out_size = 4; *out_alignment = 4; } return;
 	case TypeKind_Bool:       { *out_size = 1; *out_alignment = 1; } return;
-	case TypeKind_AssetRef:   { *out_size = sizeof(AssetRef); *out_alignment = alignof(AssetRef); } return;
+	case TypeKind_AssetRef:   { *out_size = sizeof(AssetHandle); *out_alignment = alignof(AssetHandle); } return;
 	case TypeKind_Array:      { *out_size = sizeof(Array); *out_alignment = alignof(Array); } return;
 	case TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
 	case TypeKind_Struct:     {
-		assert(AssetIsValid(type->_struct) && type->_struct.asset->kind == AssetKind_StructType);
-		Asset_StructType* struct_type = &type->_struct.asset->struct_type;
+		Asset* struct_asset = GetAsset(tree, type->_struct);
+		Asset_StructType* struct_type = &struct_asset->struct_type;
+		assert(struct_asset != NULL && struct_asset->kind == AssetKind_StructType);
+
 		*out_size = struct_type->size;
 		*out_alignment = struct_type->alignment;
 	} return;
@@ -190,7 +226,7 @@ EXPORT void GetTypeSizeAndAlignment(Type* type, i32* out_size, i32* out_alignmen
 	}
 }
 
-EXPORT void ComputeStructLayout(Asset* struct_type) {
+EXPORT void ComputeStructLayout(AssetTree* tree, Asset* struct_type) {
 	assert(struct_type->kind == AssetKind_StructType);
 	i32 offset = 0;
 	i32 max_alignment = 1;
@@ -198,7 +234,7 @@ EXPORT void ComputeStructLayout(Asset* struct_type) {
 	for (int i = 0; i < struct_type->struct_type.members.count; i++) {
 		StructMember* member = &struct_type->struct_type.members[i];
 		i32 member_size = 0, member_alignment = 0;
-		GetTypeSizeAndAlignment(&member->type, &member_size, &member_alignment);
+		GetTypeSizeAndAlignment(tree, &member->type, &member_size, &member_alignment);
 		
 		max_alignment = UI_Max(max_alignment, member_alignment);
 		
@@ -289,8 +325,10 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}
 
 	asset->kind = AssetKind_FreeSlot;
+	
+	TODO();
 	asset->freelist_next = tree->first_free_asset;
-	tree->first_free_asset = asset;
+	tree->first_free_asset = asset->handle;
 }
 
 EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {

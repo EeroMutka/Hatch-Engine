@@ -25,7 +25,7 @@ struct Allocator {
 struct Globals {
 	u64 shader_last_modtime;
 	ID3D12RootSignature* root_signature;
-	ID3D12PipelineState* pipeline_state;
+	ID3D12PipelineState* pipeline_state; // NULL when there are shader errors
 	HT_TabClass* my_tab_class;
 };
 
@@ -159,7 +159,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 	ht->DestroyTabClass(GLOBALS.my_tab_class);
 
-	GLOBALS.pipeline_state->Release();
+	if (GLOBALS.pipeline_state) GLOBALS.pipeline_state->Release();
 	GLOBALS.root_signature->Release();
 }
 

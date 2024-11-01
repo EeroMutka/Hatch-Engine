@@ -44,6 +44,7 @@ static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, (int)
 static inline MD_String8 StrToMD(STR_View str) { return {(MD_u8*)str.data, (MD_u64)str.size}; }
 
 struct ReloadAssetsContext {
+	AssetTree* tree;
 	Asset* package;
 	MD_Arena* md_arena;
 	DS_DynArray(Asset*) queue_recompile_plugins;
@@ -357,7 +358,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				DS_ArrPush(&asset->struct_type.members, member);
 			}
 			
-			ComputeStructLayout(asset);
+			ComputeStructLayout(ctx->tree, asset);
 		}
 		
 		ReloadAssetsPass2(ctx, asset);
@@ -365,7 +366,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 }
 
 // `dst` is expected to be zero-initialized.
-static void ReadMetadeskValue(Asset* package, void* dst, Type* type, MD_Node* member_node, MD_Node* value_node) {
+static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, Type* type, MD_Node* member_node, MD_Node* value_node) {
 	switch (type->kind) {
 	case TypeKind_Array: {
 		Array* val = (Array*)dst;
@@ -378,16 +379,21 @@ static void ReadMetadeskValue(Asset* package, void* dst, Type* type, MD_Node* me
 		elem_type.kind = type->subkind;
 		
 		i32 elem_size, elem_align;
-		GetTypeSizeAndAlignment(&elem_type, &elem_size, &elem_align);
+		GetTypeSizeAndAlignment(tree, &elem_type, &elem_size, &elem_align);
 
 		int i = 0;
 		for (MD_Node* child = member_node->first_child; !MD_NodeIsNil(child); child = child->next) {
 			ArrayPush(val, elem_size);
 			char* elem_data = (char*)val->data + elem_size*i;
 			memset(elem_data, 0, elem_size);
-			ReadMetadeskValue(package, elem_data, &elem_type, NULL, child);
+			ReadMetadeskValue(tree, package, elem_data, &elem_type, NULL, child);
 			i++;
 		}
+	}break;
+	case TypeKind_Int: {
+		int* val = (int*)dst;
+		bool ok = ParseMetadeskInt(value_node, val);
+		assert(ok);
 	}break;
 	case TypeKind_Float: {
 		float* val = (float*)dst;
@@ -395,9 +401,9 @@ static void ReadMetadeskValue(Asset* package, void* dst, Type* type, MD_Node* me
 		assert(ok);
 	}break;
 	case TypeKind_AssetRef: {
-		AssetRef* val = (AssetRef*)dst;
+		AssetHandle* val = (AssetHandle*)dst;
 		Asset* found_asset = FindAssetFromPath(package, StrFromMD(value_node->string));
-		*val = found_asset ? GetAssetHandle(found_asset) : AssetRef{};
+		*val = found_asset ? found_asset->handle : AssetHandle{};
 	}break;
 	default: TODO();
 	}
@@ -419,21 +425,21 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		
 		if (asset->kind == AssetKind_Plugin) {
 			Array* source_files = &asset->plugin.options.source_files;
-			ArrayClear(source_files, sizeof(AssetRef));
+			ArrayClear(source_files, sizeof(AssetHandle));
 
 			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
 			Asset* data_asset = MD_NodeIsNil(data_node) ? NULL : FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
-			asset->plugin.options.data = data_asset ? GetAssetHandle(data_asset) : AssetRef{};
+			asset->plugin.options.data = data_asset ? data_asset->handle : AssetHandle{};
 
 			MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("source_files"), 0);
 			if (!MD_NodeIsNil(source_files_node)) {
 				for (MD_EachNode(it, source_files_node->first_child)) {
 					STR_View path = StrFromMD(it->string);
 					Asset* elem = FindAssetFromPath(ctx->package, path);
-					AssetRef elem_ref = elem ? GetAssetHandle(elem) : AssetRef{};
+					AssetHandle elem_ref = elem ? elem->handle : AssetHandle{};
 
-					ArrayPush(source_files, sizeof(AssetRef));
-					((AssetRef*)source_files->data)[source_files->count - 1] = elem_ref;
+					ArrayPush(source_files, sizeof(AssetHandle));
+					((AssetHandle*)source_files->data)[source_files->count - 1] = elem_ref;
 				}
 			}
 		}
@@ -455,7 +461,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 				MD_Node* member_node = MD_ChildFromString(data_node, StrToMD(member_name), 0);
 				assert(!MD_NodeIsNil(member_node));
 				
-				ReadMetadeskValue(ctx->package, (char*)asset->struct_data.data + member.offset, &member.type, member_node, member_node->first_child);
+				ReadMetadeskValue(ctx->tree, ctx->package, (char*)asset->struct_data.data + member.offset, &member.type, member_node, member_node->first_child);
 			}
 		}
 
@@ -477,6 +483,7 @@ static void ReloadPackage(AssetTree* tree, Asset* package) {
 	OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
 	
 	ReloadAssetsContext ctx = {0};
+	ctx.tree = tree;
 	ctx.package = package;
 	ctx.md_arena = MD_ArenaAlloc();
 	DS_ArrInit(&ctx.queue_recompile_plugins, TEMP);

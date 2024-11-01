@@ -91,15 +91,25 @@ struct Array {
 };
 
 struct Asset;
-struct AssetRef {
-	Asset* asset;
-	uint64_t generation;
+
+#define ASSET_FREELIST_END 0xFFFFFFFFFFFFFFFF
+
+union AssetHandle {
+	struct {
+		u16 bucket_index;
+		u16 elem_index;
+		u32 generation;
+	};
+	u64 val;
 };
+
+static inline HT_AssetHandle AssetHandleEncode(AssetHandle handle) { return *(HT_AssetHandle*)&handle; }
+static inline AssetHandle AssetHandleDecode(HT_AssetHandle handle) { return *(AssetHandle*)&handle; }
 
 struct Type {
 	TypeKind kind;
 	TypeKind subkind; // for arrays, this is the element type
-	AssetRef _struct;
+	AssetHandle _struct;
 };
 
 #define AssetKind_FreeSlot (AssetKind)0
@@ -129,6 +139,7 @@ struct Asset_StructType {
 	DS_DynArray(StructMember) members;
 	i32 size;
 	i32 alignment;
+	AssetHandle asset_viewer_registered_by_plugin;
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
 
@@ -139,7 +150,7 @@ struct Asset_Package {
 
 struct PluginOptions {
 	Array source_files; // Array<AssetRef>
-	AssetRef data;
+	AssetHandle data;
 };
 
 struct PluginAllocationHeader {
@@ -160,7 +171,7 @@ struct Asset_Plugin {
 };
 
 struct Asset_StructData {
-	AssetRef struct_type;
+	AssetHandle struct_type;
 
 	// When editing a type, just loop through all structs of that type and update the data layout.
 	// ... When changing a member type in the struct type, removing a member, or destroying the struct type asset, that is a destructive change.
@@ -172,7 +183,7 @@ struct Asset_StructData {
 struct Asset {
 	AssetKind kind;
 	UI_Text name; // not used for AssetKind_Package
-
+	AssetHandle handle;
 	u64 modtime;
 
 	Asset* parent;
@@ -182,11 +193,7 @@ struct Asset {
 	Asset* last_child;
 
 	union {
-		Asset* freelist_next;
-		u64 generation;
-	};
-
-	union {
+		AssetHandle freelist_next; // end of the list is marked with ASSET_FREELIST_END
 		Asset_StructType struct_type;
 		Asset_StructData struct_data;
 		Asset_Plugin plugin;
@@ -199,11 +206,17 @@ struct Asset {
 	bool ui_state_is_open; // for the Assets panel
 };
 
-struct AssetTree {
-	DS_BucketArray(Asset) assets;
-	Asset* first_free_asset;
+#define ASSETS_PER_BUCKET 32
 
-	uint64_t next_asset_generation;
+struct AssetBucket {
+	Asset assets[ASSETS_PER_BUCKET];
+};
+
+struct AssetTree {
+	DS_DynArray(AssetBucket*) asset_buckets;
+	int assets_num_allocated;
+	AssetHandle first_free_asset; // ASSET_FREELIST_END
+
 	Asset* root;
 
 	// built-in types
@@ -217,9 +230,8 @@ struct AssetTree {
 EXPORT STR_View TypeKindToString(TypeKind type);
 EXPORT TypeKind StringToTypeKind(STR_View str); // may return TypeKind_INVALID
 
-EXPORT bool AssetIsValid(AssetRef handle);
-
-EXPORT AssetRef GetAssetHandle(Asset* asset);
+EXPORT bool AssetIsValid(AssetTree* tree, AssetHandle handle);
+EXPORT Asset* GetAsset(AssetTree* tree, AssetHandle handle); // returns NULL if the handle is invalid
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
 
@@ -230,8 +242,8 @@ EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset);
 //EXPORT void StructMemberNodeDeinit(StructMemberNode* node);
 //EXPORT int StructMemberNodeFindMemberIndex(StructMemberNode* node);
 
-EXPORT void GetTypeSizeAndAlignment(Type* type, i32* out_size, i32* out_alignment);
-EXPORT void ComputeStructLayout(Asset* struct_type);
+EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, Type* type, i32* out_size, i32* out_alignment);
+EXPORT void ComputeStructLayout(AssetTree* tree, Asset* struct_type);
 
 EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type);
 
@@ -351,7 +363,7 @@ struct RenderState;
 
 struct UI_Tab {
 	STR_View name; // empty string means free slot
-	AssetRef owner_plugin;
+	AssetHandle owner_plugin;
 	UI_Tab* freelist_next;
 };
 
@@ -366,7 +378,8 @@ struct PerFrameState {
 	UI_Box* type_dropdown;
 	UI_Box* type_dropdown_button;
 
-	DS_DynArray(HT_TabUpdate) queued_tab_updates;
+	DS_DynArray(HT_AssetViewerTabUpdate) queued_asset_viewer_tab_updates;
+	DS_DynArray(HT_CustomTabUpdate) queued_custom_tab_updates;
 };
 
 struct EditorState {

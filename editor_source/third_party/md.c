@@ -1699,28 +1699,19 @@ MD_StringIsCStyleInt(MD_String8 string)
     for (;ptr < opl && (*ptr == '+' || *ptr == '-'); ptr += 1);
     
     // radix from prefix
-    MD_u32 radix = 10;
-    if (ptr < opl)
+    MD_u32 radix = 10; // @eero: fixed a bug here. In the original version MD_StringIsCStyleInt(MD_S8Lit("0")) would return false.
+    if (ptr + 1 < opl && *ptr == '0')
     {
-        MD_u8 c0 = *ptr;
-        if (c0 == '0')
+        MD_u8 c1 = ptr[1];
+        if (c1 == 'x')
         {
-            ptr += 1;
-            radix = 8;
-            if (ptr < opl)
-            {
-                MD_u8 c1 = *ptr;
-                if (c1 == 'x')
-                {
-                    ptr += 1;
-                    radix = 0x10;
-                }
-                else if (c1 == 'b')
-                {
-                    ptr += 1;
-                    radix = 2;
-                }
-            }
+            ptr += 2;
+            radix = 0x10;
+        }
+        else if (c1 == 'b')
+        {
+            ptr += 2;
+            radix = 2;
         }
     }
     
@@ -1768,27 +1759,18 @@ MD_CStyleIntFromString(MD_String8 string)
     
     // radix from prefix
     MD_u32 radix = 10;
-    if (p < string.size)
+    if (p + 1 < string.size && string.str[p] == '0')
     {
-        MD_u8 c0 = string.str[p];
-        if (c0 == '0')
+        MD_u8 c1 = string.str[p + 1];
+        if (c1 == 'x')
         {
-            p += 1;
-            radix = 8;
-            if (p < string.size)
-            {
-                MD_u8 c1 = string.str[p];
-                if (c1 == 'x')
-                {
-                    p += 1;
-                    radix = 16;
-                }
-                else if (c1 == 'b')
-                {
-                    p += 1;
-                    radix = 2;
-                }
-            }
+            p += 2;
+            radix = 0x10;
+        }
+        else if (c1 == 'b')
+        {
+            p += 2;
+            radix = 2;
         }
     }
     

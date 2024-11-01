@@ -1,0 +1,4 @@
+type: "params_type"
+data: {
+	texture_type: "Texture"
+}

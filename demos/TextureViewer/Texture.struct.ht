@@ -1,4 +1,3 @@
-asset_viewer_owner: "texture_viewer"
 struct: {
 	size_x: Int
 	size_y: Int

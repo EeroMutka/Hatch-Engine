@@ -23,15 +23,31 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 
 void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
 	EditorState* s = (EditorState*)tree->user_data;
-	/**/ if (tab == s->assets_tab_class)      UIAssetsBrowserTab(s, key, area_rect);
-	else if (tab == s->properties_tab_class)  UIPropertiesTab(s, key, area_rect);
-	else if (tab == s->log_tab_class)         UILogTab(s, key, area_rect);
+	if (tab == s->assets_tab_class) {
+		UIAssetsBrowserTab(s, key, area_rect);
+	}
+	else if (tab == s->properties_tab_class) {
+		UIPropertiesTab(s, key, area_rect);
+	}
+	else if (tab == s->log_tab_class) {
+		UILogTab(s, key, area_rect);
+	}
+	else if (tab == s->asset_viewer_tab_class) {
+		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
+		if (selected_asset) {
+			HT_AssetViewerTabUpdate update = {};
+			*(AssetHandle*)&update.data_asset = selected_asset->handle;
+			update.rect_min = area_rect.min;
+			update.rect_max = area_rect.max;
+			DS_ArrPush(&s->frame.queued_asset_viewer_tab_updates, update);
+		}
+	}
 	else {
-		HT_TabUpdate update;
+		HT_CustomTabUpdate update;
 		update.tab_class = (HT_TabClass*)tab;
 		update.rect_min = area_rect.min;
 		update.rect_max = area_rect.max;
-		DS_ArrPush(&s->frame.queued_tab_updates, update);
+		DS_ArrPush(&s->frame.queued_custom_tab_updates, update);
 	}
 }
 
@@ -77,8 +93,8 @@ static void AppInit(EditorState* s) {
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
-	DS_BucketArrayInit(&s->asset_tree.assets, persist, 16);
-	s->asset_tree.next_asset_generation = 1;
+	DS_ArrInit(&s->asset_tree.asset_buckets, DS_HEAP);
+	s->asset_tree.first_free_asset.val = ASSET_FREELIST_END;
 	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
@@ -129,7 +145,7 @@ static void AppInit(EditorState* s) {
 		type_member.type.kind = TypeKind_Type;
 		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, type_member);
 		
-		ComputeStructLayout(s->asset_tree.name_and_type_struct_type);
+		ComputeStructLayout(&s->asset_tree, s->asset_tree.name_and_type_struct_type);
 
 		s->asset_tree.plugin_options_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 
@@ -144,7 +160,7 @@ static void AppInit(EditorState* s) {
 		member_data.type.kind = TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
 		
-		ComputeStructLayout(s->asset_tree.plugin_options_struct_type);
+		ComputeStructLayout(&s->asset_tree, s->asset_tree.plugin_options_struct_type);
 	}
 
 	InitAPI(s);
@@ -155,7 +171,8 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_BeginFrame(&s->ui_inputs, s->default_font);
 
 	s->frame = {};
-	DS_ArrInit(&s->frame.queued_tab_updates, TEMP);
+	DS_ArrInit(&s->frame.queued_custom_tab_updates, TEMP);
+	DS_ArrInit(&s->frame.queued_asset_viewer_tab_updates, TEMP);
 	
 	UIDropdownStateBeginFrame(&s->dropdown_state);
 	

@@ -192,16 +192,16 @@ struct StructMemberValNode {
 	STR_View name;
 };
 
-static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, AssetRef* handle) {
+static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, AssetHandle* handle) {
 	STR_View asset_name = "(None)";
 	UI_Color asset_name_color = UI_GRAY;
-	if (handle->asset) {
-		if (AssetIsValid(*handle)) {
-			asset_name = UI_TextToStr(handle->asset->name);
-			asset_name_color = UI_WHITE;
-		} else {
-			asset_name = "(Deleted Asset)";
-		}
+	
+	Asset* asset_val = GetAsset(&s->asset_tree, *handle);
+	if (asset_val) {
+		asset_name = UI_TextToStr(asset_val->name);
+		asset_name_color = UI_WHITE;
+	} else {
+		asset_name = "(Deleted Asset)";
 	}
 
 	UI_AddBox(box, w, h, UI_BoxFlag_Clickable | UI_BoxFlag_DrawBorder | UI_BoxFlag_DrawOpaqueBackground | UI_BoxFlag_Horizontal);
@@ -215,16 +215,17 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 
 			Asset* asset = (Asset*)s->assets_tree_ui_state.drag_n_dropping;
 			if (!UI_InputIsDown(UI_Input_MouseLeft)) {
-				*handle = GetAssetHandle(asset);
+				*handle = asset->handle;
 			}
 		}
 	}
 
 	UI_PushBox(box);
 
-	if (AssetIsValid(*handle)) {
+	asset_val = GetAsset(&s->asset_tree, *handle);
+	if (asset_val) {
 		UI_AddBox(UI_BBOX(box), 8.f, 0.f, 0); // padding
-		UIAddAssetIcon(UI_BBOX(box), handle->asset, s->icons_font);
+		UIAddAssetIcon(UI_BBOX(box), asset_val, s->icons_font);
 	}
 
 	UI_Box* label = UI_BBOX(box);
@@ -239,8 +240,8 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	clear_button->font.size -= 4;
 	UI_PopBox(box);
 
-	if (UI_Clicked(box) && AssetIsValid(*handle)) {
-		s->assets_tree_ui_state.selection = (UI_Key)handle->asset;
+	if (UI_Clicked(box) && asset_val) {
+		s->assets_tree_ui_state.selection = (UI_Key)asset_val;
 	}
 
 	if (UI_Clicked(clear_button)) {
@@ -386,7 +387,7 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			UI_AddButton(clear_button, UI_SizeFlex(1.f), UI_SizeFit(), 0, "clear");
 			
 			i32 member_size, _;
-			GetTypeSizeAndAlignment(&member_val->type, &member_size, &_);
+			GetTypeSizeAndAlignment(&s->asset_tree, &member_val->type, &member_size, &_);
 
 			if (UI_Clicked(add_button)) {
 				ArrayPush((Array*)member_val->data, member_size);
@@ -396,7 +397,7 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			}
 		}break;
 		case TypeKind_AssetRef: {
-			AssetRef* val = (AssetRef*)member_val->data;
+			AssetHandle* val = (AssetHandle*)member_val->data;
 			UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), val);
 		}break;
 		case TypeKind_String: {
@@ -416,9 +417,9 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 	}
 }
 
-static void BuildStructMemberValNodes(StructMemberValNode* parent, Asset* struct_type, void* struct_data_base);
+static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, Asset* struct_type, void* struct_data_base);
 
-static void AddStructMemberNode(StructMemberValNode* parent, StructMemberValNode* node, Type* type) {
+static void AddStructMemberNode(EditorState* s, StructMemberValNode* parent, StructMemberValNode* node, Type* type) {
 	UI_DataTreeNode* p = &parent->base;
 	UI_DataTreeNode* n = &node->base;
 	
@@ -429,12 +430,15 @@ static void AddStructMemberNode(StructMemberValNode* parent, StructMemberValNode
 	p->last_child = n;
 	n->parent = p;
 
-	if (node->type.kind == TypeKind_Struct && AssetIsValid(node->type._struct)) {
-		BuildStructMemberValNodes(node, node->type._struct.asset, node->data);
+	if (node->type.kind == TypeKind_Struct) {
+		Asset* struct_asset = GetAsset(&s->asset_tree, node->type._struct);
+		if (struct_asset) {
+			BuildStructMemberValNodes(s, node, struct_asset, node->data);
+		}
 	}
 }
 
-static void BuildStructMemberValNodes(StructMemberValNode* parent, Asset* struct_type, void* struct_data_base) {
+static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, Asset* struct_type, void* struct_data_base) {
 	assert(struct_type->kind == AssetKind_StructType);
 
 	for (int i = 0; i < struct_type->struct_type.members.count; i++) {
@@ -450,7 +454,7 @@ static void BuildStructMemberValNodes(StructMemberValNode* parent, Asset* struct
 		UI_BoxGetRetainedVar(UI_KBOX(member_val->base.key), UI_KEY(), &is_open);
 		member_val->base.is_open_ptr = is_open;
 
-		AddStructMemberNode(parent, member_val, &member->type);
+		AddStructMemberNode(s, parent, member_val, &member->type);
 
 		if (member->type.kind == TypeKind_Array) {
 			Array* array = (Array*)member_val->data;
@@ -458,7 +462,7 @@ static void BuildStructMemberValNodes(StructMemberValNode* parent, Asset* struct
 			elem_type.kind = elem_type.subkind;
 			
 			i32 elem_size, elem_align;
-			GetTypeSizeAndAlignment(&elem_type, &elem_size, &elem_align);
+			GetTypeSizeAndAlignment(&s->asset_tree, &elem_type, &elem_size, &elem_align);
 
 			for (int j = 0; j < array->count; j++) {
 				StructMemberValNode* element_val = DS_New(StructMemberValNode, UI_FrameArena());
@@ -472,7 +476,7 @@ static void BuildStructMemberValNodes(StructMemberValNode* parent, Asset* struct
 				UI_BoxGetRetainedVar(UI_KBOX(element_val->base.key), UI_KEY(), &elem_is_open);
 				element_val->base.is_open_ptr = elem_is_open;
 
-				AddStructMemberNode(member_val, element_val, &elem_type);
+				AddStructMemberNode(s, member_val, element_val, &elem_type);
 			}
 		}
 	}
@@ -482,7 +486,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	StructMemberValNode root = {0};
 	root.base.key = key;
 
-	BuildStructMemberValNodes(&root, struct_type, data);
+	BuildStructMemberValNodes(s, &root, struct_type, data);
 
 	UI_DataTree members_tree = {0};
 	members_tree.root = &root.base;
@@ -543,11 +547,11 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 	}
 	
 	if (selected_asset && selected_asset->kind == AssetKind_StructData) {
-		if (!AssetIsValid(selected_asset->struct_data.struct_type)) {
+		Asset* struct_type = GetAsset(&s->asset_tree, selected_asset->struct_data.struct_type);
+		if (struct_type == NULL) {
 			UI_AddLabel(UI_KBOX(key), UI_SizeFit(), UI_SizeFit(), 0, "The struct type has been destroyed!");
 		}
 		else {
-			Asset* struct_type = selected_asset->struct_data.struct_type.asset;
 			UIAddStructValueEditTree(s, UI_KKEY(key), selected_asset->struct_data.data, struct_type);
 		}
 	}
@@ -918,9 +922,11 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 }
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
-	AssetRef data = g_plugin_call_ctx->plugin->plugin.options.data;
-	if (!AssetIsValid(data)) return NULL;
-	return data.asset->struct_data.data;
+	EditorState* s = g_plugin_call_ctx->s;
+	AssetHandle data = g_plugin_call_ctx->plugin->plugin.options.data;
+
+	Asset* data_asset = GetAsset(&s->asset_tree, data);
+	return data_asset ? data_asset->struct_data.data : NULL;
 }
 
 EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
@@ -939,26 +945,26 @@ EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
 
 static HT_TabClass* HT_CreateTabClass(STR_View name) {
 	UI_Tab* tab_class = CreateTabClass(g_plugin_call_ctx->s, name);
-	tab_class->owner_plugin = GetAssetHandle(g_plugin_call_ctx->plugin);
+	tab_class->owner_plugin = g_plugin_call_ctx->plugin->handle;
 	return (HT_TabClass*)tab_class;
 }
 
 static void HT_DestroyTabClass(HT_TabClass* tab) {
 	UI_Tab* tab_class = (UI_Tab*)tab;
-	assert(tab_class->owner_plugin.asset == g_plugin_call_ctx->plugin); // a plugin may only destroy its own tab classes.
+	assert(tab_class->owner_plugin.val == g_plugin_call_ctx->plugin->handle.val); // a plugin may only destroy its own tab classes.
 	DestroyTabClass(g_plugin_call_ctx->s, tab_class);
 }
 
-static bool HT_PollNextTabUpdate(HT_TabUpdate* tab_update) {
+static bool HT_PollNextCustomTabUpdate(HT_CustomTabUpdate* tab_update) {
 	EditorState* s = g_plugin_call_ctx->s;
 	
-	for (int i = 0; i < s->frame.queued_tab_updates.count; i++) {
-		HT_TabUpdate* update = &s->frame.queued_tab_updates[i];
+	for (int i = 0; i < s->frame.queued_custom_tab_updates.count; i++) {
+		HT_CustomTabUpdate* update = &s->frame.queued_custom_tab_updates[i];
 		UI_Tab* tab = (UI_Tab*)update->tab_class;
-		if (tab->owner_plugin.asset == g_plugin_call_ctx->plugin) {
+		if (tab->owner_plugin.val == g_plugin_call_ctx->plugin->handle.val) {
 			// Remove from the queue
 			*tab_update = *update;
-			s->frame.queued_tab_updates[i] = DS_ArrPop(&s->frame.queued_tab_updates);
+			s->frame.queued_custom_tab_updates[i] = DS_ArrPop(&s->frame.queued_custom_tab_updates);
 			return true;
 		}
 	}
@@ -966,14 +972,41 @@ static bool HT_PollNextTabUpdate(HT_TabUpdate* tab_update) {
 	return false;
 }
 
-static STR_View HT_AssetGetFilepath(AssetRef asset) {
-	if (!AssetIsValid(asset)) return {};
-	return AssetGetFilepath(TEMP, asset.asset);
+static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update) {
+	EditorState* s = g_plugin_call_ctx->s;
+
+	TODO();
+	//for (int i = 0; i < s->frame.queued_tab_updates.count; i++) {
+	//	HT_CustomTabUpdate* update = &s->frame.queued_tab_updates[i];
+	//	UI_Tab* tab = (UI_Tab*)update->tab_class;
+	//	if (tab->owner_plugin.asset == g_plugin_call_ctx->plugin) {
+	//		// Remove from the queue
+	//		*tab_update = *update;
+	//		s->frame.queued_tab_updates[i] = DS_ArrPop(&s->frame.queued_tab_updates);
+	//		return true;
+	//	}
+	//}
+
+	return false;
 }
 
-static u64 HT_AssetGetModtime(AssetRef asset) {
-	if (!AssetIsValid(asset)) return 0;
-	return asset.asset->modtime;
+static STR_View HT_AssetGetFilepath(AssetHandle asset) {
+	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
+	return ptr ? AssetGetFilepath(TEMP, ptr) : STR_View{};
+}
+
+static u64 HT_AssetGetModtime(AssetHandle asset) {
+	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
+	return ptr ? ptr->modtime : 0;
+}
+
+static bool HT_RegisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
+	TODO();
+	return true;
+}
+
+static void HT_DeregisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
+	TODO();
 }
 
 static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* pDefines,
@@ -984,16 +1017,23 @@ static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* 
 	return D3DCompileFromFile(pFileName, pDefines, pInclude, pEntrypoint, pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
 }
 
+static void HT_AddIndices(u32* indices, int count) {
+	UI_AddIndices(indices, count, NULL);
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
 	*(void**)&api.AddVertices = UI_AddVertices;
-	*(void**)&api.AddIndices = UI_AddIndices;
+	api.AddIndices = HT_AddIndices;
 	//*(void**)&api.DrawText = HT_DrawText;
 	api.AllocatorProc = HT_AllocatorProc;
 	api.TempArenaPush = HT_TempArenaPush;
 	api.GetPluginData = HT_GetPluginData_;
-	api.PollNextTabUpdate = HT_PollNextTabUpdate;
+	api.RegisterAssetViewerForType = HT_RegisterAssetViewerForType;
+	api.DeregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
+	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
+	api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 	api.D3DCompile = D3DCompile;
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
@@ -1025,32 +1065,38 @@ EXPORT void LoadPlugin(EditorState* s, Asset* plugin) {
 
 EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 	// Then populate the command list for plugin defined things
-	DS_ForBucketArrayEach(Asset, &s->asset_tree.assets, IT) {
-		if (IT.elem->kind != AssetKind_Plugin) continue;
-		if (IT.elem->plugin.dll_handle) {
-			void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
-			*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(IT.elem->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
-			if (BuildPluginD3DCommandList) {
+	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
+		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
+			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
 
-				PluginCallContext ctx = {s, IT.elem};
-				g_plugin_call_ctx = &ctx;
-				BuildPluginD3DCommandList(s->api, s->render_state->command_list);
-				g_plugin_call_ctx = NULL;
+			if (asset->kind != AssetKind_Plugin) continue;
+			if (asset->plugin.dll_handle) {
+				void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
+				*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(asset->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
+				if (BuildPluginD3DCommandList) {
+
+					PluginCallContext ctx = {s, asset};
+					g_plugin_call_ctx = &ctx;
+					BuildPluginD3DCommandList(s->api, s->render_state->command_list);
+					g_plugin_call_ctx = NULL;
+				}
 			}
 		}
 	}
 }
 
 EXPORT void UpdatePlugins(EditorState* s) {
-	DS_ForBucketArrayEach(Asset, &s->asset_tree.assets, IT) {
-		if (IT.elem->kind != AssetKind_Plugin) continue;
-		Asset* plugin = IT.elem;
-
-		if (plugin->plugin.dll_handle && plugin->plugin.UpdatePlugin != NULL) {
-			PluginCallContext ctx = {s, plugin};
-			g_plugin_call_ctx = &ctx;
-			plugin->plugin.UpdatePlugin(s->api);
-			g_plugin_call_ctx = NULL;
+	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
+		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
+			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
+			if (asset->kind != AssetKind_Plugin) continue;
+			
+			if (asset->plugin.dll_handle && asset->plugin.UpdatePlugin != NULL) {
+				PluginCallContext ctx = {s, asset};
+				g_plugin_call_ctx = &ctx;
+				asset->plugin.UpdatePlugin(s->api);
+				g_plugin_call_ctx = NULL;
+			}
 		}
 	}
 }

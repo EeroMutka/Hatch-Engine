@@ -17,14 +17,13 @@
 #include "stb_image.h"
 
 // For D3D12
-// ... do we need D3D12?? shouldn't hatch provide a texture upload API since it can draw textures?
-/*#define HT_INCLUDE_D3D12_API
+#define HT_INCLUDE_D3D12_API
 #define WIN32_LEAN_AND_MEAN
 #include <d3d12.h>
 #include <dxgi1_4.h>
-#include <d3dcompiler.h>*/
+#include <d3dcompiler.h>
 
-// #include "texture_loader.inc.ht"
+#include "texture_viewer.inc.ht"
 
 #define DS_NO_MALLOC
 #include "../editor_source/fire/fire_ds.h"
@@ -39,7 +38,8 @@ struct Allocator {
 };
 
 struct Globals {
-	int _;
+	ID3D12RootSignature* root_signature;
+	ID3D12PipelineState* pipeline_state;
 };
 
 // -----------------------------------------------------
@@ -55,7 +55,9 @@ static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, si
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	GLOBALS.my_tab_class = ht->CreateTabClass("HLSLToy");
+	params_type* params = HT_GetPluginData(params_type, ht);
+	bool ok = ht->RegisterAssetViewerForType(params->texture_type);
+	assert(ok);
 	
 	// Create empty root signature
 	{
@@ -67,7 +69,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 		desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
 		ID3DBlob* signature = NULL;
-		bool ok = ht->D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, NULL) == S_OK;
+		ok = ht->D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, NULL) == S_OK;
 		assert(ok);
 
 		ok = ht->D3D_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&GLOBALS.root_signature)) == S_OK;
@@ -76,33 +78,123 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 		signature->Release();
 	}
 	
-	MaybeHotreloadShader(ht);
+	// Create PSO
+	{
+		ID3DBlob* vertex_shader;
+		ID3DBlob* pixel_shader;
+
+		UINT compile_flags = 0;
+		
+		static const char shader_src[] = "\
+			struct PSInput {\
+				float4 pos : SV_POSITION;\
+				float2 uv : TEXCOORD0;\
+			};\
+			\
+			PSInput VSMain(in uint vert_id : SV_VertexID)\
+			{\
+				float2 uv = float2((vert_id << 1) & 2, vert_id & 2);\
+				PSInput output;\
+				output.pos = float4(uv * 2.0 - float2(1.0, 1.0), 0.0, 1.0);\
+				output.uv = uv;\
+				return output;\
+			}\
+			\
+			float4 PSMain(PSInput input) : SV_TARGET\
+			{\
+				return float4(frac(input.uv*5.0), 0.0, 1.0);\
+			}\
+			";
+		
+		ID3DBlob* errors = NULL;
+		ok = ht->D3DCompile(shader_src, sizeof(shader_src), NULL, NULL, NULL, "VSMain", "vs_5_0", compile_flags, 0, &vertex_shader, &errors) == S_OK;
+		if (!ok) {
+			ht->DebugPrint((char*)errors->GetBufferPointer());
+			assert(0);
+		}
+
+		errors = NULL;
+		ok = ht->D3DCompile(shader_src, sizeof(shader_src), NULL, NULL, NULL, "PSMain", "ps_5_0", compile_flags, 0, &pixel_shader, &errors) == S_OK;
+		if (!ok) {
+			ht->DebugPrint((char*)errors->GetBufferPointer());
+			assert(0);
+		}
+		
+		if (ok) {
+			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
+
+			pso_desc.InputLayout = { NULL, 0 };
+			pso_desc.pRootSignature = GLOBALS.root_signature;
+			pso_desc.VS = { vertex_shader->GetBufferPointer(), vertex_shader->GetBufferSize() };
+			pso_desc.PS = { pixel_shader->GetBufferPointer(), pixel_shader->GetBufferSize() };
+
+			pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+			pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+			pso_desc.RasterizerState.FrontCounterClockwise = false;
+			pso_desc.RasterizerState.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+			pso_desc.RasterizerState.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+			pso_desc.RasterizerState.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+			pso_desc.RasterizerState.DepthClipEnable = true;
+			pso_desc.RasterizerState.MultisampleEnable = false;
+			pso_desc.RasterizerState.AntialiasedLineEnable = false;
+			pso_desc.RasterizerState.ForcedSampleCount = 0;
+			pso_desc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+			pso_desc.BlendState.AlphaToCoverageEnable = false;
+			pso_desc.BlendState.RenderTarget[0].BlendEnable = true;
+			pso_desc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_ALPHA;
+			pso_desc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_INV_SRC_ALPHA;
+			pso_desc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
+			pso_desc.BlendState.RenderTarget[0].SrcBlendAlpha         = D3D12_BLEND_ONE;
+			pso_desc.BlendState.RenderTarget[0].DestBlendAlpha        = D3D12_BLEND_INV_SRC_ALPHA;
+			pso_desc.BlendState.RenderTarget[0].BlendOpAlpha          = D3D12_BLEND_OP_ADD;
+			pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+			pso_desc.DepthStencilState.DepthEnable = false;
+			pso_desc.DepthStencilState.StencilEnable = false;
+			pso_desc.SampleMask = UINT_MAX;
+			pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+			pso_desc.NumRenderTargets = 1;
+			pso_desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+			pso_desc.SampleDesc.Count = 1;
+
+			ok = ht->D3D_device->CreateGraphicsPipelineState(&pso_desc, IID_PPV_ARGS(&GLOBALS.pipeline_state)) == S_OK;
+			if (!ok) ht->DebugPrint("Failed to create the graphics pipeline!\n");
+		}
+		
+		vertex_shader->Release();
+		pixel_shader->Release();
+	}
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
-	ht->DestroyTabClass(GLOBALS.my_tab_class);
+	params_type* params = HT_GetPluginData(params_type, ht);
+	ht->DeregisterAssetViewerForType(params->texture_type);
 
 	GLOBALS.pipeline_state->Release();
 	GLOBALS.root_signature->Release();
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
-	MaybeHotreloadShader(ht);
 }
 
 HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
-	if (GLOBALS.pipeline_state == NULL) return;
+	params_type* params = HT_GetPluginData(params_type, ht);
+	ht->DeregisterAssetViewerForType(params->texture_type);
 	
-	// build draw commands.
-	
-	HT_TabUpdate tab_update;
-	while (ht->PollNextTabUpdate(&tab_update)) {
-		if (tab_update.tab_class == GLOBALS.my_tab_class) {
+	HT_AssetViewerTabUpdate update;
+	while (ht->PollNextAssetViewerTabUpdate(&update)) {
+		// update
+		
+				// HT_AssetRef type_asset (*AssetGetType)(HT_AssetRef asset);
+		
+		// asset type...
+		{ // if (update.data_asset) {
 			D3D12_VIEWPORT viewport = {};
-			viewport.TopLeftX = tab_update.rect_min.x;
-			viewport.TopLeftY = tab_update.rect_min.y;
-			viewport.Width = tab_update.rect_max.x - tab_update.rect_min.x;
-			viewport.Height = tab_update.rect_max.y - tab_update.rect_min.y;
+			viewport.TopLeftX = 200.f;
+			viewport.TopLeftY = 200.f;
+			viewport.Width = 300.f;
+			viewport.Height = 300.f;
 			command_list->RSSetViewports(1, &viewport);
 			
 			command_list->SetPipelineState(GLOBALS.pipeline_state);
