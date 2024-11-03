@@ -1,0 +1,4 @@
+struct: {
+	scene_type: Asset
+	main_pass_shader: Asset
+}

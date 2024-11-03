@@ -1,0 +1,3 @@
+struct: {
+	first_mesh: Asset // this should be an array of meshes
+}

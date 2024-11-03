@@ -12,6 +12,8 @@
 
 #define _CRT_SECURE_NO_WARNINGS  // TODO: find a way to get rid of this
 
+#include <stdio.h>
+
 #define STB_IMAGE_STATIC
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -176,6 +178,9 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
+	// we should dynamically load/unload to memory. Load when opening, unload when unopening.
+	// Hmm... maybe we should just do the big thing right away.
+	
 	HT_AssetViewerTabUpdate update;
 	while (ht->PollNextAssetViewerTabUpdate(&update)) {
 		D3D12_VIEWPORT viewport = {};

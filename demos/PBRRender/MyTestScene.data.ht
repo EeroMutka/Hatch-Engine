@@ -1,0 +1,4 @@
+type: "types/Scene"
+data: {
+	first_mesh: "Monkey"
+}

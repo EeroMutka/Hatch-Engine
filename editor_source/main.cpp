@@ -137,12 +137,12 @@ static void AppInit(EditorState* s) {
 		
 		StructMember name_member = {0};
 		UI_TextInit(DS_HEAP, &name_member.name.text, "Name");
-		name_member.type.kind = TypeKind_String;
+		name_member.type.kind = HT_TypeKind_String;
 		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, name_member);
 
 		StructMember type_member = {0};
-		UI_TextInit(DS_HEAP, &type_member.name.text, "Type");
-		type_member.type.kind = TypeKind_Type;
+		UI_TextInit(DS_HEAP, &type_member.name.text, "HT_Type");
+		type_member.type.kind = HT_TypeKind_Type;
 		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, type_member);
 		
 		ComputeStructLayout(&s->asset_tree, s->asset_tree.name_and_type_struct_type);
@@ -151,13 +151,13 @@ static void AppInit(EditorState* s) {
 
 		StructMember member_source_files = {0};
 		UI_TextInit(DS_HEAP, &member_source_files.name.text, "Source Files");
-		member_source_files.type.kind = TypeKind_Array;
-		member_source_files.type.subkind = TypeKind_AssetRef;
+		member_source_files.type.kind = HT_TypeKind_Array;
+		member_source_files.type.subkind = HT_TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_source_files);
 
 		StructMember member_data = {0};
 		UI_TextInit(DS_HEAP, &member_data.name.text, "Data Asset");
-		member_data.type.kind = TypeKind_AssetRef;
+		member_data.type.kind = HT_TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
 		
 		ComputeStructLayout(&s->asset_tree, s->asset_tree.plugin_options_struct_type);

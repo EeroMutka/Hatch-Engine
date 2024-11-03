@@ -5,17 +5,15 @@
 
 static STR_View GetAssetExt(AssetKind kind) {
 	switch (kind) {
-	case AssetKind_Plugin:     return "plugin.ht";
-	case AssetKind_StructType: return "struct.ht";
-	case AssetKind_StructData: return "data.ht";
+	case AssetKind_Plugin:     return ".plugin.ht";
+	case AssetKind_StructType: return ".struct.ht";
+	case AssetKind_StructData: return ".data.ht";
 	default: return "";
 	}
 }
 
 EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
-	STR_View result = asset->kind == AssetKind_File ?
-		STR_Form(arena, "%v", UI_TextToStr(asset->name)) :
-		STR_Form(arena, "%v.%v", UI_TextToStr(asset->name), GetAssetExt(asset->kind));
+	STR_View result = STR_Form(arena, "%v%v", UI_TextToStr(asset->name), GetAssetExt(asset->kind));
 	return result;
 }
 
@@ -28,15 +26,13 @@ EXPORT STR_View AssetGetFilepath(DS_Arena* arena, Asset* asset) {
 	for (Asset* p = asset->parent; p->kind != AssetKind_Root; p = p->parent) {
 		result = p->kind == AssetKind_Package ?
 			STR_Form(arena, "%v/%v", p->package.filesys_path, result) :
-			STR_Form(TEMP, "%v/%v", UI_TextToStr(asset->name), result);
+			STR_Form(TEMP, "%v/%v", UI_TextToStr(p->name), result);
 	}
 	return result;
 }
 
 EXPORT STR_View AssetGetFilepathUsingParentDirectory(DS_Arena* arena, STR_View directory, Asset* asset) {
-	STR_View result = asset->kind == AssetKind_File ?
-		STR_Form(arena, "%v/%v", directory, UI_TextToStr(asset->name)) :
-		STR_Form(arena, "%v/%v.%v", directory, UI_TextToStr(asset->name), GetAssetExt(asset->kind));
+	STR_View result = STR_Form(arena, "%v/%v%v", directory, UI_TextToStr(asset->name), GetAssetExt(asset->kind));
 	return result;
 }
 
@@ -348,11 +344,11 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				assert(!MD_NodeIsNil(it->first_child));
 				STR_View type_name = StrFromMD(it->first_child->string);
 				member.type.kind = StringToTypeKind(type_name);
-				assert(member.type.kind != TypeKind_INVALID);
+				assert(member.type.kind != HT_TypeKind_INVALID);
 				
 				if (MD_NodeHasTag(it->first_child, MD_S8Lit("Array"), 0)) {
 					member.type.subkind = member.type.kind;
-					member.type.kind = TypeKind_Array;
+					member.type.kind = HT_TypeKind_Array;
 				}
 				
 				DS_ArrPush(&asset->struct_type.members, member);
@@ -366,16 +362,16 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 }
 
 // `dst` is expected to be zero-initialized.
-static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, Type* type, MD_Node* member_node, MD_Node* value_node) {
+static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* member_node, MD_Node* value_node) {
 	switch (type->kind) {
-	case TypeKind_Array: {
-		Array* val = (Array*)dst;
+	case HT_TypeKind_Array: {
+		HT_Array* val = (HT_Array*)dst;
 		
 		assert(member_node != NULL);
 		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
 		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
 
-		Type elem_type = *type;
+		HT_Type elem_type = *type;
 		elem_type.kind = type->subkind;
 		
 		i32 elem_size, elem_align;
@@ -390,17 +386,17 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, Type* 
 			i++;
 		}
 	}break;
-	case TypeKind_Int: {
+	case HT_TypeKind_Int: {
 		int* val = (int*)dst;
 		bool ok = ParseMetadeskInt(value_node, val);
 		assert(ok);
 	}break;
-	case TypeKind_Float: {
+	case HT_TypeKind_Float: {
 		float* val = (float*)dst;
 		bool ok = ParseMetadeskFloat(value_node, val);
 		assert(ok);
 	}break;
-	case TypeKind_AssetRef: {
+	case HT_TypeKind_AssetRef: {
 		HT_AssetHandle* val = (HT_AssetHandle*)dst;
 		Asset* found_asset = FindAssetFromPath(package, StrFromMD(value_node->string));
 		*val = found_asset ? found_asset->handle : NULL;
@@ -424,7 +420,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		}
 		
 		if (asset->kind == AssetKind_Plugin) {
-			Array* source_files = &asset->plugin.options.source_files;
+			HT_Array* source_files = &asset->plugin.options.source_files;
 			ArrayClear(source_files, sizeof(HT_AssetHandle));
 
 			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);

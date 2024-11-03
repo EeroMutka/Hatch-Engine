@@ -7,10 +7,5 @@ typedef struct params_type {
 	HT_AssetHandle texture_type;
 } params_type;
 typedef struct Texture {
-	int size_x;
-	int size_y;
-	int data_0;
-	int data_1;
-	int data_2;
-	int data_3;
+	HT_AssetHandle source_asset;
 } Texture;

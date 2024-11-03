@@ -71,25 +71,6 @@ struct ActivePluginData {
 	DS_Map(uint64_t, PluginIncludeStamp) includes;
 };
 
-enum TypeKind {
-	TypeKind_Float,
-	TypeKind_Int,
-	TypeKind_Bool,
-	TypeKind_AssetRef,
-	TypeKind_Struct,
-	TypeKind_Array,
-	TypeKind_String,
-	TypeKind_Type,
-	TypeKind_COUNT,
-	TypeKind_INVALID,
-};
-
-struct Array {
-	void* data;
-	i32 count;
-	i32 capacity;
-};
-
 struct Asset;
 
 #define ASSET_FREELIST_END 0xFFFFFFFFFFFFFFFF
@@ -105,12 +86,6 @@ union AssetHandleDecoded {
 
 static inline HT_AssetHandle EncodeAssetHandle(AssetHandleDecoded handle) { return *(HT_AssetHandle*)&handle; }
 static inline AssetHandleDecoded DecodeAssetHandle(HT_AssetHandle handle) { return *(AssetHandleDecoded*)&handle; }
-
-struct Type {
-	TypeKind kind;
-	TypeKind subkind; // for arrays, this is the element type
-	HT_AssetHandle _struct;
-};
 
 #define AssetKind_FreeSlot (AssetKind)0
 enum AssetKind {
@@ -131,7 +106,7 @@ struct String {
 
 struct StructMember {
 	String name;
-	Type type;
+	HT_Type type;
 	i32 offset;
 };
 
@@ -149,7 +124,7 @@ struct Asset_Package {
 };
 
 struct PluginOptions {
-	Array source_files; // Array<AssetRef>
+	HT_Array source_files; // Array<AssetRef>
 	HT_AssetHandle data;
 };
 
@@ -227,8 +202,8 @@ struct AssetTree {
 // Pass STR_View into printf-style %.*s arguments
 #define StrArg(X) X.size, X.data
 
-EXPORT STR_View TypeKindToString(TypeKind type);
-EXPORT TypeKind StringToTypeKind(STR_View str); // may return TypeKind_INVALID
+EXPORT STR_View HT_TypeKindToString(HT_TypeKind type);
+EXPORT HT_TypeKind StringToTypeKind(STR_View str); // may return HT_TypeKind_INVALID
 
 EXPORT bool AssetIsValid(AssetTree* tree, HT_AssetHandle handle);
 EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle); // returns NULL if the handle is invalid
@@ -242,7 +217,7 @@ EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset);
 //EXPORT void StructMemberNodeDeinit(StructMemberNode* node);
 //EXPORT int StructMemberNodeFindMemberIndex(StructMemberNode* node);
 
-EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, Type* type, i32* out_size, i32* out_alignment);
+EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_size, i32* out_alignment);
 EXPORT void ComputeStructLayout(AssetTree* tree, Asset* struct_type);
 
 EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type);
@@ -257,8 +232,8 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 
 EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset);
 
-EXPORT void ArrayPush(Array* array, i32 elem_size);
-EXPORT void ArrayClear(Array* array, i32 elem_size);
+EXPORT void ArrayPush(HT_Array* array, i32 elem_size);
+EXPORT void ArrayClear(HT_Array* array, i32 elem_size);
 
 EXPORT void StructMemberInit(StructMember* x);
 EXPORT void StructMemberDeinit(StructMember* x);

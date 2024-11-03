@@ -1,0 +1,5 @@
+type: "pbr_render_params_type"
+data: {
+	scene_type: "types/Scene"
+	main_pass_shader: "shaders/main_pass.hlsl"
+}

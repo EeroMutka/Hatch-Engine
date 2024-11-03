@@ -1,6 +1,7 @@
 // This header acts as the common interface between Hatch and any plugins that call into Hatch.
 
 #pragma once
+#define HATCH_API_INCLUDED
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -73,6 +74,33 @@ typedef struct string { // utf8-encoded string
 #endif
 } string;
 
+typedef enum HT_TypeKind {
+	HT_TypeKind_Float,
+	HT_TypeKind_Int,
+	HT_TypeKind_Bool,
+	HT_TypeKind_AssetRef,
+	HT_TypeKind_Struct,
+	HT_TypeKind_Array,
+	HT_TypeKind_String,
+	HT_TypeKind_Type,
+	HT_TypeKind_COUNT,
+	HT_TypeKind_INVALID,
+} HT_TypeKind;
+
+typedef struct HT_AssetHandle_* HT_AssetHandle;
+
+typedef struct HT_Array {
+	void* data;
+	i32 count;
+	i32 capacity;
+} HT_Array;
+
+typedef struct HT_Type {
+	HT_TypeKind kind;
+	HT_TypeKind subkind; // for arrays, this is the element type
+	HT_AssetHandle _struct;
+} HT_Type;
+
 typedef struct HT_Color {
 	u8 r, g, b, a;
 } HT_Color;
@@ -95,8 +123,6 @@ typedef struct HT_CachedGlyph {
 
 // typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
 
-typedef struct HT_AssetHandle_* HT_AssetHandle;
-
 #ifdef __cplusplus
 #define HT_EXPORT extern "C" __declspec(dllexport)
 #else
@@ -104,10 +130,6 @@ typedef struct HT_AssetHandle_* HT_AssetHandle;
 #endif
 
 typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
-
-// Helpers
-// #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
-#define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData()
 
 typedef struct HT_AssetViewerTabUpdate {
 	HT_AssetHandle data_asset;
@@ -122,6 +144,11 @@ typedef struct HT_CustomTabUpdate {
 	vec2 rect_min;
 	vec2 rect_max;
 } HT_CustomTabUpdate;
+
+// Helpers
+// #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
+#define HT_GetAssetData(TYPE, HT, ASSET) (TYPE*)HT->AssetGetData(ASSET)
+#define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData()
 
 struct HT_API {
 	// Exportable functions from a plugin:
@@ -157,7 +184,7 @@ struct HT_API {
 	void* (*GetPluginData)(/*HT_AssetHandle type_id*/);
 
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
-	// void* (*AssetGetData)(HT_AssetHandle asset);
+	void* (*AssetGetData)(HT_AssetHandle asset);
 
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
 	HT_AssetHandle (*AssetGetType)(HT_AssetHandle asset);
@@ -215,6 +242,7 @@ struct HT_API {
 #ifdef HT_INCLUDE_D3D12_API
 
 	ID3D12Device* D3D_device;
+	ID3D12CommandQueue* D3D_queue;
 	
 	HRESULT (*D3DCompile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
 		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
@@ -227,7 +255,10 @@ struct HT_API {
 	
 	HRESULT (*D3D12SerializeRootSignature)(const D3D12_ROOT_SIGNATURE_DESC* pRootSignature,
 		D3D_ROOT_SIGNATURE_VERSION Version, ID3DBlob** ppBlob, ID3DBlob** ppErrorBlob);
-		
+	
+	HANDLE (*D3DCreateEvent)(); // Equivelent to `CreateEventW(NULL, FALSE, FALSE, NULL)`
+	void (*D3DDestroyEvent)(HANDLE event); // Equivelent to `CloseHandle(event)`
+	void (*D3DWaitForEvent)(HANDLE event); // Equivelent to `WaitForSingleObjectEx(event, INFINITE, FALSE)`
 #endif
 	
 	// ------------------------------------------------

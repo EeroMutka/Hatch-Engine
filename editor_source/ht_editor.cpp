@@ -176,6 +176,7 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 	assets_tree.allow_selection = true;
 	assets_tree.root = AddAssetUITreeNode(NULL, s->asset_tree.root);
 	assets_tree.num_columns = 1; // 3
+	assets_tree.icons_font = s->icons_font;
 	assets_tree.allow_drag_n_drop = true;
 	assets_tree.AddValueUI = AssetTreeValueUI;
 	assets_tree.user_data = s;
@@ -190,7 +191,7 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 struct StructMemberValNode {
 	UI_DataTreeNode base; // Must be the first member for downcasting
 	void* data;
-	Type type;
+	HT_Type type;
 	STR_View name;
 };
 
@@ -253,14 +254,14 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	}
 }
 
-static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, TypeKind* type_kind, bool skip_array) {
+static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, HT_TypeKind* type_kind, bool skip_array) {
 	UI_Box* dropdown = UI_BBOX(dropdown_button);
 	UI_InitRootBox(dropdown, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
 	//dropdown->inner_padding = DEFAULT_UI_INNER_PADDING;
 	UI_PushBox(dropdown);
-	for (int i = 0; i < TypeKind_COUNT; i++) {
-		STR_View type_string = TypeKindToString((TypeKind)i);
-		if (skip_array && i == TypeKind_Array) continue;
+	for (int i = 0; i < HT_TypeKind_COUNT; i++) {
+		STR_View type_string = HT_TypeKindToString((HT_TypeKind)i);
+		if (skip_array && i == HT_TypeKind_Array) continue;
 		
 		UI_Box* label = UI_KBOX(UI_HashInt(UI_BKEY(dropdown_button), i));
 		UI_AddLabel(label, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable, type_string);
@@ -268,8 +269,8 @@ static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, Typ
 			s->type_dropdown_open = UI_INVALID_KEY;
 
 			// Change type!!
-			if (*type_kind != (TypeKind)i) {
-				*type_kind = (TypeKind)i;
+			if (*type_kind != (HT_TypeKind)i) {
+				*type_kind = (HT_TypeKind)i;
 
 				//Asset* type_asset = (Asset*)tree->user_data;
 
@@ -288,24 +289,24 @@ static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, Typ
 	s->frame.type_dropdown_button = dropdown_button;
 }
 
-static void UIAddValType(EditorState* s, UI_Key key, Type* type) {
+static void UIAddValType(EditorState* s, UI_Key key, HT_Type* type) {
 	UI_Box* kind_dropdown = UI_KBOX(key);
-	UI_AddDropdownButton(kind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->kind), s->icons_font);
+	UI_AddDropdownButton(kind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, HT_TypeKindToString(type->kind), s->icons_font);
 	if (UI_Pressed(kind_dropdown)) {
 		s->type_dropdown_open = s->type_dropdown_open == kind_dropdown->key ? UI_INVALID_KEY : kind_dropdown->key;
 	}
 	
 	UI_Box* subkind_dropdown = NULL;
-	if (type->kind == TypeKind_Array) {
+	if (type->kind == HT_TypeKind_Array) {
 		subkind_dropdown = UI_KBOX(key);
-		UI_AddDropdownButton(subkind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, TypeKindToString(type->subkind), s->icons_font);
+		UI_AddDropdownButton(subkind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, HT_TypeKindToString(type->subkind), s->icons_font);
 		if (UI_Pressed(subkind_dropdown)) {
 			s->type_dropdown_open = s->type_dropdown_open == subkind_dropdown->key ? UI_INVALID_KEY : subkind_dropdown->key;
 		}
 	}
 
-	TypeKind leaf_kind = type->kind == TypeKind_Array ? type->subkind : type->kind;
-	if (leaf_kind == TypeKind_Struct) {
+	HT_TypeKind leaf_kind = type->kind == HT_TypeKind_Array ? type->subkind : type->kind;
+	if (leaf_kind == HT_TypeKind_Struct) {
 		UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &type->_struct);
 	}
 
@@ -374,17 +375,17 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 		parent->inner_padding = {5.f, 1.f};
 
 		switch (member_val->type.kind) {
-		case TypeKind_Float: {
+		case HT_TypeKind_Float: {
 			UI_AddValFloat(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), (float*)member_val->data);
 		}break;
-		case TypeKind_Int: {
+		case HT_TypeKind_Int: {
 			UI_AddValInt(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), (int32_t*)member_val->data);
 		}break;
-		case TypeKind_Bool: {
+		case HT_TypeKind_Bool: {
 			UI_AddCheckbox(UI_KBOX(key), (bool*)member_val->data);
 		}break;
-		case TypeKind_Struct: {}break;
-		case TypeKind_Array: {
+		case HT_TypeKind_Struct: {}break;
+		case HT_TypeKind_Array: {
 			UI_Box* add_button = UI_KBOX(key);
 			UI_AddButton(add_button, UI_SizeFlex(1.f), UI_SizeFit(), 0, "add");
 			UI_Box* clear_button = UI_KBOX(key);
@@ -394,36 +395,36 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			GetTypeSizeAndAlignment(&s->asset_tree, &member_val->type, &member_size, &_);
 
 			if (UI_Clicked(add_button)) {
-				ArrayPush((Array*)member_val->data, member_size);
+				ArrayPush((HT_Array*)member_val->data, member_size);
 			}
 			if (UI_Clicked(clear_button)) {
-				ArrayClear((Array*)member_val->data, member_size);
+				ArrayClear((HT_Array*)member_val->data, member_size);
 			}
 		}break;
-		case TypeKind_AssetRef: {
+		case HT_TypeKind_AssetRef: {
 			HT_AssetHandle* val = (HT_AssetHandle*)member_val->data;
 			UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), val);
 		}break;
-		case TypeKind_String: {
+		case HT_TypeKind_String: {
 			String* val = (String*)member_val->data;
 			if (val->text.text.allocator == NULL) {
 				UI_TextInit(DS_HEAP, &val->text, "");
 			}
 			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &val->text);
 		}break;
-		case TypeKind_Type: {
-			Type* val = (Type*)member_val->data;
+		case HT_TypeKind_Type: {
+			HT_Type* val = (HT_Type*)member_val->data;
 			UIAddValType(s, UI_KKEY(key), val);
 		} break;
-		case TypeKind_COUNT: break;
-		case TypeKind_INVALID: break;
+		case HT_TypeKind_COUNT: break;
+		case HT_TypeKind_INVALID: break;
 		}
 	}
 }
 
 static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, Asset* struct_type, void* struct_data_base);
 
-static void AddStructMemberNode(EditorState* s, StructMemberValNode* parent, StructMemberValNode* node, Type* type) {
+static void AddStructMemberNode(EditorState* s, StructMemberValNode* parent, StructMemberValNode* node, HT_Type* type) {
 	UI_DataTreeNode* p = &parent->base;
 	UI_DataTreeNode* n = &node->base;
 	
@@ -434,7 +435,7 @@ static void AddStructMemberNode(EditorState* s, StructMemberValNode* parent, Str
 	p->last_child = n;
 	n->parent = p;
 
-	if (node->type.kind == TypeKind_Struct) {
+	if (node->type.kind == HT_TypeKind_Struct) {
 		Asset* struct_asset = GetAsset(&s->asset_tree, node->type._struct);
 		if (struct_asset) {
 			BuildStructMemberValNodes(s, node, struct_asset, node->data);
@@ -460,9 +461,9 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 
 		AddStructMemberNode(s, parent, member_val, &member->type);
 
-		if (member->type.kind == TypeKind_Array) {
-			Array* array = (Array*)member_val->data;
-			Type elem_type = member->type;
+		if (member->type.kind == HT_TypeKind_Array) {
+			HT_Array* array = (HT_Array*)member_val->data;
+			HT_Type elem_type = member->type;
 			elem_type.kind = elem_type.subkind;
 			
 			i32 elem_size, elem_align;
@@ -496,6 +497,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	members_tree.root = &root.base;
 	members_tree.allow_selection = false;
 	members_tree.num_columns = 2;
+	members_tree.icons_font = s->icons_font;
 	members_tree.AddValueUI = UIStructDataNodeAdd;
 	members_tree.user_data = s;
 	UI_AddDataTree(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &members_tree, &s->properties_tree_data_ui_state);
@@ -538,6 +540,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 		members_tree.root = p;
 		members_tree.allow_selection = false;
 		members_tree.num_columns = 2;
+		members_tree.icons_font = s->icons_font;
 		members_tree.AddValueUI = UIStructMemberNodeAdd;
 		members_tree.user_data = s;
 
@@ -626,15 +629,15 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		{
 		MoveAssetToInside(&g_asset_tree, type2, g_asset_tree.root);
 		StructMemberNode* m1 = StructTypeAddMember(type2);
-		m1->type.kind = TypeKind_Struct;
+		m1->type.kind = HT_TypeKind_Struct;
 		m1->type._struct = GetAssetHandle(type_vec2);
 		UI_TextSet(&m1->name, "position");
 
 		StructMemberNode* m2 = StructTypeAddMember(type2);
 
 		StructMemberNode* m3 = StructTypeAddMember(type2);
-		m3->type.kind = TypeKind_Array;
-		m3->type.subkind = TypeKind_Float;
+		m3->type.kind = HT_TypeKind_Array;
+		m3->type.subkind = HT_TypeKind_Float;
 		UI_TextSet(&m3->name, "some_numbers");
 		}*/
 
@@ -675,7 +678,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			UI_Box* new_struct_type = UI_BOX();
 
 			UI_AddLabel(new_folder, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Folder");
-			UI_AddLabel(new_struct_type, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Struct Type");
+			UI_AddLabel(new_struct_type, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Struct HT_Type");
 			UI_AddLabel(new_plugin, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New Plugin");
 			UI_AddLabel(new_file, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "New File");
 
@@ -1046,6 +1049,19 @@ static HT_AssetHandle HT_AssetGetType(HT_AssetHandle asset) {
 	return NULL;
 }
 
+static void* HT_AssetGetData(HT_AssetHandle asset) {
+	EditorState* s = g_plugin_call_ctx->s;
+	Asset* ptr = GetAsset(&s->asset_tree, asset);
+	if (ptr != NULL && ptr->kind == AssetKind_StructData) {
+		return ptr->struct_data.data;
+	}
+	return NULL;
+}
+
+static HANDLE HT_D3DCreateEvent() { return CreateEventW(NULL, FALSE, FALSE, NULL); }
+static void HT_D3DDestroyEvent(HANDLE event) { CloseHandle(event); }
+static void HT_D3DWaitForEvent(HANDLE event) { WaitForSingleObjectEx(event, INFINITE, FALSE); }
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
@@ -1063,7 +1079,12 @@ EXPORT void InitAPI(EditorState* s) {
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
+	api.D3D_queue = s->render_state->command_queue;
+	api.D3DCreateEvent = HT_D3DCreateEvent;
+	api.D3DDestroyEvent = HT_D3DDestroyEvent;
+	api.D3DWaitForEvent = HT_D3DWaitForEvent;
 	*(void**)&api.AssetGetType = HT_AssetGetType;
+	*(void**)&api.AssetGetData = HT_AssetGetData;
 	*(void**)&api.AssetGetModtime = HT_AssetGetModtime;
 	*(void**)&api.AssetGetFilepath = HT_AssetGetFilepath;
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;

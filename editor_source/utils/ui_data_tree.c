@@ -60,6 +60,7 @@ typedef struct UI_DataTreeDrawData {
 typedef struct UI_DataTreeRowDrawData {
 	bool has_arrow;
 	bool arrow_is_open;
+	UI_Font icons_font;
 } UI_DataTreeRowDrawData;
 
 static inline UI_Key UI_DataTreeSplittersKey() { return UI_KEY(); }
@@ -158,15 +159,13 @@ static void UI_DataTreeDraw(UI_Box* box) {
 		// draw arrow
 		// TODO: I think we should do the arrows as button boxes.
 		if (row_draw_data.has_arrow) {
-			// TODO
-			
-
-			//UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), icons_font,
-			//	UI_VEC2{
-			//		child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
-			//		child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
-			//	},
-			//	UI_AlignH_Left, UI_WHITE, NULL);
+			// TODO: better handling of how data is passed around, especially the icons and icons_font.
+			UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), row_draw_data.icons_font,
+				UI_VEC2{
+					child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
+					child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
+				},
+				UI_AlignH_Left, UI_WHITE, NULL);
 		}
 		
 		child = iter;
@@ -212,6 +211,7 @@ static void UI_AddDataTreeNode(UI_Key parent_key, UI_Box* root, UI_DataTree* tre
 			UI_DataTreeRowDrawData row_draw_data;
 			row_draw_data.arrow_is_open = *node->is_open_ptr;
 			row_draw_data.has_arrow = has_arrow_button;
+			row_draw_data.icons_font = tree->icons_font;
 			UI_BoxAddVar(node_box, UI_DataTreeRowDrawDataKey(), &row_draw_data);
 		}
 

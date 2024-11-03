@@ -44,6 +44,8 @@ typedef struct UI_DataTree {
 	bool allow_selection;
 	bool allow_drag_n_drop;
 
+	UI_Font icons_font;
+	
 	void (*AddValueUI)(struct UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column);
 	
 	void* user_data; // unused by the library

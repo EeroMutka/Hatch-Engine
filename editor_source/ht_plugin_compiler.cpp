@@ -194,27 +194,37 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	// TODO: so we need a recursive list of all types used inside this type...
 
-	// for now, do the simple flat alternative that doesn't work in many cases.
-	for (Asset* child = plugin->parent->first_child; child; child = child->next) {
-		if (child->kind == AssetKind_StructType) {
-			STR_View name = UI_TextToStr(child->name);
-			fprintf(header, "typedef struct %.*s {\n", StrArg(name));
+	// for now, do the simple way that doesn't work in many cases.
+	// This is totally wrong.
+	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
+		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
+			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
+	
+			if (asset->kind == AssetKind_StructType) {
+				STR_View name = UI_TextToStr(asset->name);
+				if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
 
-			for (int i = 0; i < child->struct_type.members.count; i++) {
-				StructMember member = child->struct_type.members[i];
-				fprintf(header, "\t");
-				switch (member.type.kind) {
-				case TypeKind_Float: { fprintf(header, "float"); }break;
-				case TypeKind_Int: { fprintf(header, "int"); }break;
-				case TypeKind_Bool: { fprintf(header, "bool"); }break;
-				case TypeKind_AssetRef: { fprintf(header, "HT_AssetHandle"); }break;
-				default: assert(0); break;
+				fprintf(header, "typedef struct %.*s {\n", StrArg(name));
+
+				for (int i = 0; i < asset->struct_type.members.count; i++) {
+					StructMember member = asset->struct_type.members[i];
+					fprintf(header, "\t");
+					switch (member.type.kind) {
+					case HT_TypeKind_Float: { fprintf(header, "float"); }break;
+					case HT_TypeKind_Int: { fprintf(header, "int"); }break;
+					case HT_TypeKind_Bool: { fprintf(header, "bool"); }break;
+					case HT_TypeKind_String: { fprintf(header, "string"); }break;
+					case HT_TypeKind_Type: { fprintf(header, "HT_Type"); }break;
+					case HT_TypeKind_Array: { fprintf(header, "HT_Array"); }break;
+					case HT_TypeKind_AssetRef: { fprintf(header, "HT_AssetHandle"); }break;
+					default: assert(0); break;
+					}
+					STR_View member_name = UI_TextToStr(member.name.text);
+					fprintf(header, " %.*s;\n", StrArg(member_name));
 				}
-				STR_View member_name = UI_TextToStr(member.name.text);
-				fprintf(header, " %.*s;\n", StrArg(member_name));
-			}
 
-			fprintf(header, "} %.*s;\n", StrArg(name));
+				fprintf(header, "} %.*s;\n", StrArg(name));
+			}
 		}
 	}
 
