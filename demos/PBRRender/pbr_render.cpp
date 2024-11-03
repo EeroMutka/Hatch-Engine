@@ -35,8 +35,8 @@ struct Allocator {
 struct OpenScene {
 	ID3D12Resource* vbo;
 	ID3D12Resource* ibo;
-	u32 vbo_size;
-	u32 ibo_size;
+	u32 num_vertices;
+	u32 num_indices;
 };
 
 struct Globals {
@@ -106,7 +106,7 @@ static void MaybeHotreloadShader(HT_API* ht) {
 		
 		if (vs_ok && ps_ok) {
 			D3D12_INPUT_ELEMENT_DESC input_elem_desc[] = {
-				{ "POSITION", 0,   DXGI_FORMAT_R32G32_FLOAT, 0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			};
 		
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
@@ -207,6 +207,9 @@ static void LoadScene(HT_API* ht, HT_AssetHandle scene_asset) {
 		printf("Failed to load: %s\n", error.description.data);
 		assert(0);
 	}
+	
+	DS_DynArray(vec3) vertices = {TEMP};
+	DS_DynArray(u32) indices = {TEMP};
 
 	// Let's just list all objects within the scene for example:
 	for (size_t i = 0; i < fbx_scene->nodes.count; i++) {
@@ -216,25 +219,47 @@ static void LoadScene(HT_API* ht, HT_AssetHandle scene_asset) {
 		// printf("Object: %s\n", node->name.data);
 		if (node->mesh) {
 			// load mesh!
-			printf("-> mesh with %zu faces\n", node->mesh->faces.count);
+			ufbx_mesh* fbx_mesh = node->mesh;
+			
+			u32 triangulated_face[32*3];
+			assert(fbx_mesh->max_face_triangles < 32);
+			
+			for (size_t face_i = 0; face_i < fbx_mesh->faces.count; face_i++) {
+				ufbx_face face = fbx_mesh->faces[face_i];
+				u32 num_triangles = ufbx_triangulate_face(triangulated_face, 32*3, fbx_mesh, face);
+				u32 num_tri_indices = num_triangles*3;
+				for (u32 index_i = 0; index_i < num_tri_indices; index_i++) {
+					u32 vertex_i = fbx_mesh->vertex_indices[triangulated_face[index_i]];
+					DS_ArrPush(&indices, vertex_i);
+				}
+			}
+			
+			DS_ArrResizeUndef(&vertices, (int)fbx_mesh->vertices.count);
+			for (size_t vert_i = 0; vert_i < fbx_mesh->vertices.count; vert_i++) {
+				ufbx_vec3* fbx_vert = &fbx_mesh->vertices[vert_i];
+				vertices[vert_i] = {(float)fbx_vert->x, (float)fbx_vert->y, (float)fbx_vert->z};
+			}
+			
+			// printf("-> mesh with %zu faces\n", mesh->faces.count);
 		}
 	}
+	
 	ufbx_free_scene(fbx_scene);
 	
-	float vertices[] = {
-		-1.f, -1.f,
-		1.f, -1.f,
-		0.f, 1.f,
-	};
-	int indices[] = {0, 1, 2};
+	//float vertices[] = {
+	//	-1.f, -1.f,
+	//	1.f, -1.f,
+	//	0.f, 1.f,
+	//};
+	//int indices[] = {0, 1, 2};
 	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
-	GLOBALS.open_scene.vbo_size = sizeof(float)*2*3;
-	GLOBALS.open_scene.vbo = CreateGPUBuffer(&ctx, GLOBALS.open_scene.vbo_size, vertices);
+	GLOBALS.open_scene.vbo = CreateGPUBuffer(&ctx, vertices.count * sizeof(vec3), vertices.data);
+	GLOBALS.open_scene.num_vertices = vertices.count;
 	
-	GLOBALS.open_scene.ibo_size = sizeof(uint32_t)*3;
-	GLOBALS.open_scene.ibo = CreateGPUBuffer(&ctx, GLOBALS.open_scene.ibo_size, indices);
+	GLOBALS.open_scene.ibo = CreateGPUBuffer(&ctx, indices.count * sizeof(u32), indices.data);
+	GLOBALS.open_scene.num_indices = indices.count;
 	
 	DestroyTempGPUCmdContext(&ctx);
 }
@@ -283,17 +308,17 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	
 		D3D12_VERTEX_BUFFER_VIEW vbo_view;
 		vbo_view.BufferLocation = GLOBALS.open_scene.vbo->GetGPUVirtualAddress();
-		vbo_view.StrideInBytes = 2 * sizeof(float); // pos
-		vbo_view.SizeInBytes = GLOBALS.open_scene.vbo_size;
+		vbo_view.StrideInBytes = 3 * sizeof(float); // position
+		vbo_view.SizeInBytes = GLOBALS.open_scene.num_vertices * vbo_view.StrideInBytes;
 		command_list->IASetVertexBuffers(0, 1, &vbo_view);
 
 		D3D12_INDEX_BUFFER_VIEW ibo_view;
 		ibo_view.BufferLocation = GLOBALS.open_scene.ibo->GetGPUVirtualAddress();
-		ibo_view.SizeInBytes = GLOBALS.open_scene.ibo_size;
+		ibo_view.SizeInBytes = GLOBALS.open_scene.num_indices * sizeof(u32);
 		ibo_view.Format = DXGI_FORMAT_R32_UINT;
 		command_list->IASetIndexBuffer(&ibo_view);
 	
-		command_list->DrawIndexedInstanced(3, 1, 0, 0, 0);
+		command_list->DrawIndexedInstanced(GLOBALS.open_scene.num_indices, 1, 0, 0, 0);
 	}
 	
 	TEMP = NULL;

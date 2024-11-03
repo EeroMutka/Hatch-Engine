@@ -1,7 +1,7 @@
 editor_build/
 .vscode/
 .vs/
-.hatch_binaries/
+.plugin_binaries/
 *.exp
 *.exe
 *.pdb

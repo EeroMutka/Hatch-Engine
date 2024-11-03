@@ -3,10 +3,10 @@ struct PSInput {
 	float4 pos : SV_POSITION;
 };
 
-PSInput VSMain(float2 position : POSITION)
+PSInput VSMain(float3 position : POSITION)
 {
 	PSInput output;
-	output.pos = float4(position, 0.0, 1.0);
+	output.pos = float4(position, 1.0);
 	return output;
 }
 
