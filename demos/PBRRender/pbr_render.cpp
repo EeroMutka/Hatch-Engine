@@ -40,12 +40,19 @@ struct Allocator {
 	HT_API* ht;
 };
 
+struct LoadedMeshPart {
+	u32 index_count;
+	u32 base_index_location;
+	u32 base_vertex_location;
+};
+
 struct LoadedScene {
 	bool is_loaded;
+	DS_DynArray(LoadedMeshPart) mesh_parts;
 	ID3D12Resource* vbo;
 	ID3D12Resource* ibo;
-	u32 num_vertices;
-	u32 num_indices;
+	u32 vbo_size;
+	u32 ibo_size;
 };
 
 struct Vertex {
@@ -82,6 +89,7 @@ struct Globals {
 // -----------------------------------------------------
 
 static Globals GLOBALS;
+static DS_Allocator* HEAP;
 static DS_Arena* TEMP;
 
 // -----------------------------------------------------
@@ -89,6 +97,11 @@ static DS_Arena* TEMP;
 static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
 	if (ptr) memcpy(data, ptr, old_size);
+	return data;
+}
+
+static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
+	void* data = ((Allocator*)allocator)->ht->AllocatorProc(ptr, size);
 	return data;
 }
 
@@ -388,6 +401,7 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 
 static void UnloadSceneIfPossible(HT_API* ht, LoadedScene* scene) {
 	if (scene->is_loaded) {
+		DS_ArrDeinit(&scene->mesh_parts);
 		scene->ibo->Release();
 		scene->vbo->Release();
 		*scene = {};
@@ -414,11 +428,20 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 		assert(0);
 	}
 	
-	Vertex* vertices = NULL;
-	u32 num_vertices = 0;
+	DS_ArrInit(&scene->mesh_parts, HEAP);
 	
-	u32* indices = NULL;
-	u32 num_indices = 0;
+	struct TempPart {
+		Vertex* vertices;
+		u32 base_vertex;
+		u32 num_vertices;
+		u32* indices;
+		u32 base_index;
+		u32 num_indices;
+	};
+	
+	DS_DynArray(TempPart) temp_parts = {TEMP};
+	u32 total_num_vertices = 0;
+	u32 total_num_indices = 0;
 	
 	for (size_t node_i = 0; node_i < fbx_scene->nodes.count; node_i++) {
 		ufbx_node* node = fbx_scene->nodes.data[node_i];
@@ -428,41 +451,61 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 			// see docs at https://ufbx.github.io/elements/meshes/
 			ufbx_mesh* fbx_mesh = node->mesh;
 			
-			u32 num_triangles = (u32)fbx_mesh->num_triangles;
-			vertices = (Vertex*)DS_ArenaPush(TEMP, num_triangles * 3 * sizeof(Vertex));
-			
 			u32 num_tri_indices = (u32)fbx_mesh->max_face_triangles * 3;
 			u32* tri_indices = (u32*)DS_ArenaPush(TEMP, num_tri_indices * sizeof(u32));
 			
-			for (u32 face_i = 0; face_i < fbx_mesh->faces.count; face_i++) {
-				ufbx_face face = fbx_mesh->faces[face_i];
+			for (u32 part_i = 0; part_i < fbx_mesh->material_parts.count; part_i++) {
+				ufbx_mesh_part* part = &fbx_mesh->material_parts[part_i];
 				
-				u32 num_triangulated_tris = ufbx_triangulate_face(tri_indices, num_tri_indices, fbx_mesh, face);
+				u32 num_triangles = (u32)part->num_triangles;
+				Vertex* vertices = (Vertex*)DS_ArenaPush(TEMP, num_triangles * 3 * sizeof(Vertex));
+				u32 num_vertices = 0;
 				
-				for (u32 i = 0; i < num_triangulated_tris*3; i++) {
-					u32 index = tri_indices[i];
+				for (u32 face_i = 0; face_i < part->num_faces; face_i++) {
+					ufbx_face face = fbx_mesh->faces.data[part->face_indices.data[face_i]];
 					
-					Vertex* v = &vertices[num_vertices++];
-					ufbx_vec3 position = ufbx_get_vertex_vec3(&fbx_mesh->vertex_position, index);
-					ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
-					v->position = {(float)position.x, (float)position.y, (float)position.z};
-					v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
-					// v->uv = ufbx_get_vertex_vec3(&fbx_mesh->vertex_uv, index);
+					u32 num_triangulated_tris = ufbx_triangulate_face(tri_indices, num_tri_indices, fbx_mesh, face);
+					
+					for (u32 i = 0; i < num_triangulated_tris*3; i++) {
+						u32 index = tri_indices[i];
+						
+						Vertex* v = &vertices[num_vertices++];
+						ufbx_vec3 position = ufbx_get_vertex_vec3(&fbx_mesh->vertex_position, index);
+						ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
+						v->position = {(float)position.x, (float)position.y, (float)position.z};
+						v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
+						// v->uv = ufbx_get_vertex_vec3(&fbx_mesh->vertex_uv, index);
+					}
 				}
+				
+				assert(num_vertices == num_triangles * 3);
+				
+				// Generate index buffer
+				ufbx_vertex_stream streams[1] = {
+					{ vertices, num_vertices, sizeof(Vertex) },
+				};
+				u32 num_indices = num_triangles * 3;
+				u32* indices = (u32*)DS_ArenaPush(TEMP, num_indices * sizeof(u32));
+				
+				// This call will deduplicate vertices, modifying the arrays passed in `streams[]`,
+				// indices are written in `indices[]` and the number of unique vertices is returned.
+				num_vertices = (u32)ufbx_generate_indices(streams, 1, indices, num_indices, NULL, NULL);
+				
+				TempPart temp_part = {
+					vertices, total_num_vertices, num_vertices,
+					indices, total_num_indices, num_indices,
+				};
+				DS_ArrPush(&temp_parts, temp_part);
+				
+				LoadedMeshPart loaded_part = {};
+				loaded_part.base_index_location = total_num_indices;
+				loaded_part.base_vertex_location = total_num_vertices;
+				loaded_part.index_count = num_indices;
+				DS_ArrPush(&scene->mesh_parts, loaded_part);
+				
+				total_num_indices += num_indices;
+				total_num_vertices += num_vertices;
 			}
-			
-			assert(num_vertices == num_triangles * 3);
-			
-			// Generate index buffer
-			ufbx_vertex_stream streams[1] = {
-				{ vertices, num_vertices, sizeof(Vertex) },
-			};
-			num_indices = num_triangles * 3;
-			indices = (u32*)DS_ArenaPush(TEMP, num_indices * sizeof(u32));
-			
-			// This call will deduplicate vertices, modifying the arrays passed in `streams[]`,
-			// indices are written in `indices[]` and the number of unique vertices is returned.
-			num_vertices = (u32)ufbx_generate_indices(streams, 1, indices, num_indices, NULL, NULL);
 		}
 	}
 	
@@ -470,11 +513,22 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
-	scene->vbo = CreateGPUBuffer(&ctx, num_vertices * sizeof(Vertex), vertices);
-	scene->num_vertices = num_vertices;
+	// Allocating a temporary "combined" array is unnecessary and required by the `initial_data` API for CreateGPUBuffer.
+	// If we instead mapped the buffer pointer, we could copy directly to it. But this is good enough for now.
+	Vertex* combined_vertices = (Vertex*)DS_ArenaPush(TEMP, total_num_vertices * sizeof(Vertex));
+	u32* combined_indices = (u32*)DS_ArenaPush(TEMP, total_num_indices * sizeof(u32));
 	
-	scene->ibo = CreateGPUBuffer(&ctx, num_indices * sizeof(u32), indices);
-	scene->num_indices = num_indices;
+	for (int i = 0; i < temp_parts.count; i++) {
+		TempPart temp_part = temp_parts[i];
+		memcpy((Vertex*)combined_vertices + temp_part.base_vertex, temp_part.vertices, temp_part.num_vertices * sizeof(Vertex));
+		memcpy((u32*)combined_indices + temp_part.base_index, temp_part.indices, temp_part.num_indices * sizeof(u32));
+	}
+	
+	scene->vbo = CreateGPUBuffer(&ctx, total_num_vertices * sizeof(Vertex), combined_vertices);
+	scene->vbo_size = total_num_vertices * sizeof(Vertex);
+	
+	scene->ibo = CreateGPUBuffer(&ctx, total_num_indices * sizeof(u32), combined_indices);
+	scene->ibo_size = total_num_indices * sizeof(u32);
 	
 	scene->is_loaded = true;
 	
@@ -487,6 +541,9 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	DS_Arena temp_arena;
 	DS_ArenaInit(&temp_arena, 1024, temp_allocator);
 	TEMP = &temp_arena;
+	
+	Allocator _heap_allocator = {{HeapAllocatorProc}, ht};
+	HEAP = (DS_Allocator*)&_heap_allocator;
 	
 	HT_AssetHandle current_scene_asset = NULL;
 	
@@ -510,8 +567,8 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		GLOBALS.current_scene_asset = current_scene_asset;
 	}
 	
-	for (int i = 0; i < updates_count; i++) {
-		HT_AssetViewerTabUpdate update = updates[i];
+	for (int update_i = 0; update_i < updates_count; update_i++) {
+		HT_AssetViewerTabUpdate update = updates[update_i];
 		ivec2 viewport_size = {update.rect_max.x - update.rect_min.x, update.rect_max.y - update.rect_min.y};
 		MaybeResizeRenderTargets(ht->D3D_device, viewport_size);
 		
@@ -521,9 +578,9 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		// --- draw offscreen ---
 		
 		float aspect_ratio = (float)viewport_size.x / (float)viewport_size.y;
-		UpdateCamera(&GLOBALS.camera, ht->input_frame, 0.01f, 0.001f, 70.f, aspect_ratio, 0.01f, 100.f);
+		UpdateCamera(&GLOBALS.camera, ht->input_frame, 0.01f, 0.001f, 70.f, aspect_ratio, 0.01f, 1000.f);
 		
-		D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = GLOBALS.rtv_heap->GetCPUDescriptorHandleForHeapStart();//ht->D3DGetHatchRenderTargetView();
+		D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = GLOBALS.rtv_heap->GetCPUDescriptorHandleForHeapStart();
 		D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = GLOBALS.dsv_heap->GetCPUDescriptorHandleForHeapStart();
 		command_list->OMSetRenderTargets(1, &rtv_handle, false, &dsv_handle);
 		
@@ -543,16 +600,19 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		D3D12_VERTEX_BUFFER_VIEW vbo_view;
 		vbo_view.BufferLocation = GLOBALS.current_scene.vbo->GetGPUVirtualAddress();
 		vbo_view.StrideInBytes = sizeof(Vertex);
-		vbo_view.SizeInBytes = GLOBALS.current_scene.num_vertices * vbo_view.StrideInBytes;
+		vbo_view.SizeInBytes = GLOBALS.current_scene.vbo_size;
 		command_list->IASetVertexBuffers(0, 1, &vbo_view);
 		
 		D3D12_INDEX_BUFFER_VIEW ibo_view;
 		ibo_view.BufferLocation = GLOBALS.current_scene.ibo->GetGPUVirtualAddress();
-		ibo_view.SizeInBytes = GLOBALS.current_scene.num_indices * sizeof(u32);
+		ibo_view.SizeInBytes = GLOBALS.current_scene.ibo_size;
 		ibo_view.Format = DXGI_FORMAT_R32_UINT;
 		command_list->IASetIndexBuffer(&ibo_view);
 	
-		command_list->DrawIndexedInstanced(GLOBALS.current_scene.num_indices, 1, 0, 0, 0);
+		for (int i = 0; i < GLOBALS.current_scene.mesh_parts.count; i++) {
+			LoadedMeshPart part = GLOBALS.current_scene.mesh_parts[i];
+			command_list->DrawIndexedInstanced(part.index_count, 1, part.base_index_location, part.base_vertex_location, 0);
+		}
 		
 		// ---------------------
 		

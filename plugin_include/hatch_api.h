@@ -377,8 +377,8 @@ struct HT_API {
 	// -- Memory allocation ---------------------------
 	
 	// AllocatorProc is a combination of malloc, free and realloc.
-	// A new allocation is made (or an existing allocation is resized if ptr != NULL) when new_size > 0.
-	// An existing allocation is freed when new_size == 0.
+	// A new allocation is made (or an existing allocation is resized if ptr != NULL) when size > 0.
+	// An existing allocation is freed when size == 0.
 	// All allocations are aligned to 16 bytes.
 	void* (*AllocatorProc)(void* ptr, size_t size);
 	

@@ -1,0 +1,4 @@
+type: "types/Mesh"
+data: {
+	source_asset: "SponzaAssets/Sponza.fbx"
+}

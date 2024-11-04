@@ -245,7 +245,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	UI_PopBox(box);
 
 	if (UI_Clicked(box) && asset_val) {
-		s->assets_tree_ui_state.selection = (UI_Key)asset_val;
+		s->assets_tree_ui_state.selection = (UI_Key)asset_val->handle;
 	}
 
 	if (UI_Clicked(clear_button)) {
@@ -682,26 +682,26 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_Folder);
 				MoveAssetToInside(&s->asset_tree, new_asset, selected_asset);
 				selected_asset->ui_state_is_open = true;
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 				s->rmb_menu_open = false;
 			}
 			if (UI_Clicked(new_file)) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_File);
 				MoveAssetToInside(&s->asset_tree, new_asset, selected_asset);
 				selected_asset->ui_state_is_open = true;
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 				s->rmb_menu_open = false;
 			}
 			if (UI_Clicked(new_plugin)) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_Plugin);
 				MoveAssetToInside(&s->asset_tree, new_asset, selected_asset);
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 				s->rmb_menu_open = false;
 			}
 			if (UI_Clicked(new_struct_type)) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 				MoveAssetToInside(&s->asset_tree, new_asset, selected_asset);
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 				s->rmb_menu_open = false;
 			}
 
@@ -721,7 +721,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_Package);
 				MoveAssetToInside(&s->asset_tree, new_asset, s->asset_tree.root);
 				new_asset->ui_state_is_open = true;
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 				s->rmb_menu_open = false;
 			}
 
@@ -730,7 +730,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			if (UI_Clicked(load_package_box)) {
 				STR_View load_package_path;
 				if (OS_FolderPicker(MEM_SCOPE(TEMP), &load_package_path)) {
-					s->assets_tree_ui_state.selection = (UI_Key)LoadPackageFromDisk(&s->asset_tree, load_package_path);
+					s->assets_tree_ui_state.selection = (UI_Key)LoadPackageFromDisk(&s->asset_tree, load_package_path)->handle;
 				}
 				s->rmb_menu_open = false;
 			}
@@ -744,7 +744,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			if (UI_Clicked(new_struct_data)) {
 				Asset* new_asset = MakeNewAsset(&s->asset_tree, AssetKind_StructData);
 				MoveAssetToInside(&s->asset_tree, new_asset, s->asset_tree.root);
-				s->assets_tree_ui_state.selection = (UI_Key)new_asset;
+				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 
 				InitStructDataAsset(new_asset, selected_asset);
 
@@ -762,7 +762,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 					selected_asset->parent != s->asset_tree.root ? selected_asset->parent : NULL;
 
 				DeleteAssetIncludingChildren(&s->asset_tree, selected_asset);
-				s->assets_tree_ui_state.selection = (UI_Key)new_selection; // TODO: here the selection should act as if moving up with keyboard instead
+				s->assets_tree_ui_state.selection = (UI_Key)new_selection->handle; // TODO: here the selection should act as if moving up with keyboard instead
 				s->rmb_menu_open = false;
 			}
 		}
@@ -903,9 +903,15 @@ static void* HT_AllocatorProc(void* ptr, size_t size) {
 	else {
 		// Having a 16 byte header is quite a lot of overhead per allocation... but for now its ok.
 
-		size_t old_size = ptr ? ((PluginAllocationHeader*)((char*)ptr - 16))->size : 0;
+		PluginAllocationHeader* header;
+		if (ptr) {
+			char* allocation_base = (char*)ptr - 16;
+			size_t old_size = ptr ? ((PluginAllocationHeader*)allocation_base)->size : 0;
+			header = (PluginAllocationHeader*)DS_MemResizeAligned(DS_HEAP, allocation_base, old_size, 16 + size, 16);
+		} else {
+			header = (PluginAllocationHeader*)DS_MemAllocAligned(DS_HEAP, 16 + size, 16);
+		}
 
-		PluginAllocationHeader* header = (PluginAllocationHeader*)DS_MemResizeAligned(DS_HEAP, ptr, old_size, 16 + size, 16);
 		header->size = size;
 		header->allocation_index = plugin->allocations.count;
 		DS_ArrPush(&plugin->allocations, header);
