@@ -68,7 +68,7 @@ typedef struct DS_Arena DS_Arena;
 typedef DS_Arena DS_Allocator;
 
 typedef struct DS_ArenaBlockHeader {
-	int size_including_header;
+	size_t size_including_header;
 	struct DS_ArenaBlockHeader* next; // may be NULL
 } DS_ArenaBlockHeader;
 
@@ -79,11 +79,11 @@ typedef struct DS_ArenaMark {
 
 struct DS_Arena {
 	DS_AllocatorBase base;
-	int block_size;
 	DS_ArenaBlockHeader* first_block; // may be NULL
 	DS_ArenaMark mark;
 	DS_Allocator* allocator;
-	int total_mem_reserved;
+	size_t block_size;
+	size_t total_mem_reserved;
 };
 
 // --- Internal helpers -------------------------------------
@@ -355,12 +355,12 @@ static inline bool DS_MapIter(DS_MapRaw* map, int* i, void** out_key, void** out
 
 // -- Arena interface --------------------------------
 
-DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator);
+DS_API void DS_ArenaInit(DS_Arena* arena, size_t block_size, DS_Allocator* allocator);
 DS_API void DS_ArenaDeinit(DS_Arena* arena);
 
-DS_API char* DS_ArenaPush(DS_Arena* arena, int size);
-DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size);
-DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment);
+DS_API char* DS_ArenaPush(DS_Arena* arena, size_t size);
+DS_API char* DS_ArenaPushZero(DS_Arena* arena, size_t size);
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment);
 
 DS_API DS_ArenaMark DS_ArenaGetMark(DS_Arena* arena);
 DS_API void DS_ArenaSetMark(DS_Arena* arena, DS_ArenaMark mark);
@@ -423,8 +423,8 @@ static inline void DS_ScopeEnd(DS_MemScope* scope) {
 #define DS_MemAllocAligned(ALLOCATOR, SIZE, ALIGN)                 (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base,  NULL,          0, (SIZE), ALIGN)
 #define DS_MemResizeAligned(ALLOCATOR, PTR, OLD_SIZE, SIZE, ALIGN) (ALLOCATOR)->base.AllocatorProc(&(ALLOCATOR)->base, (PTR), (OLD_SIZE), (SIZE), ALIGN)
 
-static inline void* DS_MemClone(DS_Arena* arena, const void* value, int size) { void* p = DS_ArenaPush(arena, size); return memcpy(p, value, size); }
-static inline void* DS_MemCloneAligned(DS_Arena* arena, const void* value, int size, int align) { void* p = DS_ArenaPushAligned(arena, size, align); return memcpy(p, value, size); }
+static inline void* DS_MemClone(DS_Arena* arena, const void* value, size_t size) { void* p = DS_ArenaPush(arena, size); return memcpy(p, value, size); }
+static inline void* DS_MemCloneAligned(DS_Arena* arena, const void* value, size_t size, size_t align) { void* p = DS_ArenaPushAligned(arena, size, align); return memcpy(p, value, size); }
 
 // -- Dynamic array --------------------------------
 
@@ -1191,12 +1191,12 @@ static inline bool DS_MapInsertRaw(DS_MapRaw* map, const void* key, DS_OUT void*
 }
 
 static void* DS_ArenaAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
-	char* data = DS_ArenaPushAligned((DS_Arena*)allocator, (int)size, (int)align); // TODO: use size_t for arenas instead of int
+	char* data = DS_ArenaPushAligned((DS_Arena*)allocator, size, align);
 	if (ptr) memcpy(data, ptr, old_size);
 	return data;
 }
 
-DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator) {
+DS_API void DS_ArenaInit(DS_Arena* arena, size_t block_size, DS_Allocator* allocator) {
 	memset(arena, 0, sizeof(*arena));
 	arena->base.AllocatorProc = DS_ArenaAllocatorProc;
 	arena->block_size = block_size;
@@ -1212,17 +1212,17 @@ DS_API void DS_ArenaDeinit(DS_Arena* arena) {
 	DS_DebugFillGarbage(arena, sizeof(DS_Arena));
 }
 
-DS_API char* DS_ArenaPush(DS_Arena* arena, int size) {
+DS_API char* DS_ArenaPush(DS_Arena* arena, size_t size) {
 	return DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 }
 
-DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size) {
+DS_API char* DS_ArenaPushZero(DS_Arena* arena, size_t size) {
 	char* ptr = DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 	memset(ptr, 0, size);
 	return ptr;
 }
 
-DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment) {
 	DS_ProfEnter();
 
 	bool alignment_is_power_of_2 = ((alignment) & ((alignment)-1)) == 0;
@@ -1233,11 +1233,11 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
 	void* curr_ptr = arena->mark.ptr;
 
 	char* result_address = (char*)DS_AlignUpPow2((uintptr_t)curr_ptr, alignment);
-	int remaining_space = curr_block ? curr_block->size_including_header - (int)((uintptr_t)result_address - (uintptr_t)curr_block) : 0;
+	size_t remaining_space = curr_block ? curr_block->size_including_header - (size_t)((uintptr_t)result_address - (uintptr_t)curr_block) : 0;
 
 	if (size > remaining_space) { // We need a new block!
-		int result_offset = DS_AlignUpPow2(sizeof(DS_ArenaBlockHeader), alignment);
-		int new_block_size = result_offset + size;
+		size_t result_offset = DS_AlignUpPow2(sizeof(DS_ArenaBlockHeader), alignment);
+		size_t new_block_size = result_offset + size;
 		if (arena->block_size > new_block_size) new_block_size = arena->block_size;
 
 		DS_ArenaBlockHeader* new_block = NULL;
@@ -1247,7 +1247,7 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
 		if (curr_block && curr_block->next) {
 			next_block = curr_block->next;
 
-			int next_block_remaining_space = next_block->size_including_header - result_offset;
+			size_t next_block_remaining_space = next_block->size_including_header - result_offset;
 			if (size <= next_block_remaining_space) {
 				new_block = next_block; // Next block has enough space, let's use it!
 			}

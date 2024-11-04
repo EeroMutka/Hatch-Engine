@@ -48,6 +48,11 @@ struct LoadedScene {
 	u32 num_indices;
 };
 
+struct Vertex {
+	vec3 position;
+	vec3 normal;
+};
+
 struct Shader {
 	u64 last_modtime;
 	ID3D12PipelineState* pipeline; // NULL if there's compile errors
@@ -138,6 +143,7 @@ static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_
 		if (vs_ok && ps_ok) {
 			D3D12_INPUT_ELEMENT_DESC input_elem_desc[] = {
 				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+				{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			};
 		
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
@@ -399,6 +405,8 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	const char* mesh_filepath_cstr = STR_ToC(TEMP, mesh_filepath);
 	
 	ufbx_load_opts opts = {0}; // Optional, pass NULL for defaults
+	opts.generate_missing_normals = true;
+	
 	ufbx_error error; // Optional, pass NULL if you don't care about errors
 	ufbx_scene* fbx_scene = ufbx_load_file(mesh_filepath_cstr, &opts, &error);
 	if (!fbx_scene) {
@@ -406,39 +414,55 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 		assert(0);
 	}
 	
-	DS_DynArray(vec3) vertices = {TEMP};
-	DS_DynArray(u32) indices = {TEMP};
-
-	// Let's just list all objects within the scene for example:
-	for (size_t i = 0; i < fbx_scene->nodes.count; i++) {
-		ufbx_node* node = fbx_scene->nodes.data[i];
+	Vertex* vertices = NULL;
+	u32 num_vertices = 0;
+	
+	u32* indices = NULL;
+	u32 num_indices = 0;
+	
+	for (size_t node_i = 0; node_i < fbx_scene->nodes.count; node_i++) {
+		ufbx_node* node = fbx_scene->nodes.data[node_i];
 		if (node->is_root) continue;
 		
-		// printf("Object: %s\n", node->name.data);
 		if (node->mesh) {
-			// load mesh!
+			// see docs at https://ufbx.github.io/elements/meshes/
 			ufbx_mesh* fbx_mesh = node->mesh;
 			
-			u32 triangulated_face[32*3];
-			assert(fbx_mesh->max_face_triangles < 32);
+			u32 num_triangles = (u32)fbx_mesh->num_triangles;
+			vertices = (Vertex*)DS_ArenaPush(TEMP, num_triangles * 3 * sizeof(Vertex));
 			
-			for (size_t face_i = 0; face_i < fbx_mesh->faces.count; face_i++) {
+			u32 num_tri_indices = (u32)fbx_mesh->max_face_triangles * 3;
+			u32* tri_indices = (u32*)DS_ArenaPush(TEMP, num_tri_indices * sizeof(u32));
+			
+			for (u32 face_i = 0; face_i < fbx_mesh->faces.count; face_i++) {
 				ufbx_face face = fbx_mesh->faces[face_i];
-				u32 num_triangles = ufbx_triangulate_face(triangulated_face, 32*3, fbx_mesh, face);
-				u32 num_tri_indices = num_triangles*3;
-				for (u32 index_i = 0; index_i < num_tri_indices; index_i++) {
-					u32 vertex_i = fbx_mesh->vertex_indices[triangulated_face[index_i]];
-					DS_ArrPush(&indices, vertex_i);
+				
+				u32 num_triangulated_tris = ufbx_triangulate_face(tri_indices, num_tri_indices, fbx_mesh, face);
+				
+				for (u32 i = 0; i < num_triangulated_tris*3; i++) {
+					u32 index = tri_indices[i];
+					
+					Vertex* v = &vertices[num_vertices++];
+					ufbx_vec3 position = ufbx_get_vertex_vec3(&fbx_mesh->vertex_position, index);
+					ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
+					v->position = {(float)position.x, (float)position.y, (float)position.z};
+					v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
+					// v->uv = ufbx_get_vertex_vec3(&fbx_mesh->vertex_uv, index);
 				}
 			}
 			
-			DS_ArrResizeUndef(&vertices, (int)fbx_mesh->vertices.count);
-			for (size_t vert_i = 0; vert_i < fbx_mesh->vertices.count; vert_i++) {
-				ufbx_vec3* fbx_vert = &fbx_mesh->vertices[vert_i];
-				vertices[vert_i] = {(float)fbx_vert->x, (float)fbx_vert->y, (float)fbx_vert->z};
-			}
+			assert(num_vertices == num_triangles * 3);
 			
-			// printf("-> mesh with %zu faces\n", mesh->faces.count);
+			// Generate index buffer
+			ufbx_vertex_stream streams[1] = {
+				{ vertices, num_vertices, sizeof(Vertex) },
+			};
+			num_indices = num_triangles * 3;
+			indices = (u32*)DS_ArenaPush(TEMP, num_indices * sizeof(u32));
+			
+			// This call will deduplicate vertices, modifying the arrays passed in `streams[]`,
+			// indices are written in `indices[]` and the number of unique vertices is returned.
+			num_vertices = (u32)ufbx_generate_indices(streams, 1, indices, num_indices, NULL, NULL);
 		}
 	}
 	
@@ -446,11 +470,11 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
-	scene->vbo = CreateGPUBuffer(&ctx, vertices.count * sizeof(vec3), vertices.data);
-	scene->num_vertices = vertices.count;
+	scene->vbo = CreateGPUBuffer(&ctx, num_vertices * sizeof(Vertex), vertices);
+	scene->num_vertices = num_vertices;
 	
-	scene->ibo = CreateGPUBuffer(&ctx, indices.count * sizeof(u32), indices.data);
-	scene->num_indices = indices.count;
+	scene->ibo = CreateGPUBuffer(&ctx, num_indices * sizeof(u32), indices);
+	scene->num_indices = num_indices;
 	
 	scene->is_loaded = true;
 	
@@ -518,7 +542,7 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	
 		D3D12_VERTEX_BUFFER_VIEW vbo_view;
 		vbo_view.BufferLocation = GLOBALS.current_scene.vbo->GetGPUVirtualAddress();
-		vbo_view.StrideInBytes = 3 * sizeof(float); // position
+		vbo_view.StrideInBytes = sizeof(Vertex);
 		vbo_view.SizeInBytes = GLOBALS.current_scene.num_vertices * vbo_view.StrideInBytes;
 		command_list->IASetVertexBuffers(0, 1, &vbo_view);
 		
