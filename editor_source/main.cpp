@@ -33,10 +33,10 @@ void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_
 		UILogTab(s, key, area_rect);
 	}
 	else if (tab == s->asset_viewer_tab_class) {
-		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
-		if (selected_asset) {
+		HT_AssetHandle selected_asset = (HT_AssetHandle)s->assets_tree_ui_state.selection;
+		if (AssetIsValid(&s->asset_tree, selected_asset)) {
 			HT_AssetViewerTabUpdate update = {};
-			update.data_asset = selected_asset->handle;
+			update.data_asset = selected_asset;
 			update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
 			update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
 			DS_ArrPush(&s->frame.queued_asset_viewer_tab_updates, update);

@@ -29,7 +29,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 	EditorState* s = (EditorState*)tree->user_data;
 
 	UI_Key key = node->key;
-	Asset* asset = (Asset*)node->key;
+	Asset* asset = GetAsset(&s->asset_tree, (HT_AssetHandle)node->key);
 
 	UIAddAssetIcon(UI_KBOX(key), asset, s->icons_font);
 
@@ -60,7 +60,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 
 static UI_DataTreeNode* AddAssetUITreeNode(UI_DataTreeNode* parent, Asset* asset) {
 	UI_DataTreeNode* node = DS_New(UI_DataTreeNode, UI_FrameArena());
-	node->key = (UI_Key)asset;
+	node->key = (UI_Key)asset->handle;
 	node->is_open_ptr = &asset->ui_state_is_open;
 	
 	if (parent) {
@@ -218,9 +218,8 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 		if (UI_IsHovered(box)) {
 			box->draw_args->border_color = ACTIVE_COLOR;
 
-			Asset* asset = (Asset*)s->assets_tree_ui_state.drag_n_dropping;
 			if (!UI_InputIsDown(UI_Input_MouseLeft)) {
-				*handle = asset->handle;
+				*handle = (HT_AssetHandle)s->assets_tree_ui_state.drag_n_dropping;
 			}
 		}
 	}
@@ -510,7 +509,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 	UIRegisterOrderedRoot(&s->dropdown_state, root_box);
 	UI_PushBox(root_box);
 
-	Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
+	Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
 	if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 		StructMemberNode root = {0};
 		root.base.key = UI_HashPtr(UI_KKEY(key), selected_asset);
@@ -666,7 +665,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	if (s->rmb_menu_open && s->rmb_menu_tab_class == s->assets_tab_class) {
 		UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
 
-		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
+		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
 		if (selected_asset) {
 			// for christmas MVP version, we can just do cut-n-paste for getting things into and outside of folders.
 			UI_Box* new_folder = UI_BOX();
@@ -775,7 +774,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		}
 	}
 	else if (s->rmb_menu_open && s->rmb_menu_tab_class == s->properties_tab_class) {
-		Asset* selected_asset = (Asset*)s->assets_tree_ui_state.selection;
+		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
 		if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 			UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
 
@@ -864,7 +863,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 
 	// update drag n drop state
 	if (s->assets_tree_ui_state.drag_n_dropping) {
-		Asset* asset = (Asset*)s->assets_tree_ui_state.drag_n_dropping;
+		Asset* asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.drag_n_dropping);
 
 		UI_Box* box = UI_BOX();
 		UI_InitRootBox(box, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_Horizontal|UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);

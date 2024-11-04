@@ -23,5 +23,5 @@ PSInput VSMain(float3 position : POSITION)
 
 float4 PSMain(PSInput input) : SV_TARGET
 {
-	return float4(frac(input.ws_pos*3.0), 1.);
+	return float4(frac(input.ws_pos*10), 1.);
 }

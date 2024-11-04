@@ -434,7 +434,6 @@ EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 
-
 // -- ht_plugin_compiler.cpp ------------------------------------------
 
 EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory);

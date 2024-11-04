@@ -40,7 +40,8 @@ struct Allocator {
 	HT_API* ht;
 };
 
-struct OpenScene {
+struct LoadedScene {
+	bool is_loaded;
 	ID3D12Resource* vbo;
 	ID3D12Resource* ibo;
 	u32 num_vertices;
@@ -53,16 +54,14 @@ struct Shader {
 };
 
 struct Globals {
-	HT_AssetHandle open_scene_asset;
-	OpenScene open_scene;
+	HT_AssetHandle current_scene_asset;
+	LoadedScene current_scene;
 	
 	ivec2 render_targets_size;
 	ID3D12Resource* color_rt;
 	ID3D12Resource* depth_rt;
 	
 	Camera camera;
-	
-	// DS_Arena open_scene_arena;
 	
 	ID3D12DescriptorHeap* rtv_heap; // render target view heap
 	ID3D12DescriptorHeap* srv_heap; // shader resource view heap
@@ -71,6 +70,7 @@ struct Globals {
 	
 	Shader main_pass_shader;
 	Shader present_shader;
+	
 	bool all_shaders_ok;
 };
 
@@ -91,22 +91,26 @@ struct ShaderParams {
 	bool enable_depth_test;
 };
 
-static bool MaybeHotreloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_asset, const ShaderParams* params) {
-	bool hotreload = false;
+static void UnloadShader(Shader* shader) {
+	if (shader->pipeline) {
+		shader->pipeline->Release();
+	}
+	shader->pipeline = NULL;
+}
+
+static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_asset, const ShaderParams* params) {
+	bool reload = false;
 	
 	u64 modtime = ht->AssetGetModtime(shader_asset);
 	assert(modtime != 0);
 
 	if (modtime != shader->last_modtime) {
-		hotreload = true;
+		reload = true;
 		shader->last_modtime = modtime;
 	}
 	
-	if (hotreload) {
-		if (shader->pipeline) {
-			shader->pipeline->Release();
-			shader->pipeline = NULL;
-		}
+	if (reload) {
+		UnloadShader(shader);
 		
 		ID3DBlob* vertex_shader;
 		ID3DBlob* pixel_shader;
@@ -191,9 +195,18 @@ static bool MaybeHotreloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shad
 	return shader->pipeline != NULL;
 }
 
+static void DestroyRenderTargetsIfPossible() {
+	if (GLOBALS.render_targets_size.x > 0) {
+		GLOBALS.color_rt->Release();
+		GLOBALS.depth_rt->Release();
+	}
+	GLOBALS.render_targets_size = {};
+}
+
 static void MaybeResizeRenderTargets(ID3D12Device* device, ivec2 new_size) {
 	if (new_size.x == GLOBALS.render_targets_size.x && new_size.y == GLOBALS.render_targets_size.y) return;
-	if (GLOBALS.depth_rt) TODO(); // destroy
+	DestroyRenderTargetsIfPossible();
+	
 	GLOBALS.render_targets_size = new_size;
 	
 	// Create color rendertarget
@@ -349,20 +362,16 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	GLOBALS.camera.pos = {0.f, -5.f, 0.f};
 }
 
-HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
-	GLOBALS.root_signature->Release();
-}
-
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	PBRRenderParams* params = HT_GetPluginData(PBRRenderParams, ht);
 	
 	ShaderParams main_pass_params{};
 	main_pass_params.enable_depth_test = true;
-	bool ok = MaybeHotreloadShader(ht, &GLOBALS.main_pass_shader, params->main_pass_shader, &main_pass_params);
+	bool ok = MaybeReloadShader(ht, &GLOBALS.main_pass_shader, params->main_pass_shader, &main_pass_params);
 	
 	ShaderParams present_params{};
 	present_params.enable_depth_test = false;
-	ok = ok && MaybeHotreloadShader(ht, &GLOBALS.present_shader, params->present_shader, &present_params);
+	ok = ok && MaybeReloadShader(ht, &GLOBALS.present_shader, params->present_shader, &present_params);
 	
 	GLOBALS.all_shaders_ok = ok;
 	
@@ -371,11 +380,19 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	}*/
 }
 
-static void LoadScene(HT_API* ht, HT_AssetHandle scene_asset) {
-	Scene* scene = HT_GetAssetData(Scene, ht, scene_asset);
-	assert(scene);
+static void UnloadSceneIfPossible(HT_API* ht, LoadedScene* scene) {
+	if (scene->is_loaded) {
+		scene->ibo->Release();
+		scene->vbo->Release();
+		*scene = {};
+	}
+}
+
+static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset) {
+	Scene* scene_info = HT_GetAssetData(Scene, ht, scene_asset);
+	assert(scene_info);
 	
-	Mesh* mesh = HT_GetAssetData(Mesh, ht, scene->first_mesh);
+	Mesh* mesh = HT_GetAssetData(Mesh, ht, scene_info->first_mesh);
 	assert(mesh);
 	
 	string mesh_filepath = ht->AssetGetFilepath(mesh->source_asset);
@@ -429,11 +446,13 @@ static void LoadScene(HT_API* ht, HT_AssetHandle scene_asset) {
 	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
-	GLOBALS.open_scene.vbo = CreateGPUBuffer(&ctx, vertices.count * sizeof(vec3), vertices.data);
-	GLOBALS.open_scene.num_vertices = vertices.count;
+	scene->vbo = CreateGPUBuffer(&ctx, vertices.count * sizeof(vec3), vertices.data);
+	scene->num_vertices = vertices.count;
 	
-	GLOBALS.open_scene.ibo = CreateGPUBuffer(&ctx, indices.count * sizeof(u32), indices.data);
-	GLOBALS.open_scene.num_indices = indices.count;
+	scene->ibo = CreateGPUBuffer(&ctx, indices.count * sizeof(u32), indices.data);
+	scene->num_indices = indices.count;
+	
+	scene->is_loaded = true;
 	
 	DestroyTempGPUCmdContext(&ctx);
 }
@@ -444,7 +463,8 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	DS_Arena temp_arena;
 	DS_ArenaInit(&temp_arena, 1024, temp_allocator);
 	TEMP = &temp_arena;
-	HT_AssetHandle open_scene_asset = NULL;
+	
+	HT_AssetHandle current_scene_asset = NULL;
 	
 	HT_AssetViewerTabUpdate updates[8];
 	int updates_count = 0;
@@ -452,19 +472,18 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	if (GLOBALS.all_shaders_ok) {
 		HT_AssetViewerTabUpdate update;
 		while (ht->PollNextAssetViewerTabUpdate(&update)) {
-			open_scene_asset = update.data_asset;
+			current_scene_asset = update.data_asset;
 			updates[updates_count++] = update;
 			assert(updates_count <= 8);
 		}
 	}
 	
-	if (open_scene_asset != GLOBALS.open_scene_asset) {
-		if (GLOBALS.open_scene_asset) {
-			TODO(); // unload the currently open scene
+	if (current_scene_asset != GLOBALS.current_scene_asset) {
+		UnloadSceneIfPossible(ht, &GLOBALS.current_scene);
+		if (current_scene_asset) {
+			LoadScene(ht, &GLOBALS.current_scene, current_scene_asset);
 		}
-		
-		LoadScene(ht, open_scene_asset);
-		GLOBALS.open_scene_asset = open_scene_asset;
+		GLOBALS.current_scene_asset = current_scene_asset;
 	}
 	
 	for (int i = 0; i < updates_count; i++) {
@@ -498,18 +517,18 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		command_list->SetGraphicsRoot32BitConstants(0, 16, &GLOBALS.camera.clip_from_world, 0);
 	
 		D3D12_VERTEX_BUFFER_VIEW vbo_view;
-		vbo_view.BufferLocation = GLOBALS.open_scene.vbo->GetGPUVirtualAddress();
+		vbo_view.BufferLocation = GLOBALS.current_scene.vbo->GetGPUVirtualAddress();
 		vbo_view.StrideInBytes = 3 * sizeof(float); // position
-		vbo_view.SizeInBytes = GLOBALS.open_scene.num_vertices * vbo_view.StrideInBytes;
+		vbo_view.SizeInBytes = GLOBALS.current_scene.num_vertices * vbo_view.StrideInBytes;
 		command_list->IASetVertexBuffers(0, 1, &vbo_view);
 		
 		D3D12_INDEX_BUFFER_VIEW ibo_view;
-		ibo_view.BufferLocation = GLOBALS.open_scene.ibo->GetGPUVirtualAddress();
-		ibo_view.SizeInBytes = GLOBALS.open_scene.num_indices * sizeof(u32);
+		ibo_view.BufferLocation = GLOBALS.current_scene.ibo->GetGPUVirtualAddress();
+		ibo_view.SizeInBytes = GLOBALS.current_scene.num_indices * sizeof(u32);
 		ibo_view.Format = DXGI_FORMAT_R32_UINT;
 		command_list->IASetIndexBuffer(&ibo_view);
 	
-		command_list->DrawIndexedInstanced(GLOBALS.open_scene.num_indices, 1, 0, 0, 0);
+		command_list->DrawIndexedInstanced(GLOBALS.current_scene.num_indices, 1, 0, 0, 0);
 		
 		// ---------------------
 		
@@ -545,4 +564,12 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	}
 	
 	TEMP = NULL;
+}
+
+HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
+	DestroyRenderTargetsIfPossible();
+	UnloadSceneIfPossible(ht, &GLOBALS.current_scene);
+	UnloadShader(&GLOBALS.main_pass_shader);
+	UnloadShader(&GLOBALS.present_shader);
+	GLOBALS.root_signature->Release();
 }
