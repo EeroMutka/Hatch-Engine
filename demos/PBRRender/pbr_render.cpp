@@ -29,6 +29,9 @@
 // for fbx loading
 #include "ufbx.h"
 
+// for dds texture loading
+#include "ddspp.h"
+
 #include "PBRRender.inc.ht"
 
 #define TODO() __debugbreak()
@@ -41,13 +44,21 @@ struct Allocator {
 };
 
 struct LoadedMeshPart {
+	u32 tex_id_base_color;
+	u32 tex_id_normal;
+	u32 tex_id_orm;
 	u32 index_count;
 	u32 base_index_location;
 	u32 base_vertex_location;
 };
 
+struct LoadedTexture {
+	ID3D12Resource* texture;
+};
+
 struct LoadedScene {
 	bool is_loaded;
+	DS_DynArray(LoadedTexture) textures;
 	DS_DynArray(LoadedMeshPart) mesh_parts;
 	ID3D12Resource* vbo;
 	ID3D12Resource* ibo;
@@ -58,6 +69,7 @@ struct LoadedScene {
 struct Vertex {
 	vec3 position;
 	vec3 normal;
+	vec2 uv;
 };
 
 struct Shader {
@@ -156,7 +168,8 @@ static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_
 		if (vs_ok && ps_ok) {
 			D3D12_INPUT_ELEMENT_DESC input_elem_desc[] = {
 				{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-				{ "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+				{   "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+				{       "UV", 0,    DXGI_FORMAT_R32G32_FLOAT, 0, 24, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
 			};
 		
 			D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = {};
@@ -321,9 +334,9 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 		
 		D3D12_STATIC_SAMPLER_DESC sampler = {};
 		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 		sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 		sampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
 		sampler.ShaderRegister = 0;
@@ -401,6 +414,10 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 
 static void UnloadSceneIfPossible(HT_API* ht, LoadedScene* scene) {
 	if (scene->is_loaded) {
+		for (int i = 0; i < scene->textures.count; i++) {
+			scene->textures[i].texture->Release();
+		}
+		DS_ArrDeinit(&scene->textures);
 		DS_ArrDeinit(&scene->mesh_parts);
 		scene->ibo->Release();
 		scene->vbo->Release();
@@ -408,7 +425,54 @@ static void UnloadSceneIfPossible(HT_API* ht, LoadedScene* scene) {
 	}
 }
 
+typedef DS_Map(ufbx_texture*, u32) TextureToIdMap;
+
+// returns 0 if no texture
+static u32 LoadTexture(HT_API* ht, TempGPUCmdContext* ctx, TextureToIdMap* texture_to_id, ufbx_texture* texture_or_null) {
+	if (texture_or_null) {
+		u32* id = NULL;
+		bool added_new = DS_MapGetOrAddPtr(texture_to_id, texture_or_null, &id);
+		if (added_new) {
+			DS_ArenaMark mark = DS_ArenaGetMark(TEMP);
+			
+			u8* tex_file_data;
+			long tex_file_size = 0;
+			{
+				FILE* f = fopen(texture_or_null->absolute_filename.data, "rb");
+				assert(f);
+
+				fseek(f, 0, SEEK_END);
+				tex_file_size = ftell(f);
+				fseek(f, 0, SEEK_SET);
+
+				tex_file_data = (u8*)DS_ArenaPush(TEMP, tex_file_size);
+				fread(tex_file_data, tex_file_size, 1, f);
+				fclose(f);
+			}
+			
+			DDSPP_Descriptor desc = {};
+			DDSPP_Result result = DDSPP_DecodeHeader(tex_file_data, &desc);
+			void* tex_data = tex_file_data + desc.headerSize + DDSPP_GetOffset(&desc, 0, 0);
+			
+			DXGI_FORMAT format;
+			if (desc.format == DDSPP_FORMAT_BC1_UNORM)           format = DXGI_FORMAT_BC1_UNORM;
+			else if (desc.format == DDSPP_FORMAT_BC3_UNORM)      format = DXGI_FORMAT_BC3_UNORM;
+			else if (desc.format == DDSPP_FORMAT_R8G8B8A8_UNORM) format = DXGI_FORMAT_R8G8B8A8_UNORM;
+			else if (desc.format == DDSPP_FORMAT_BC5_UNORM)      format = DXGI_FORMAT_BC5_UNORM;
+			else TODO();
+			
+			CreateGPUTexture(ctx, format, desc.width, desc.height, tex_data);
+			
+			DS_ArenaSetMark(TEMP, mark);
+		}
+		return *id;
+	}
+	return 0;
+}
+
 static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset) {
+	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
+	
 	Scene* scene_info = HT_GetAssetData(Scene, ht, scene_asset);
 	assert(scene_info);
 	
@@ -443,6 +507,8 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	u32 total_num_vertices = 0;
 	u32 total_num_indices = 0;
 	
+	TextureToIdMap texture_to_id = {TEMP};
+	
 	for (size_t node_i = 0; node_i < fbx_scene->nodes.count; node_i++) {
 		ufbx_node* node = fbx_scene->nodes.data[node_i];
 		if (node->is_root) continue;
@@ -456,6 +522,7 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 			
 			for (u32 part_i = 0; part_i < fbx_mesh->material_parts.count; part_i++) {
 				ufbx_mesh_part* part = &fbx_mesh->material_parts[part_i];
+				ufbx_material* material = fbx_mesh->materials[part_i];
 				
 				u32 num_triangles = (u32)part->num_triangles;
 				Vertex* vertices = (Vertex*)DS_ArenaPush(TEMP, num_triangles * 3 * sizeof(Vertex));
@@ -472,9 +539,10 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 						Vertex* v = &vertices[num_vertices++];
 						ufbx_vec3 position = ufbx_get_vertex_vec3(&fbx_mesh->vertex_position, index);
 						ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
+						ufbx_vec2 uv = ufbx_get_vertex_vec2(&fbx_mesh->vertex_uv, index);
 						v->position = {(float)position.x, (float)position.y, (float)position.z};
 						v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
-						// v->uv = ufbx_get_vertex_vec3(&fbx_mesh->vertex_uv, index);
+						v->uv = {(float)uv.x, (float)uv.y};
 					}
 				}
 				
@@ -501,6 +569,11 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 				loaded_part.base_index_location = total_num_indices;
 				loaded_part.base_vertex_location = total_num_vertices;
 				loaded_part.index_count = num_indices;
+				
+				loaded_part.tex_id_base_color = LoadTexture(ht, &ctx, &texture_to_id, material->pbr.base_color.texture);
+				if (loaded_part.tex_id_base_color) TODO();
+				// loaded_part.tex_id_normal = LoadTexture(ht, &texture_to_id, material->pbr.normal_map.texture);
+				
 				DS_ArrPush(&scene->mesh_parts, loaded_part);
 				
 				total_num_indices += num_indices;
@@ -510,8 +583,6 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	}
 	
 	ufbx_free_scene(fbx_scene);
-	
-	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
 	// Allocating a temporary "combined" array is unnecessary and required by the `initial_data` API for CreateGPUBuffer.
 	// If we instead mapped the buffer pointer, we could copy directly to it. But this is good enough for now.
