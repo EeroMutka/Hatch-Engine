@@ -1233,9 +1233,9 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment)
 	void* curr_ptr = arena->mark.ptr;
 
 	char* result_address = (char*)DS_AlignUpPow2((uintptr_t)curr_ptr, alignment);
-	size_t remaining_space = curr_block ? curr_block->size_including_header - (size_t)((uintptr_t)result_address - (uintptr_t)curr_block) : 0;
+	intptr_t remaining_space = curr_block ? (intptr_t)curr_block->size_including_header - ((intptr_t)result_address - (intptr_t)curr_block) : 0;
 
-	if (size > remaining_space) { // We need a new block!
+	if ((intptr_t)size > remaining_space) { // We need a new block!
 		size_t result_offset = DS_AlignUpPow2(sizeof(DS_ArenaBlockHeader), alignment);
 		size_t new_block_size = result_offset + size;
 		if (arena->block_size > new_block_size) new_block_size = arena->block_size;
@@ -1247,8 +1247,8 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment)
 		if (curr_block && curr_block->next) {
 			next_block = curr_block->next;
 
-			size_t next_block_remaining_space = next_block->size_including_header - result_offset;
-			if (size <= next_block_remaining_space) {
+			intptr_t next_block_remaining_space = (intptr_t)next_block->size_including_header - (intptr_t)result_offset;
+			if ((intptr_t)size <= next_block_remaining_space) {
 				new_block = next_block; // Next block has enough space, let's use it!
 			}
 		}
