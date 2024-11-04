@@ -188,6 +188,7 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 
 	Asset* plugin_data = GetAsset(&s->asset_tree, plugin_opts->data);
 	if (plugin_data) {
+		assert(plugin_data->kind == AssetKind_StructData);
 		assert(AssetIsValid(&s->asset_tree, plugin_data->struct_data.struct_type));
 		//Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
 	}

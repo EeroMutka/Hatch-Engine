@@ -650,12 +650,9 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 #endif
 
 	bool has_hovered_tab = s->frame.hovered_panel && s->frame.hovered_panel->tabs.count > 0;
-	//UI_Tab** hovered_tab = NULL;
-	//if () {
-	//hovered_tab = &s->frame.hovered_panel->tabs[s->frame.hovered_panel->active_tab];
-	//}
+	UI_Tab* hovered_tab = has_hovered_tab ? s->frame.hovered_panel->tabs[s->frame.hovered_panel->active_tab] : NULL;
 
-	if (has_hovered_tab && UI_InputWasPressed(UI_Input_MouseRight)) {
+	if (has_hovered_tab && hovered_tab == s->assets_tab_class && UI_InputWasPressed(UI_Input_MouseRight)) {
 		s->rmb_menu_pos = UI_STATE.mouse_pos;
 		s->rmb_menu_open = true;
 		s->rmb_menu_tab_class = s->assets_tab_class;
@@ -1062,6 +1059,13 @@ static HANDLE HT_D3DCreateEvent() { return CreateEventW(NULL, FALSE, FALSE, NULL
 static void HT_D3DDestroyEvent(HANDLE event) { CloseHandle(event); }
 static void HT_D3DWaitForEvent(HANDLE event) { WaitForSingleObjectEx(event, INFINITE, FALSE); }
 
+static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
+	EditorState* s = g_plugin_call_ctx->s;
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = s->render_state->rtv_heap->GetCPUDescriptorHandleForHeapStart();
+	rtv_handle.ptr += s->render_state->frame_index * s->render_state->rtv_descriptor_size;
+	return rtv_handle;
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
@@ -1080,6 +1084,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
 	api.D3D_queue = s->render_state->command_queue;
+	api.D3DGetHatchRenderTargetView = HT_D3DGetHatchRenderTargetView;
 	api.D3DCreateEvent = HT_D3DCreateEvent;
 	api.D3DDestroyEvent = HT_D3DDestroyEvent;
 	api.D3DWaitForEvent = HT_D3DWaitForEvent;
@@ -1089,6 +1094,7 @@ EXPORT void InitAPI(EditorState* s) {
 	*(void**)&api.AssetGetFilepath = HT_AssetGetFilepath;
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;
 	api.DestroyTabClass = HT_DestroyTabClass;
+	api.input_frame = &s->input_frame;
 	s->api = &api;
 }
 

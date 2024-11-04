@@ -1,4 +1,4 @@
-data_asset: "pbr_render_params"
+data_asset: "PBRRenderParamsData"
 source_files: {
 	"ufbx.c"
 	"pbr_render.cpp"

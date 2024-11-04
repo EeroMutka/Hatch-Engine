@@ -133,17 +133,191 @@ typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 
 typedef struct HT_AssetViewerTabUpdate {
 	HT_AssetHandle data_asset;
-	vec2 rect_min;
-	vec2 rect_max;
+	ivec2 rect_min;
+	ivec2 rect_max;
 } HT_AssetViewerTabUpdate;
 
 typedef struct HT_TabClass HT_TabClass;
 
 typedef struct HT_CustomTabUpdate {
 	HT_TabClass* tab_class;
-	vec2 rect_min;
-	vec2 rect_max;
+	ivec2 rect_min;
+	ivec2 rect_max;
 } HT_CustomTabUpdate;
+
+typedef enum HT_InputKey {
+	HT_InputKey_Invalid = 0,
+
+	HT_InputKey_Space = 32,
+	HT_InputKey_Apostrophe = 39,   /* ' */
+	HT_InputKey_Comma = 44,        /* , */
+	HT_InputKey_Minus = 45,        /* - */
+	HT_InputKey_Period = 46,       /* . */
+	HT_InputKey_Slash = 47,        /* / */
+
+	HT_InputKey_0 = 48,
+	HT_InputKey_1 = 49,
+	HT_InputKey_2 = 50,
+	HT_InputKey_3 = 51,
+	HT_InputKey_4 = 52,
+	HT_InputKey_5 = 53,
+	HT_InputKey_6 = 54,
+	HT_InputKey_7 = 55,
+	HT_InputKey_8 = 56,
+	HT_InputKey_9 = 57,
+
+	HT_InputKey_Semicolon = 59,    /* ; */
+	HT_InputKey_Equal = 61,        /* = */
+	HT_InputKey_LeftBracket = 91,  /* [ */
+	HT_InputKey_Backslash = 92,    /* \ */
+	HT_InputKey_RightBracket = 93, /* ] */
+	HT_InputKey_GraveAccent = 96,  /* ` */
+
+	HT_InputKey_A = 65,
+	HT_InputKey_B = 66,
+	HT_InputKey_C = 67,
+	HT_InputKey_D = 68,
+	HT_InputKey_E = 69,
+	HT_InputKey_F = 70,
+	HT_InputKey_G = 71,
+	HT_InputKey_H = 72,
+	HT_InputKey_I = 73,
+	HT_InputKey_J = 74,
+	HT_InputKey_K = 75,
+	HT_InputKey_L = 76,
+	HT_InputKey_M = 77,
+	HT_InputKey_N = 78,
+	HT_InputKey_O = 79,
+	HT_InputKey_P = 80,
+	HT_InputKey_Q = 81,
+	HT_InputKey_R = 82,
+	HT_InputKey_S = 83,
+	HT_InputKey_T = 84,
+	HT_InputKey_U = 85,
+	HT_InputKey_V = 86,
+	HT_InputKey_W = 87,
+	HT_InputKey_X = 88,
+	HT_InputKey_Y = 89,
+	HT_InputKey_Z = 90,
+
+	HT_InputKey_Escape = 256,
+	HT_InputKey_Enter = 257,
+	HT_InputKey_Tab = 258,
+	HT_InputKey_Backspace = 259,
+	HT_InputKey_Insert = 260,
+	HT_InputKey_Delete = 261,
+	HT_InputKey_Right = 262,
+	HT_InputKey_Left = 263,
+	HT_InputKey_Down = 264,
+	HT_InputKey_Up = 265,
+	HT_InputKey_PageUp = 266,
+	HT_InputKey_PageDown = 267,
+	HT_InputKey_Home = 268,
+	HT_InputKey_End = 269,
+	HT_InputKey_CapsLock = 280,
+	HT_InputKey_ScrollLock = 281,
+	HT_InputKey_NumLock = 282,
+	HT_InputKey_PrintScreen = 283,
+	HT_InputKey_Pause = 284,
+
+	HT_InputKey_F1 = 290,
+	HT_InputKey_F2 = 291,
+	HT_InputKey_F3 = 292,
+	HT_InputKey_F4 = 293,
+	HT_InputKey_F5 = 294,
+	HT_InputKey_F6 = 295,
+	HT_InputKey_F7 = 296,
+	HT_InputKey_F8 = 297,
+	HT_InputKey_F9 = 298,
+	HT_InputKey_F10 = 299,
+	HT_InputKey_F11 = 300,
+	HT_InputKey_F12 = 301,
+	HT_InputKey_F13 = 302,
+	HT_InputKey_F14 = 303,
+	HT_InputKey_F15 = 304,
+	HT_InputKey_F16 = 305,
+	HT_InputKey_F17 = 306,
+	HT_InputKey_F18 = 307,
+	HT_InputKey_F19 = 308,
+	HT_InputKey_F20 = 309,
+	HT_InputKey_F21 = 310,
+	HT_InputKey_F22 = 311,
+	HT_InputKey_F23 = 312,
+	HT_InputKey_F24 = 313,
+	HT_InputKey_F25 = 314,
+
+	HT_InputKey_KP_0 = 320,
+	HT_InputKey_KP_1 = 321,
+	HT_InputKey_KP_2 = 322,
+	HT_InputKey_KP_3 = 323,
+	HT_InputKey_KP_4 = 324,
+	HT_InputKey_KP_5 = 325,
+	HT_InputKey_KP_6 = 326,
+	HT_InputKey_KP_7 = 327,
+	HT_InputKey_KP_8 = 328,
+	HT_InputKey_KP_9 = 329,
+
+	HT_InputKey_KP_Decimal = 330,
+	HT_InputKey_KP_Divide = 331,
+	HT_InputKey_KP_Multiply = 332,
+	HT_InputKey_KP_Subtract = 333,
+	HT_InputKey_KP_Add = 334,
+	HT_InputKey_KP_Enter = 335,
+	HT_InputKey_KP_Equal = 336,
+
+	HT_InputKey_LeftShift = 340,
+	HT_InputKey_LeftControl = 341,
+	HT_InputKey_LeftAlt = 342,
+	HT_InputKey_LeftSuper = 343,
+	HT_InputKey_RightShift = 344,
+	HT_InputKey_RightControl = 345,
+	HT_InputKey_RightAlt = 346,
+	HT_InputKey_RightSuper = 347,
+	HT_InputKey_Menu = 348,
+
+	// Events for these four modifier keys shouldn't be generated, nor should they be used in the `key_is_down` table.
+	// They're purely for convenience when calling the HT_InputIsDown/WentDown/WentDownOrRepeat/WentUp functions.
+	HT_InputKey_Shift = 349,
+	HT_InputKey_Control = 350,
+	HT_InputKey_Alt = 351,
+	HT_InputKey_Super = 352,
+
+	HT_InputKey_MouseLeft = 353,
+	HT_InputKey_MouseRight = 354,
+	HT_InputKey_MouseMiddle = 355,
+	HT_InputKey_Mouse_4 = 356,
+	HT_InputKey_Mouse_5 = 357,
+	HT_InputKey_Mouse_6 = 358,
+	HT_InputKey_Mouse_7 = 359,
+	HT_InputKey_Mouse_8 = 360,
+
+	HT_InputKey_COUNT,
+} HT_InputKey;
+
+typedef uint8_t HT_InputEventKind;
+enum {
+	HT_InputEventKind_Press,
+	HT_InputEventKind_Repeat,
+	HT_InputEventKind_Release,
+	HT_InputEventKind_TextCharacter,
+};
+
+typedef struct HT_InputEvent {
+	HT_InputEventKind kind;
+	uint8_t mouse_click_index; // 0 for regular click, 1 for double-click, 2 for triple-click
+	union {
+		HT_InputKey key; // for Press, Repeat, Release events
+		u32 text_character; // unicode character for TextCharacter event
+	};
+} HT_InputEvent;
+
+typedef struct HT_InputFrame {
+	HT_InputEvent* events;
+	int events_count;
+	bool key_is_down[HT_InputKey_COUNT]; // This is the key down state after the events for this frame have been applied
+	float mouse_wheel_input[2]; // +1.0 means the wheel was rotated forward by one detent (scroll step)
+	float raw_mouse_input[2];
+} HT_InputFrame;
 
 // Helpers
 // #define HT_GetPluginData(TYPE, HT) (TYPE*)HT->GetPluginData(HT->type_table->TYPE)
@@ -178,7 +352,7 @@ struct HT_API {
 	
 	// -- Data model ----------------------------------
 	
-	HT_GeneratedTypeTable* type_table;
+	const HT_GeneratedTypeTable* type_table;
 	
 	// Returns NULL if data asset is invalid or of different type than `type_id`
 	void* (*GetPluginData)(/*HT_AssetHandle type_id*/);
@@ -218,6 +392,10 @@ struct HT_API {
 	void (*DeregisterAssetViewerForType)(HT_AssetHandle struct_type_asset);
 	bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
 	
+	// -- Input --------------------------------------
+	
+	const HT_InputFrame* input_frame;
+	
 	// -- UI -----------------------------------------
 	
 	HT_TabClass* (*CreateTabClass)(string name);
@@ -255,6 +433,8 @@ struct HT_API {
 	
 	HRESULT (*D3D12SerializeRootSignature)(const D3D12_ROOT_SIGNATURE_DESC* pRootSignature,
 		D3D_ROOT_SIGNATURE_VERSION Version, ID3DBlob** ppBlob, ID3DBlob** ppErrorBlob);
+	
+	D3D12_CPU_DESCRIPTOR_HANDLE (*D3DGetHatchRenderTargetView)();
 	
 	HANDLE (*D3DCreateEvent)(); // Equivelent to `CreateEventW(NULL, FALSE, FALSE, NULL)`
 	void (*D3DDestroyEvent)(HANDLE event); // Equivelent to `CloseHandle(event)`

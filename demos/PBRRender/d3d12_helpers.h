@@ -1,3 +1,5 @@
+// This file is part of the Hatch codebase, written by Eero Mutka.
+// For educational purposes only.
 
 #include <stdint.h>
 #include <assert.h>

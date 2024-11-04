@@ -3,10 +3,11 @@
 
 #include <hatch_api.h>
 
-typedef struct pbr_render_params_type {
+typedef struct PBRRenderParams {
 	HT_AssetHandle scene_type;
 	HT_AssetHandle main_pass_shader;
-} pbr_render_params_type;
+	HT_AssetHandle present_shader;
+} PBRRenderParams;
 typedef struct Mesh {
 	HT_AssetHandle source_asset;
 } Mesh;

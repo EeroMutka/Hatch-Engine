@@ -366,6 +366,8 @@ struct EditorState {
 	ivec2 window_size = {1280, 720};
 	OS_WINDOW window;
 
+	HT_InputFrame input_frame;
+	
 	UI_Inputs ui_inputs;
 	UI_Font default_font;
 	UI_Font icons_font;
