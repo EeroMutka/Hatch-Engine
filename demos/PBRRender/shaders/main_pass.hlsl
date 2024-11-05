@@ -19,6 +19,8 @@ PSInput VSMain(float3 position : POSITION, float3 normal : NORMAL, float2 uv : U
 	output.pos = mul(projection_matrix, float4(position, 1.0));
 	output.ws_pos = position;
 	output.normal = normal;
+	
+	uv.y = 1.-uv.y;
 	output.uv = uv;
 	return output;
 }
@@ -34,6 +36,6 @@ Texture2D tex_occlusion_roughness_metallic : register(t2);
 float4 PSMain(PSInput input) : SV_TARGET
 {
 	// return float4(normalize(input.normal)*0.5 + 0.5, 1.);
-	// return float4(frac(input.uv*10.0), 0, 1.);
+	// return float4(frac(input.uv), 0, 1.);
 	return tex_base_color.Sample(sampler0, input.uv);
 }

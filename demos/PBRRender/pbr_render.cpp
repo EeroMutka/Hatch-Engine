@@ -44,9 +44,7 @@ struct Allocator {
 };
 
 struct LoadedMeshPart {
-	u32 tex_id_base_color;
-	u32 tex_id_normal;
-	u32 tex_id_orm;
+	u32 desc_set_offset;
 	u32 index_count;
 	u32 base_index_location;
 	u32 base_vertex_location;
@@ -77,7 +75,12 @@ struct Shader {
 	ID3D12PipelineState* pipeline; // NULL if there's compile errors
 };
 
+#define MAX_DESCRIPTOR_SET_COUNT 2048
+#define NUM_DESCRIPTORS_PER_SET 8
+
 struct Globals {
+	u32 srv_descriptor_size; // constant
+	
 	HT_AssetHandle current_scene_asset;
 	LoadedScene current_scene;
 	
@@ -87,10 +90,14 @@ struct Globals {
 	
 	Camera camera;
 	
-	ID3D12DescriptorHeap* rtv_heap; // render target view heap
 	ID3D12DescriptorHeap* srv_heap; // shader resource view heap
+	u32 srv_heap_cursor;
+	
+	ID3D12DescriptorHeap* rtv_heap; // render target view heap
 	ID3D12DescriptorHeap* dsv_heap; // depth-stencil view descriptor heap
 	ID3D12RootSignature* root_signature;
+	
+	u32 present_desc_set_offset;
 	
 	Shader main_pass_shader;
 	Shader present_shader;
@@ -105,6 +112,14 @@ static DS_Allocator* HEAP;
 static DS_Arena* TEMP;
 
 // -----------------------------------------------------
+
+static void ResetDescriptorSets(HT_API* ht) {
+	GLOBALS.srv_heap_cursor = 0;
+	
+	// Reserve space for the present descriptor set
+	GLOBALS.present_desc_set_offset = 0;
+	GLOBALS.srv_heap_cursor += GLOBALS.srv_descriptor_size * NUM_DESCRIPTORS_PER_SET;
+}
 
 static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
@@ -302,6 +317,10 @@ static void MaybeResizeRenderTargets(ID3D12Device* device, ivec2 new_size) {
 		device->CreateDepthStencilView(GLOBALS.depth_rt, &dsv_desc, GLOBALS.dsv_heap->GetCPUDescriptorHandleForHeapStart());*/
 		device->CreateDepthStencilView(GLOBALS.depth_rt, NULL, GLOBALS.dsv_heap->GetCPUDescriptorHandleForHeapStart());
 	}
+	
+	D3D12_CPU_DESCRIPTOR_HANDLE desc_set = GLOBALS.srv_heap->GetCPUDescriptorHandleForHeapStart();
+	desc_set.ptr += GLOBALS.present_desc_set_offset;
+	device->CreateShaderResourceView(GLOBALS.color_rt, NULL, desc_set);
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
@@ -310,6 +329,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 
 	bool ok = ht->RegisterAssetViewerForType(params->scene_type);
 	assert(ok);
+	
+	GLOBALS.srv_descriptor_size = ht->D3D_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	
 	// Create root signature
 	{
@@ -372,7 +393,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	// Create a shader resource view heap
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC srv_heap_desc = {};
-		srv_heap_desc.NumDescriptors = 1;
+		srv_heap_desc.NumDescriptors = NUM_DESCRIPTORS_PER_SET * MAX_DESCRIPTOR_SET_COUNT;
 		srv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		srv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		ok = ht->D3D_device->CreateDescriptorHeap(&srv_heap_desc, IID_PPV_ARGS(&GLOBALS.srv_heap)) == S_OK;
@@ -427,18 +448,18 @@ static void UnloadSceneIfPossible(HT_API* ht, LoadedScene* scene) {
 
 typedef DS_Map(ufbx_texture*, u32) TextureToIdMap;
 
-// returns 0 if no texture
-static u32 LoadTexture(HT_API* ht, TempGPUCmdContext* ctx, TextureToIdMap* texture_to_id, ufbx_texture* texture_or_null) {
-	if (texture_or_null) {
+// returns NULL if no texture
+static ID3D12Resource* LoadTexture(HT_API* ht, TempGPUCmdContext* ctx, LoadedScene* scene, TextureToIdMap* texture_to_id, ufbx_texture* fbx_texture_or_null) {
+	if (fbx_texture_or_null) {
 		u32* id = NULL;
-		bool added_new = DS_MapGetOrAddPtr(texture_to_id, texture_or_null, &id);
+		bool added_new = DS_MapGetOrAddPtr(texture_to_id, fbx_texture_or_null, &id);
 		if (added_new) {
 			DS_ArenaMark mark = DS_ArenaGetMark(TEMP);
 			
 			u8* tex_file_data;
 			long tex_file_size = 0;
 			{
-				FILE* f = fopen(texture_or_null->absolute_filename.data, "rb");
+				FILE* f = fopen(fbx_texture_or_null->absolute_filename.data, "rb");
 				assert(f);
 
 				fseek(f, 0, SEEK_END);
@@ -461,16 +482,21 @@ static u32 LoadTexture(HT_API* ht, TempGPUCmdContext* ctx, TextureToIdMap* textu
 			else if (desc.format == DDSPP_FORMAT_BC5_UNORM)      format = DXGI_FORMAT_BC5_UNORM;
 			else TODO();
 			
-			CreateGPUTexture(ctx, format, desc.width, desc.height, tex_data);
+			ID3D12Resource* texture = CreateGPUTexture(ctx, format, desc.width, desc.height, tex_data);
+			
+			*id = scene->textures.count;
+			DS_ArrPush(&scene->textures, LoadedTexture{texture});
 			
 			DS_ArenaSetMark(TEMP, mark);
 		}
-		return *id;
+		return scene->textures[*id].texture;
 	}
-	return 0;
+	return NULL;
 }
 
 static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset) {
+	ResetDescriptorSets(ht);
+	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
 	
 	Scene* scene_info = HT_GetAssetData(Scene, ht, scene_asset);
@@ -493,6 +519,7 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 	}
 	
 	DS_ArrInit(&scene->mesh_parts, HEAP);
+	DS_ArrInit(&scene->textures, HEAP);
 	
 	struct TempPart {
 		Vertex* vertices;
@@ -570,9 +597,21 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 				loaded_part.base_vertex_location = total_num_vertices;
 				loaded_part.index_count = num_indices;
 				
-				loaded_part.tex_id_base_color = LoadTexture(ht, &ctx, &texture_to_id, material->pbr.base_color.texture);
-				if (loaded_part.tex_id_base_color) TODO();
+				ID3D12Resource* tex_base_color = LoadTexture(ht, &ctx, scene, &texture_to_id, material->pbr.base_color.texture);
+				assert(tex_base_color != NULL);
 				// loaded_part.tex_id_normal = LoadTexture(ht, &texture_to_id, material->pbr.normal_map.texture);
+				
+				// Allocate a descriptor set for this mesh part.
+				{
+					D3D12_CPU_DESCRIPTOR_HANDLE handle = GLOBALS.srv_heap->GetCPUDescriptorHandleForHeapStart();
+					handle.ptr += GLOBALS.srv_heap_cursor;
+					loaded_part.desc_set_offset = GLOBALS.srv_heap_cursor;
+					
+					GLOBALS.srv_heap_cursor += GLOBALS.srv_descriptor_size * NUM_DESCRIPTORS_PER_SET;
+					
+					ht->D3D_device->CreateShaderResourceView(tex_base_color, NULL, handle);
+					handle.ptr += GLOBALS.srv_descriptor_size;
+				}
 				
 				DS_ArrPush(&scene->mesh_parts, loaded_part);
 				
@@ -645,7 +684,9 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		
 		command_list->SetGraphicsRootSignature(GLOBALS.root_signature);
 		command_list->SetDescriptorHeaps(1, &GLOBALS.srv_heap);
-
+		
+		D3D12_GPU_DESCRIPTOR_HANDLE srv_heap_gpu_start = GLOBALS.srv_heap->GetGPUDescriptorHandleForHeapStart();
+		
 		// --- draw offscreen ---
 		
 		float aspect_ratio = (float)viewport_size.x / (float)viewport_size.y;
@@ -682,6 +723,11 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	
 		for (int i = 0; i < GLOBALS.current_scene.mesh_parts.count; i++) {
 			LoadedMeshPart part = GLOBALS.current_scene.mesh_parts[i];
+			
+			D3D12_GPU_DESCRIPTOR_HANDLE desc_set = srv_heap_gpu_start;
+			desc_set.ptr += part.desc_set_offset;
+			command_list->SetGraphicsRootDescriptorTable(1, desc_set);
+			
 			command_list->DrawIndexedInstanced(part.index_count, 1, part.base_index_location, part.base_vertex_location, 0);
 		}
 		
@@ -692,11 +738,9 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 		
 		// --- draw to hatch ---
 		
-		// update shader resources
-		ht->D3D_device->CreateShaderResourceView(GLOBALS.color_rt, NULL, GLOBALS.srv_heap->GetCPUDescriptorHandleForHeapStart());
-		
-		D3D12_GPU_DESCRIPTOR_HANDLE descriptor_table = GLOBALS.srv_heap->GetGPUDescriptorHandleForHeapStart();
-		command_list->SetGraphicsRootDescriptorTable(1, descriptor_table);
+		D3D12_GPU_DESCRIPTOR_HANDLE present_desc_set = srv_heap_gpu_start;
+		present_desc_set.ptr += GLOBALS.present_desc_set_offset;
+		command_list->SetGraphicsRootDescriptorTable(1, present_desc_set);
 		
 		D3D12_VIEWPORT present_viewport = {};
 		present_viewport.TopLeftX = (float)update.rect_min.x;
