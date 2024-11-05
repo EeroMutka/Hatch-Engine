@@ -94,6 +94,12 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		
 		UI_Rect content_rect = area_rect;
 		content_rect.min.y += tab_area_height;
+		
+		// Apply a bit of inner padding, because of the panel border
+		content_rect = {
+			{content_rect.min.x + 2.f, content_rect.min.y + 0.f},
+			{content_rect.max.x - 2.f, content_rect.max.y - 2.f},
+		};
 
 		UI_Vec2 panel_size = UI_RectSize(area_rect);
 

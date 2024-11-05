@@ -171,6 +171,9 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 	UI_InitRootBox(root, content_rect_size.x, content_rect_size.y, 0);
 	UIRegisterOrderedRoot(&s->dropdown_state, root);
 	UI_PushBox(root);
+	
+	UI_Box* scroll_area = UI_BBOX(root);
+	UI_PushScrollArea(scroll_area, UI_SizeFlex(1.f), UI_SizeFlex(1.f), 0, 0, 0);
 
 	UI_DataTree assets_tree = {0};
 	assets_tree.allow_selection = true;
@@ -183,6 +186,8 @@ EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect)
 	
 	UI_AddDataTree(UI_BBOX(root), UI_SizeFlex(1.f), UI_SizeFit(), &assets_tree, &s->assets_tree_ui_state);
 
+	UI_PopScrollArea(scroll_area);
+	
 	UI_PopBox(root);
 	UI_BoxComputeRects(root, content_rect.min);
 	UI_DrawBox(root);

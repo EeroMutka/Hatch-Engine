@@ -126,6 +126,7 @@ static void UI_DataTreeDraw(UI_Box* box) {
 	UI_BoxGetVar(box, UI_DataTreeSplittersKey(), &splitters);
 	UI_DataTreeDrawData draw_data;
 	UI_BoxGetVar(box, UI_DataTreeDrawDataKey(), &draw_data);
+	
 
 	int row_i = 0;
 	UI_Box* child = box->first_child;
@@ -140,32 +141,37 @@ static void UI_DataTreeDraw(UI_Box* box) {
 		UI_DataTreeRowDrawData row_draw_data;
 		UI_BoxGetVar(child, UI_DataTreeRowDrawDataKey(), &row_draw_data); // store node state / draw data per row in the first box of each row
 		
-		UI_Rect row_rect = {child->computed_rect.min, {box->computed_rect.max.x, child->computed_rect.min.y + row_h}};
-		row_rect.min.x = box->computed_rect.min.x;
+		UI_Rect row_rect = {
+			{box->computed_rect.min.x, child->computed_position.y},
+			{box->computed_rect.max.x, child->computed_position.y + row_h}
+		};
 
-		if ((row_i & 1) == 0) {
-			UI_DrawRect(row_rect, UI_COLOR{255, 255, 255, 20});
-		}
+		bool fully_clipped = UI_ClipRect(&row_rect, &box->computed_rect);
+		if (!fully_clipped) {
+			if ((row_i & 1) == 0) {
+				UI_DrawRect(row_rect, UI_COLOR{255, 255, 255, 20});
+			}
 
-		if (draw_data.highlight_row_idx == row_i) {
-			UI_DrawRectRounded(row_rect, 2.f, UI_COLOR{ 250, 200, 85, 50 }, 5);
-			UI_DrawRectLinesRounded(row_rect, 2.f, 2.f, UI_COLOR{ 250, 200, 85, 220 });
-		}
-		else if (draw_data.half_highlight_row_idx == row_i) {
-			UI_DrawRectRounded(row_rect, 2.f, UI_COLOR{0, 0, 0, 210}, 5);
-			UI_DrawRectLinesRounded(row_rect, 2.f, 2.f, UI_COLOR{0, 0, 0, 255});
-		}
+			if (draw_data.highlight_row_idx == row_i) {
+				UI_DrawRectRounded(row_rect, 2.f, UI_COLOR{ 250, 200, 85, 50 }, 5);
+				UI_DrawRectLinesRounded(row_rect, 2.f, 2.f, UI_COLOR{ 250, 200, 85, 220 });
+			}
+			else if (draw_data.half_highlight_row_idx == row_i) {
+				UI_DrawRectRounded(row_rect, 2.f, UI_COLOR{0, 0, 0, 210}, 5);
+				UI_DrawRectLinesRounded(row_rect, 2.f, 2.f, UI_COLOR{0, 0, 0, 255});
+			}
 
-		// draw arrow
-		// TODO: I think we should do the arrows as button boxes.
-		if (row_draw_data.has_arrow) {
-			// TODO: better handling of how data is passed around, especially the icons and icons_font.
-			UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), row_draw_data.icons_font,
-				UI_VEC2{
-					child->computed_rect.min.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
-					child->computed_rect.min.y + UI_DEFAULT_TEXT_PADDING.y
-				},
-				UI_AlignH_Left, UI_WHITE, NULL);
+			// draw arrow
+			// TODO: I think we should do the arrows as button boxes.
+			if (row_draw_data.has_arrow) {
+				// TODO: better handling of how data is passed around, especially the icons and icons_font.
+				UI_DrawText(row_draw_data.arrow_is_open ? STR_V("\x44") : STR_V("\x46"), row_draw_data.icons_font,
+					UI_VEC2{
+						child->computed_position.x - ARROW_AREA_WIDTH + UI_DEFAULT_TEXT_PADDING.x,
+						child->computed_position.y + UI_DEFAULT_TEXT_PADDING.y
+					},
+					UI_AlignH_Left, UI_WHITE, &box->computed_rect);
+			}
 		}
 		
 		child = iter;

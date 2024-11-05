@@ -116,7 +116,7 @@ static void UI_DrawTextRangeHighlight(UI_Mark min, UI_Mark max, UI_Vec2 text_ori
 		rect.max.y += font.size;
 		
 		UI_Rect _uv_rect;
-		if (!UI_ClipRect(&rect, &_uv_rect, scissor)) {
+		if (!UI_ClipRectEx(&rect, &_uv_rect, scissor)) {
 			UI_DrawRect(rect, color);
 		}
 	}
@@ -832,8 +832,13 @@ UI_API void UI_PopScrollArea(UI_Box* box) {
 	UI_ProfExit();
 }
 
+UI_API bool UI_ClipRect(UI_Rect* rect, const UI_Rect* scissor) {
+	UI_Rect _;
+	return UI_ClipRectEx(rect, &_, scissor);
+}
+
 // returns "true" if the rect is fully clipped, "false" if there is still some area left
-UI_API bool UI_ClipRect(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor) {
+UI_API bool UI_ClipRectEx(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor) {
 	UI_ProfEnter();
 	bool fully_clipped =
 		rect->max.x < scissor->min.x ||
@@ -1831,7 +1836,7 @@ UI_API void UI_DrawConvexPolygon(const UI_Vec2* points, int points_count, UI_Col
 
 UI_API void UI_DrawSprite(UI_Rect rect, UI_Color color, UI_Rect uv_rect, UI_Texture* texture, UI_ScissorRect scissor) {
 	UI_ProfEnter();
-	if (scissor == NULL || !UI_ClipRect(&rect, &uv_rect, scissor)) {
+	if (scissor == NULL || !UI_ClipRectEx(&rect, &uv_rect, scissor)) {
 		UI_DrawVertex vertices[4] = {
 			{ {rect.min.x, rect.min.y}, uv_rect.min,                    color },
 			{ {rect.max.x, rect.min.y}, {uv_rect.max.x, uv_rect.min.y}, color },

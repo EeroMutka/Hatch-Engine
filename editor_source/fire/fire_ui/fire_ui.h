@@ -455,7 +455,6 @@ static inline float UI_Lerp(float a, float b, float t)          { return (1.f - 
 static inline UI_Vec2 UI_LerpV2(UI_Vec2 a, UI_Vec2 b, float t)  { return UI_VEC2{ (1.f - t) * a.x + t * b.x, (1.f - t) * a.y + t * b.y }; }
 
 static inline bool UI_PointIsInRect(UI_Rect rect, UI_Vec2 p)    { return p.x >= rect.min.x && p.y >= rect.min.y && p.x <= rect.max.x && p.y <= rect.max.y; }
-static inline UI_Rect UI_RectIntersection(UI_Rect a, UI_Rect b) { return UI_RECT{ {UI_Max(a.min.x, b.min.x), UI_Max(a.min.y, b.min.y)}, {UI_Min(a.max.x, b.max.x), UI_Min(a.max.y, b.max.y)} }; }
 static inline UI_Vec2 UI_RectSize(UI_Rect rect)                 { return UI_VEC2 { rect.max.x - rect.min.x, rect.max.y - rect.min.y }; }
 
 UI_API UI_Key UI_HashKey(UI_Key a, UI_Key b);
@@ -584,7 +583,9 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font);
 
 // -- Drawing ----------------------
 
-UI_API bool UI_ClipRect(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
+// returns "true" if the rect is fully clipped, "false" if there is still some area left
+UI_API bool UI_ClipRect(UI_Rect* rect, const UI_Rect* scissor);
+UI_API bool UI_ClipRectEx(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
 
 UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count); // Returns the index of the first new vertex
 UI_API UI_DrawVertex* UI_AddVerticesUnsafe(int count, uint32_t* out_first_vertex); // WARNING: Returned pointer may be invalid on the next call to UI_AddVerticesUnsafe
