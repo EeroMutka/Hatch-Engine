@@ -6,19 +6,16 @@
 // This code is released under the MIT license (https://opensource.org/licenses/MIT).
 // 
 
-#ifndef BUILD_INCLUDED
-#define BUILD_INCLUDED
+#ifndef FIRE_BUILD_INCLUDED
+#define FIRE_BUILD_INCLUDED
 
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #ifndef BUILD_API
-#define BUILD_API
-#endif
-
-#ifndef FIRE_BUILD_NO_IMPLEMENTATION
 #define FIRE_BUILD_IMPLEMENTATION
+#define BUILD_API static
 #endif
 
 typedef enum BUILD_Target {
@@ -84,12 +81,20 @@ BUILD_API bool BUILD_CompileProject(BUILD_Project* project, const char* project_
 BUILD_API bool BUILD_CreateVisualStudioSolution(const char* project_directory, const char* relative_build_directory,
 	const char* solution_name, BUILD_Project** projects, int projects_count, BUILD_Log* log_or_null);
 
-// If the directory already exists or is successfully created, true is returned.
-BUILD_API bool BUILD_CreateDirectory(const char* directory);
+// Filesystem utilities that are commonly needed for build scripts
+BUILD_API bool BUILD_CreateDirectory(const char* directory); // If the directory already exists or is successfully created, true is returned.
+BUILD_API bool BUILD_CopyFile(const char* file, const char* new_file);
+
+// String concatenation utilities - the returned string is heap-allocated.
+BUILD_API char* BUILD_Concat2(const char* a, const char* b);
+BUILD_API char* BUILD_Concat3(const char* a, const char* b, const char* c);
+BUILD_API char* BUILD_Concat4(const char* a, const char* b, const char* c, const char* d);
 
 /* ---- end of the public API --------------------------------------------- */
 
 #define BUILD_Array(T) struct { T* data; int count; int capacity; }
+typedef BUILD_Array(wchar_t) BUILD_WStrBuilder;
+typedef BUILD_Array(char) BUILD_StrBuilder;
 
 struct BUILD_Project {
 	const char* name;
@@ -115,9 +120,6 @@ struct BUILD_Project {
 #include <io.h>         // For _get_osfhandle
 #include <string.h>
 #include <assert.h>
-#include <stdlib.h> // for realloc / free
-
-// TODO: manual windows function prototypes
 #include <Windows.h>
 
 #define BUILD_ArrayReserve(ARR, CAPACITY) \
@@ -147,9 +149,6 @@ static void BUILD_LogPrint4(BUILD_Log* log_or_null, const char* A, const char* B
 		if (D) log_or_null->print(log_or_null, D);
 	}
 }
-
-typedef BUILD_Array(wchar_t) BUILD_WStrBuilder;
-typedef BUILD_Array(char) BUILD_StrBuilder;
 
 static void BUILD_WPrint(BUILD_WStrBuilder* builder, const wchar_t* string) {
 	for (const wchar_t* ptr = string; *ptr; ptr++) {
@@ -195,6 +194,33 @@ static void BUILD_PrintW(BUILD_StrBuilder* builder, wchar_t* string) {
 	BUILD_ArrayReserve(builder, builder->count + size);
 	WideCharToMultiByte(CP_UTF8, 0, string, -1, builder->data + builder->count, size + 1, NULL, NULL);
 	builder->count += size;
+}
+
+BUILD_API char* BUILD_Concat2(const char* a, const char* b) {
+	BUILD_StrBuilder s = {0};
+	BUILD_Print(&s, a);
+	BUILD_Print(&s, b);
+	BUILD_PrintNullTermination(&s);
+	return s.data;
+}
+
+BUILD_API char* BUILD_Concat3(const char* a, const char* b, const char* c) {
+	BUILD_StrBuilder s = {0};
+	BUILD_Print(&s, a);
+	BUILD_Print(&s, b);
+	BUILD_Print(&s, c);
+	BUILD_PrintNullTermination(&s);
+	return s.data;
+}
+
+BUILD_API char* BUILD_Concat4(const char* a, const char* b, const char* c, const char* d) {
+	BUILD_StrBuilder s = {0};
+	BUILD_Print(&s, a);
+	BUILD_Print(&s, b);
+	BUILD_Print(&s, c);
+	BUILD_Print(&s, d);
+	BUILD_PrintNullTermination(&s);
+	return s.data;
 }
 
 // NOTE: CreateProcessW may write to the command_string in-place! CreateProcessW requires that.
@@ -769,6 +795,10 @@ BUILD_API bool BUILD_CreateDirectory(const char* directory) {
 	return success || GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
+BUILD_API bool BUILD_CopyFile(const char* file, const char* new_file) {
+	return CopyFileA(file, new_file, FALSE);
+}
+
 static void BUILD_StringFromGUID(GUID* guid, wchar_t buffer[128]) {
 #ifdef __cplusplus
 	StringFromGUID2(*guid, buffer, 128);
@@ -875,4 +905,4 @@ BUILD_API bool BUILD_CreateVisualStudioSolution(const char* project_directory, c
 }
 
 #endif // FIRE_BUILD_IMPLEMENTATION
-#endif // BUILD_INCLUDED
+#endif // FIRE_BUILD_INCLUDED

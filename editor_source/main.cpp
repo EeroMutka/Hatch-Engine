@@ -57,7 +57,7 @@ static void AppInit(EditorState* s) {
 
 	DS_Arena* persist = &s->persistent_arena;
 
-	s->window = OS_WINDOW_Create(s->window_size.x, s->window_size.y, "Hatch");
+	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");
 	
 	RenderInit(s->render_state, s->window_size, s->window);
 
@@ -239,8 +239,8 @@ static void HT_OS_EndEvents(HT_OS_Events* s) {
 	s->frame->events_count = s->events.count;
 }
 
-static void HT_OS_AddEvent(HT_OS_Events* s, const OS_WINDOW_Event* event) {
-	if (event->kind == OS_WINDOW_EventKind_Press) {
+static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
+	if (event->kind == OS_EventKind_Press) {
 		HT_InputKey key = (HT_InputKey)event->key; // NOTE: OS_Key and HT_InputKey must be kept in sync!
 		s->frame->key_is_down[event->key] = true;
 		
@@ -250,7 +250,7 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_WINDOW_Event* event) {
 		input_event.mouse_click_index = event->mouse_click_index;
 		DS_ArrPush(&s->events, input_event);
 	}
-	if (event->kind == OS_WINDOW_EventKind_Release) {
+	if (event->kind == OS_EventKind_Release) {
 		HT_InputKey key = (HT_InputKey)event->key; // NOTE: OS_Key and HT_InputKey must be kept in sync!
 		s->frame->key_is_down[event->key] = false;
 
@@ -259,16 +259,16 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_WINDOW_Event* event) {
 		input_event.key = key;
 		DS_ArrPush(&s->events, input_event);
 	}
-	if (event->kind == OS_WINDOW_EventKind_TextCharacter) {
+	if (event->kind == OS_EventKind_TextCharacter) {
 		HT_InputEvent input_event = {0};
 		input_event.kind = HT_InputEventKind_TextCharacter;
 		input_event.text_character = event->text_character;
 		DS_ArrPush(&s->events, input_event);
 	}
-	if (event->kind == OS_WINDOW_EventKind_MouseWheel) {
+	if (event->kind == OS_EventKind_MouseWheel) {
 		s->frame->mouse_wheel_input[1] += event->mouse_wheel;
 	}
-	if (event->kind == OS_WINDOW_EventKind_RawMouseInput) {
+	if (event->kind == OS_EventKind_RawMouseInput) {
 		s->frame->raw_mouse_input[0] += event->raw_mouse_input[0];
 		s->frame->raw_mouse_input[1] += event->raw_mouse_input[1];
 	}
@@ -287,15 +287,15 @@ int main() {
 		DS_ArenaReset(&editor_state.temporary_arena);
 		UI_OS_ResetFrameInputs(&editor_state.window, &editor_state.ui_inputs);
 
-		OS_WINDOW_Event event;
+		OS_Event event;
 		HT_OS_Events input_events;
 		HT_OS_BeginEvents(&input_events, &editor_state.input_frame);
-		while (OS_WINDOW_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
+		while (OS_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
 			UI_OS_RegisterInputEvent(&editor_state.ui_inputs, &event);
 			HT_OS_AddEvent(&input_events, &event);
 		}
 		HT_OS_EndEvents(&input_events);
-		if (OS_WINDOW_ShouldClose(&editor_state.window)) break;
+		if (OS_WindowShouldClose(&editor_state.window)) break;
 
 		UpdateAndDraw(&editor_state);
 	}

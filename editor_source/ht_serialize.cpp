@@ -36,7 +36,7 @@ EXPORT STR_View AssetGetFilepathUsingParentDirectory(DS_Arena* arena, STR_View d
 	return result;
 }
 
-static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, (int)str.size}; }
+static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, str.size}; }
 static inline MD_String8 StrToMD(STR_View str) { return {(MD_u8*)str.data, (MD_u64)str.size}; }
 
 struct ReloadAssetsContext {

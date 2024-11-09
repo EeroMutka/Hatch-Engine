@@ -25,9 +25,9 @@ OS_API bool OS_PathIsAbsolute(STR_View path) {
 OS_API wchar_t* OS_UTF8ToWide(DS_MemScope* m, STR_View str, int null_terminations) {
 	if (str.size == 0) return L""; // MultiByteToWideChar does not accept 0-length strings
 
-	int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data, str.size, NULL, 0);
+	int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data, (int)str.size, NULL, 0);
 	wchar_t* result = (wchar_t*)DS_ArenaPush(m->arena, (size + null_terminations) * sizeof(wchar_t));
-	MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data, str.size, result, size);
+	MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, str.data, (int)str.size, result, size);
 
 	for (int i = 0; i < null_terminations; i++) {
 		result[size + i] = 0;

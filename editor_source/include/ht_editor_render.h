@@ -26,7 +26,7 @@ struct RenderState {
     uint64_t render_finished_fence_value;
 };
 
-EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_WINDOW window);
+EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window);
 
 // for now we need to pass editor state to call HT_BuildPluginD3DCommandList on all plugins. TODO: cleanup this!
 EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs);

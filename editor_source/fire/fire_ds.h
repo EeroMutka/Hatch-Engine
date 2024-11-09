@@ -12,8 +12,8 @@
 // If you wish to use a different prefix than DS_, simply do a find and replace in this file.
 // 
 
-#ifndef DS_INCLUDED
-#define DS_INCLUDED
+#ifndef FIRE_DS_INCLUDED
+#define FIRE_DS_INCLUDED
 
 #include <stddef.h>
 #include <stdint.h>
@@ -82,7 +82,7 @@ typedef struct DS_Arena DS_Arena;
 typedef DS_Arena DS_Allocator;
 
 typedef struct DS_ArenaBlockHeader {
-	int size_including_header;
+	size_t size_including_header;
 	struct DS_ArenaBlockHeader* next; // may be NULL
 } DS_ArenaBlockHeader;
 
@@ -93,11 +93,11 @@ typedef struct DS_ArenaMark {
 
 struct DS_Arena {
 	DS_AllocatorBase base;
-	int block_size;
 	DS_ArenaBlockHeader* first_block; // may be NULL
 	DS_ArenaMark mark;
 	DS_Allocator* allocator;
-	int total_mem_reserved;
+	size_t block_size;
+	size_t total_mem_reserved;
 };
 
 // --- Internal helpers -------------------------------------
@@ -221,8 +221,8 @@ static inline void DS_ArrBoundsCheck_(bool x) { DS_ASSERT(x); }
 // 
 
 // Basic hash functions
-DS_API uint32_t DS_MurmurHash3(const void* key, int len, uint32_t seed);
-DS_API uint64_t DS_MurmurHash64A(const void* key, int len, uint64_t seed);
+DS_API uint32_t DS_MurmurHash3(const void* key, size_t size, uint32_t seed);
+DS_API uint64_t DS_MurmurHash64A(const void* key, size_t size, uint64_t seed);
 
 // If using a struct as the key type in a DS_Map, it must not contain any compiler-generated padding, as that could cause
 // unpredictable behaviour when memcmp is used on them.
@@ -382,12 +382,12 @@ static inline bool DS_MapIter(DS_MapRaw* map, int* i, void** out_key, void** out
 
 // -- Arena interface --------------------------------
 
-DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator);
+DS_API void DS_ArenaInit(DS_Arena* arena, size_t block_size, DS_Allocator* allocator);
 DS_API void DS_ArenaDeinit(DS_Arena* arena);
 
-DS_API char* DS_ArenaPush(DS_Arena* arena, int size);
-DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size);
-DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment);
+DS_API char* DS_ArenaPush(DS_Arena* arena, size_t size);
+DS_API char* DS_ArenaPushZero(DS_Arena* arena, size_t size);
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment);
 
 DS_API DS_ArenaMark DS_ArenaGetMark(DS_Arena* arena);
 DS_API void DS_ArenaSetMark(DS_Arena* arena, DS_ArenaMark mark);
@@ -933,15 +933,15 @@ static inline void DS_MapDeinitRaw(DS_MapRaw* map, int elem_size) {
 #endif
 
 // See https://github.com/aappleby/smhasher/blob/master/src/MurmurHash2.cpp
-static uint64_t DS_MurmurHash64A(const void* key, int len, uint64_t seed) {
+static uint64_t DS_MurmurHash64A(const void* key, size_t size, uint64_t seed) {
 	DS_ProfEnter();
 	const uint64_t m = 0xc6a4a7935bd1e995LLU;
 	const int r = 47;
 
-	uint64_t h = seed ^ (len * m);
+	uint64_t h = seed ^ (size * m);
 
 	const uint64_t* data = (const uint64_t*)key;
-	const uint64_t* end = data + (len / 8);
+	const uint64_t* end = data + (size / 8);
 
 	while (data != end) {
 		uint64_t k = *data++;
@@ -954,7 +954,7 @@ static uint64_t DS_MurmurHash64A(const void* key, int len, uint64_t seed) {
 
 	const unsigned char* data2 = (const unsigned char*)data;
 
-	switch (len & 7) {
+	switch (size & 7) {
 	case 7: h ^= ((uint64_t)data2[6]) << 48;
 	case 6: h ^= ((uint64_t)data2[5]) << 40;
 	case 5: h ^= ((uint64_t)data2[4]) << 32;
@@ -973,10 +973,10 @@ static uint64_t DS_MurmurHash64A(const void* key, int len, uint64_t seed) {
 }
 
 // See https://github.com/aappleby/smhasher/blob/master/src/DS_MurmurHash3.cpp
-DS_API uint32_t DS_MurmurHash3(const void* key, int len, uint32_t seed) {
+DS_API uint32_t DS_MurmurHash3(const void* key, size_t size, uint32_t seed) {
 	DS_ProfEnter();
 	const uint8_t* data = (const uint8_t*)key;
-	const int nblocks = len / 4;
+	const intptr_t nblocks = size / 4;
 
 	uint32_t h1 = seed;
 
@@ -986,7 +986,7 @@ DS_API uint32_t DS_MurmurHash3(const void* key, int len, uint32_t seed) {
 	// body
 
 	const uint32_t* blocks = (const uint32_t*)(data + nblocks * 4);
-	for (int i = -nblocks; i; i++) {
+	for (intptr_t i = -nblocks; i; i++) {
 		uint32_t k1 = blocks[i];
 
 		k1 *= c1;
@@ -1003,7 +1003,7 @@ DS_API uint32_t DS_MurmurHash3(const void* key, int len, uint32_t seed) {
 	const uint8_t* tail = (const uint8_t*)(data + nblocks * 4);
 
 	uint32_t k1 = 0;
-	switch (len & 3) {
+	switch (size & 3) {
 	case 3: k1 ^= tail[2] << 16;
 	case 2: k1 ^= tail[1] << 8;
 	case 1: k1 ^= tail[0];
@@ -1012,7 +1012,7 @@ DS_API uint32_t DS_MurmurHash3(const void* key, int len, uint32_t seed) {
 
 	// finalization
 
-	h1 ^= len;
+	h1 ^= size;
 	h1 ^= h1 >> 16;
 	h1 *= 0x85ebca6b;
 	h1 ^= h1 >> 13;
@@ -1223,7 +1223,7 @@ static void* DS_ArenaAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_
 	return data;
 }
 
-DS_API void DS_ArenaInit(DS_Arena* arena, int block_size, DS_Allocator* allocator) {
+DS_API void DS_ArenaInit(DS_Arena* arena, size_t block_size, DS_Allocator* allocator) {
 	memset(arena, 0, sizeof(*arena));
 	arena->base.AllocatorProc = DS_ArenaAllocatorProc;
 	arena->block_size = block_size;
@@ -1239,17 +1239,17 @@ DS_API void DS_ArenaDeinit(DS_Arena* arena) {
 	DS_DebugFillGarbage(arena, sizeof(DS_Arena));
 }
 
-DS_API char* DS_ArenaPush(DS_Arena* arena, int size) {
+DS_API char* DS_ArenaPush(DS_Arena* arena, size_t size) {
 	return DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 }
 
-DS_API char* DS_ArenaPushZero(DS_Arena* arena, int size) {
+DS_API char* DS_ArenaPushZero(DS_Arena* arena, size_t size) {
 	char* ptr = DS_ArenaPushAligned(arena, size, DS_DEFAULT_ARENA_PUSH_ALIGNMENT);
 	memset(ptr, 0, size);
 	return ptr;
 }
 
-DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
+DS_API char* DS_ArenaPushAligned(DS_Arena* arena, size_t size, size_t alignment) {
 	DS_ProfEnter();
 
 	bool alignment_is_power_of_2 = ((alignment) & ((alignment)-1)) == 0;
@@ -1259,13 +1259,13 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
 	DS_ArenaBlockHeader* curr_block = arena->mark.block; // may be NULL
 	void* curr_ptr = arena->mark.ptr;
 
-	char* result_address = (char*)DS_AlignUpPow2((uintptr_t)curr_ptr, alignment);
-	int remaining_space = curr_block ? curr_block->size_including_header - (int)((uintptr_t)result_address - (uintptr_t)curr_block) : 0;
+	char* result_address = (char*)DS_AlignUpPow2((intptr_t)curr_ptr, alignment);
+	intptr_t remaining_space = curr_block ? curr_block->size_including_header - ((intptr_t)result_address - (intptr_t)curr_block) : 0;
 
-	if (size > remaining_space) { // We need a new block!
-		int result_offset = DS_AlignUpPow2(sizeof(DS_ArenaBlockHeader), alignment);
-		int new_block_size = result_offset + size;
-		if (arena->block_size > new_block_size) new_block_size = arena->block_size;
+	if ((intptr_t)size > remaining_space) { // We need a new block!
+		intptr_t result_offset = DS_AlignUpPow2(sizeof(DS_ArenaBlockHeader), alignment);
+		intptr_t new_block_size = result_offset + size;
+		if ((intptr_t)arena->block_size > new_block_size) new_block_size = arena->block_size;
 
 		DS_ArenaBlockHeader* new_block = NULL;
 		DS_ArenaBlockHeader* next_block = NULL;
@@ -1274,8 +1274,8 @@ DS_API char* DS_ArenaPushAligned(DS_Arena* arena, int size, int alignment) {
 		if (curr_block && curr_block->next) {
 			next_block = curr_block->next;
 
-			int next_block_remaining_space = next_block->size_including_header - result_offset;
-			if (size <= next_block_remaining_space) {
+			intptr_t next_block_remaining_space = next_block->size_including_header - result_offset;
+			if ((intptr_t)size <= next_block_remaining_space) {
 				new_block = next_block; // Next block has enough space, let's use it!
 			}
 		}
@@ -1410,4 +1410,4 @@ void* DS_Realloc_Impl(void* old_ptr, int new_size, int new_alignment) {
 }
 #endif
 
-#endif // DS_INCLUDED
+#endif // FIRE_DS_INCLUDED

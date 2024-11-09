@@ -25,7 +25,7 @@ static void CreateRenderTargets(RenderState* s) {
     }
 }
 
-EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_WINDOW window) {
+EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
     
 //#ifdef UI_DX12_DEBUG_MODE
 

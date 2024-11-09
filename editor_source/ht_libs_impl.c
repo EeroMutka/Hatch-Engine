@@ -1,10 +1,9 @@
 #define EXPORT
 
 #include "fire/fire_ds.h"
-
-#define STR_USE_FIRE_DS
 #include "fire/fire_string.h"
 
+#define BUILD_API
 #define FIRE_BUILD_IMPLEMENTATION
 #include "fire/fire_build.h"
 

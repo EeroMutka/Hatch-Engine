@@ -106,7 +106,7 @@ typedef struct UI_Text {
 	// TODO: we could add function pointers here to let you use your own text data-structure instead of this.
 } UI_Text;
 
-#define UI_TextToStr(TEXT) UI_LangAgnosticLiteral(STR_View){(const char*)(TEXT).text.data, (TEXT).text.count}
+#define UI_TextToStr(TEXT) UI_LangAgnosticLiteral(STR_View){(const char*)(TEXT).text.data, (size_t)(TEXT).text.count}
 
 typedef struct UI_CachedGlyphKey {
 	// !!! memcmp is used on this struct, so it must not have any compiler-generated padding.

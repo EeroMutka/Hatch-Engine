@@ -17,10 +17,8 @@ typedef vec2 UI_Vec2;
 #include "../fire/fire_os_clipboard.h"
 
 #define BUILD_API extern "C"
-#define FIRE_BUILD_NO_IMPLEMENTATION
 #include "../fire/fire_build.h"
 
-#define STR_USE_FIRE_DS
 #include "../fire/fire_string.h"
 
 #include "../utils/ui_data_tree.h"
@@ -200,7 +198,7 @@ struct AssetTree {
 };
 
 // Pass STR_View into printf-style %.*s arguments
-#define StrArg(X) X.size, X.data
+#define StrArg(X) (int)X.size, X.data
 
 EXPORT STR_View HT_TypeKindToString(HT_TypeKind type);
 EXPORT HT_TypeKind StringToTypeKind(STR_View str); // may return HT_TypeKind_INVALID
@@ -364,7 +362,7 @@ struct EditorState {
 	DS_Arena temporary_arena;
 
 	ivec2 window_size = {1280, 720};
-	OS_WINDOW window;
+	OS_Window window;
 
 	HT_InputFrame input_frame;
 	

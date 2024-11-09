@@ -216,7 +216,7 @@ static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_
 			pso_desc.DSVFormat = DXGI_FORMAT_D32_FLOAT;
 
 			pso_desc.BlendState.AlphaToCoverageEnable = false;
-			pso_desc.BlendState.RenderTarget[0].BlendEnable = true;
+			pso_desc.BlendState.RenderTarget[0].BlendEnable = false;
 			pso_desc.BlendState.RenderTarget[0].SrcBlend              = D3D12_BLEND_SRC_ALPHA;
 			pso_desc.BlendState.RenderTarget[0].DestBlend             = D3D12_BLEND_INV_SRC_ALPHA;
 			pso_desc.BlendState.RenderTarget[0].BlendOp               = D3D12_BLEND_OP_ADD;
@@ -336,7 +336,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	{
 		D3D12_DESCRIPTOR_RANGE descriptor_range = {};
 		descriptor_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		descriptor_range.NumDescriptors = 1;
+		descriptor_range.NumDescriptors = NUM_DESCRIPTORS_PER_SET;
 		descriptor_range.BaseShaderRegister = 0;
 		descriptor_range.RegisterSpace = 0;
 		descriptor_range.OffsetInDescriptorsFromTableStart = 0;
@@ -598,7 +598,9 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 				loaded_part.index_count = num_indices;
 				
 				ID3D12Resource* tex_base_color = LoadTexture(ht, &ctx, scene, &texture_to_id, material->pbr.base_color.texture);
+				ID3D12Resource* tex_normal_map = LoadTexture(ht, &ctx, scene, &texture_to_id, material->pbr.normal_map.texture);
 				assert(tex_base_color != NULL);
+				assert(tex_normal_map != NULL);
 				// loaded_part.tex_id_normal = LoadTexture(ht, &texture_to_id, material->pbr.normal_map.texture);
 				
 				// Allocate a descriptor set for this mesh part.
@@ -606,10 +608,12 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset
 					D3D12_CPU_DESCRIPTOR_HANDLE handle = GLOBALS.srv_heap->GetCPUDescriptorHandleForHeapStart();
 					handle.ptr += GLOBALS.srv_heap_cursor;
 					loaded_part.desc_set_offset = GLOBALS.srv_heap_cursor;
-					
 					GLOBALS.srv_heap_cursor += GLOBALS.srv_descriptor_size * NUM_DESCRIPTORS_PER_SET;
 					
 					ht->D3D_device->CreateShaderResourceView(tex_base_color, NULL, handle);
+					handle.ptr += GLOBALS.srv_descriptor_size;
+					
+					ht->D3D_device->CreateShaderResourceView(tex_normal_map, NULL, handle);
 					handle.ptr += GLOBALS.srv_descriptor_size;
 				}
 				

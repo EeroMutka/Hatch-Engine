@@ -20,7 +20,9 @@ static int UI_ColumnFromXOffset(float x, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	int column = 0;
 	float start_x = 0.f;
-	for STR_Each(line, r, offset) {
+	
+	size_t i = 0;
+	for (uint32_t r; r = STR_NextCodepoint(line, &i);) {
 		float glyph_advance = UI_GlyphAdvance(r, font);
 		float mid_x = start_x + 0.5f * glyph_advance;
 		if (x >= mid_x) column++;
@@ -33,12 +35,14 @@ static int UI_ColumnFromXOffset(float x, STR_View line, UI_Font font) {
 static float UI_XOffsetFromColumn(int col, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	float x = 0.f;
-	int i = 0;
-	for STR_Each(line, r, offset) {
+
+	size_t i = 0, i_next = 0;
+	for (uint32_t r; r = STR_NextCodepoint(line, &i_next); i = i_next) {
 		if (i == col) break;
 		x += UI_GlyphAdvance(r, font);
 		i++;
 	}
+
 	UI_ProfExit();
 	return x;
 }
@@ -68,14 +72,16 @@ static int UI_MarkToByteOffset(UI_Mark mark, const UI_Text* text) {
 	int line_start = mark.line > 0 ? DS_ArrGet(text->line_offsets, mark.line - 1) : 0;
 	STR_View after = STR_SliceAfter(UI_TextToStr(*text), line_start);
 
-	int i = 0;
+	int col = 0;
 	int result = text->text.count;
-	for STR_Each(after, r, offset) {
-		if (i == mark.col) {
-			result = line_start + offset;
+	
+	size_t i = 0, i_next = 0;
+	for (uint32_t r; r = STR_NextCodepoint(after, &i_next); i = i_next) {
+		if (col == mark.col) {
+			result = line_start + (int)i;
 			break;
 		}
-		i++;
+		col++;
 	}
 
 	UI_ProfExit();
@@ -174,14 +180,14 @@ UI_API void UI_RectPad(UI_Rect* rect, float pad) {
 
 static void UI_MoveMarkByWord(UI_Mark* mark, const UI_Text* text, int dir) {
 	UI_ProfEnter();
-	int byteoffset = UI_MarkToByteOffset(*mark, text);
+	size_t byteoffset = UI_MarkToByteOffset(*mark, text);
 
 	bool was_whitespace = false;
 	bool was_alnum = false;
 	int i = 0;
 	uint32_t r;
 
-	uint32_t (*next_codepoint_fn)(STR_View, int*) = dir > 0 ? STR_NextCodepoint : STR_PrevCodepoint;
+	uint32_t (*next_codepoint_fn)(STR_View, size_t*) = dir > 0 ? STR_NextCodepoint : STR_PrevCodepoint;
 
 	for (; r = next_codepoint_fn(UI_TextToStr(*text), &byteoffset); i++) {
 		bool whitespace = r == ' ' || r == '\t';
@@ -214,11 +220,11 @@ static void UI_MoveMarkH(UI_Mark* mark, const UI_Text* text, int dir, bool ctrl)
 	else if (mark->col + dir < 0) {
 		if (mark->line > 0) {
 			mark->line -= 1;
-			mark->col = STR_CodepointCount(UI_GetLineString(mark->line, text));
+			mark->col = (int)STR_CodepointCount(UI_GetLineString(mark->line, text));
 		}
 	}
 	else {
-		int end_col = STR_CodepointCount(UI_GetLineString(mark->line, text));
+		int end_col = (int)STR_CodepointCount(UI_GetLineString(mark->line, text));
 
 		if (mark->col + dir > end_col) {
 			if (mark->line < text->line_offsets.count) {
@@ -290,7 +296,7 @@ UI_API UI_Selection UI_TextReplaceRange(UI_Text* text, UI_Mark from, UI_Mark to,
 		UI_Mark mark = from;
 		int byteoffset = UI_MarkToByteOffset(mark, text);
 
-		DS_ArrInsertN(&text->text, byteoffset, insertion.data, insertion.size);
+		DS_ArrInsertN(&text->text, byteoffset, insertion.data, (int)insertion.size);
 
 		int lines_count = 0;
 		for (STR_View remaining = insertion;;) {
@@ -300,7 +306,7 @@ UI_API UI_Selection UI_TextReplaceRange(UI_Text* text, UI_Mark from, UI_Mark to,
 		}
 
 		if (lines_count > 1) UI_TODO();
-		mark.col += STR_CodepointCount(insertion);
+		mark.col += (int)STR_CodepointCount(insertion);
 		result._[1] = mark;
 	}
 
@@ -313,7 +319,7 @@ UI_API void UI_EditTextSelectAll(const UI_Text* text, UI_Selection* selection) {
 	selection->_[0] = UI_MARK{0};
 	selection->_[1] = UI_MARK{
 		text->line_offsets.count,
-		STR_CodepointCount(UI_GetLineString(text->line_offsets.count, text)),
+		(int)STR_CodepointCount(UI_GetLineString(text->line_offsets.count, text)),
 	};
 	selection->cursor = 1;
 	UI_ProfExit();
@@ -465,7 +471,7 @@ UI_API void UI_TextDeinit(UI_Text* text) {
 UI_API void UI_TextSet(UI_Text* text, STR_View value) {
 	UI_ProfEnter();
 	DS_ArrClear(&text->text);
-	DS_ArrPushN(&text->text, value.data, value.size);
+	DS_ArrPushN(&text->text, value.data, (int)value.size);
 	UI_ProfExit();
 }
 
@@ -1731,7 +1737,8 @@ UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font) {
 UI_API float UI_TextWidth(STR_View text, UI_Font font) {
 	UI_ProfEnter();
 	float w = 0.f;
-	for STR_Each(text, r, i) {
+	size_t i = 0;
+	for (uint32_t r; r = STR_NextCodepoint(text, &i);) {
 		w += UI_GlyphAdvance(r, font);
 	}
 	UI_ProfExit();
@@ -2264,7 +2271,8 @@ UI_API void UI_DrawText(STR_View text, UI_Font font, UI_Vec2 pos, UI_AlignH alig
 	pos.x = (float)(int)(pos.x + 0.5f); // round to integer
 	pos.y = (float)(int)(pos.y + 0.5f); // round to integer
 
-	for STR_Each(text, r, i) {
+	size_t i = 0;
+	for (uint32_t r; r = STR_NextCodepoint(text, &i);) {
 		UI_CachedGlyph glyph = UI_STATE.backend.GetCachedGlyph(r, font);
 
 		UI_Rect glyph_rect;
