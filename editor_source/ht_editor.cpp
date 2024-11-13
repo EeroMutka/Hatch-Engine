@@ -389,6 +389,9 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			UI_AddCheckbox(UI_KBOX(key), (bool*)member_val->data);
 		}break;
 		case HT_TypeKind_Struct: {}break;
+		case HT_TypeKind_ItemTree: {
+			UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, "(ItemTree: TODO)");
+		}break;
 		case HT_TypeKind_Array: {
 			UI_Box* add_button = UI_KBOX(key);
 			UI_AddButton(add_button, UI_SizeFlex(1.f), UI_SizeFit(), 0, "add");

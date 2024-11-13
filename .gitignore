@@ -1,4 +1,5 @@
-editor_build/
+build/
+build_projects/
 SponzaAssets/
 SunTempleAssets/
 .vscode/

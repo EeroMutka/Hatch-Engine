@@ -1,0 +1,55 @@
+type: "Scene:types/Scene"
+data: {
+	// array of SceneEntities - this looks suspiciously similar to an AssetTree.
+	// Maybe we should have a "ItemTree" be a built-in type. What does a data tree look like then?
+	// A data tree is like an asset tree, where each item is a struct instance with an unique name/path.
+	// Items may be parented to other items.
+	// entities: @ItemTree "Scene:types/SceneEntity"
+	
+	entities: {
+		"My box 1": {
+			components: { // array of "any"
+				@any("PBRRender:Components/MeshComponent") {
+					mesh: "Meshes/Box.fbx"
+				}
+			}
+			x: 10
+			y: 0
+			z: 0
+			__children: {
+				"My parented box": {
+					components: { // array of "any"
+						@any("PBRRender:Components/MeshComponent") {
+							mesh: "Meshes/Box.fbx"
+						}
+					}
+					x: 10
+					y: 0
+					z: 0
+				}
+			}
+		}
+		"My box 2": {
+			components: {
+				@any("PBRRender:Components/MeshComponent") {
+					mesh: "Meshes/Box.fbx"
+				}
+			}
+			x: 0
+			y: 0
+			z: 50
+			__children: {}
+		}
+		"Follower": {
+			components: { // array of "any"
+				@any("Components/FollowerComponent") {
+					target: "My box 1/My parented box"
+				}
+			}
+			x: 0
+			y: 0
+			z: 50
+			__children: {}
+		}
+	}
+}

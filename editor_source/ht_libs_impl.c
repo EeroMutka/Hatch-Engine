@@ -12,11 +12,3 @@
 
 #define FIRE_OS_CLIPBOARD_IMPLEMENTATION
 #include "fire/fire_os_clipboard.h"
-
-#include "utils/os_misc.c"
-#include "utils/os_directory_watch.c"
-
-#include "fire/fire_ui/fire_ui.c"
-#include "fire/fire_ui/fire_ui_color_pickers.c"
-#include "fire/fire_ui/fire_ui_extras.c"
-#include "utils/ui_data_tree.c"

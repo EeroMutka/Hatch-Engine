@@ -1,0 +1,5 @@
+struct: {
+	// An ItemHandle always points to the item in the innermost tree it belongs to that matches its type.
+	// The reason to specify the type is to make it possible to have nested item-trees of different types in each other.
+	target: @ItemHandle "Scene:types/SceneEntity"
+}

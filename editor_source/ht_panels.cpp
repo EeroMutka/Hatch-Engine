@@ -1,28 +1,29 @@
-#include "ht_internal.h"
+#if 0
+#include "include/ht_internal.h"
 
-static UIPanel* NewUIPanel() {
-	UIPanel* panel = (UIPanel*)DS_TakeSlot(&g_panels);
-	*panel = UIPanel{0};
+static UI_Panel* NewUIPanel() {
+	UI_Panel* panel = (UI_Panel*)DS_TakeSlot(&g_panels);
+	*panel = UI_Panel{0};
 	DS_ArrInit(&panel->tabs, DS_HEAP);
 	return panel;
 }
 
-static void FreeUIPanel(UIPanel* panel) {
+static void FreeUIPanel(UI_Panel* panel) {
 	for (int i = 0; i < panel->tabs.count; i++) FreeUITab(&panel->tabs.data[i]);
 	DS_ArrDeinit(&panel->tabs);
 	DS_FreeSlot(&g_panels, panel);
 }
 
 // Split panel and return the split
-static UIPanel* SplitPanel(UIPanel* panel, UI_Axis split_along) {
+static UI_Panel* SplitPanel(UI_Panel* panel, UI_Axis split_along) {
 	assert(panel->end_child[0] == NULL); // panel must be a leaf
-	UIPanel* parent = panel->parent;
-	UIPanel* split = NULL;
+	UI_Panel* parent = panel->parent;
+	UI_Panel* split = NULL;
 
 	if (parent && parent->split_along == split_along) {
 		// Add one more panel at the end
 		split = parent;
-		UIPanel* new_panel = NewUIPanel();
+		UI_Panel* new_panel = NewUIPanel();
 
 		new_panel->parent = split;
 		if (split->end_child[0]) split->end_child[1]->link[1] = new_panel;
@@ -39,7 +40,7 @@ static UIPanel* SplitPanel(UIPanel* panel, UI_Axis split_along) {
 		split->size = panel->size;
 		split->split_along = split_along;
 
-		UIPanel* new_leaf = NewUIPanel();
+		UI_Panel* new_leaf = NewUIPanel();
 		new_leaf->size = panel->size;
 		
 		// Replace panel with new_split
@@ -68,10 +69,10 @@ static UIPanel* SplitPanel(UIPanel* panel, UI_Axis split_along) {
 	return split;
 }
 
-static void ClosePanel(UIPanel* panel) {
+static void ClosePanel(UI_Panel* panel) {
 	assert(panel->end_child[0] == NULL); // panel must be a leaf
 	
-	UIPanel* parent = panel->parent;
+	UI_Panel* parent = panel->parent;
 	DS_ArrClear(&panel->tabs);
 	if (parent == NULL) return;
 
@@ -87,7 +88,7 @@ static void ClosePanel(UIPanel* panel) {
 
 	// if the parent now has only one child, then replace the parent with the last child
 	if (parent->end_child[0] && parent->end_child[0] == parent->end_child[1]) {
-		UIPanel* last_child = parent->end_child[0];
+		UI_Panel* last_child = parent->end_child[0];
 		
 		last_child->parent = parent->parent;
 		last_child->size = parent->size;
@@ -116,3 +117,4 @@ static void AddNewTabToActivePanel(UITab tab) {
 
 static void UILogTab(UI_Key key, UI_Rect content_rect) {
 }
+#endif

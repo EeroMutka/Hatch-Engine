@@ -1,3 +1,5 @@
+#include <fire_ui/fire_ui.h>
+
 #include "ui_data_tree.h"
 
 static const float ARROW_AREA_WIDTH = 25.f;

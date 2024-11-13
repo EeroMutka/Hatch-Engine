@@ -8,6 +8,7 @@ EXPORT STR_View HT_TypeKindToString(HT_TypeKind type) {
 	case HT_TypeKind_AssetRef:  return "Asset";
 	case HT_TypeKind_Struct:    return "Struct";
 	case HT_TypeKind_Array:     return "Array";
+	case HT_TypeKind_ItemTree:  return "ItemTree";
 	case HT_TypeKind_String:    return "String";
 	case HT_TypeKind_Type:      return "HT_Type";
 	case HT_TypeKind_COUNT:   break;
@@ -17,13 +18,14 @@ EXPORT STR_View HT_TypeKindToString(HT_TypeKind type) {
 }
 
 EXPORT HT_TypeKind StringToTypeKind(STR_View str) {
-	/**/ if (STR_Match(str, "Float"))  return HT_TypeKind_Float;
-	else if (STR_Match(str, "Int"))    return HT_TypeKind_Int;
-	else if (STR_Match(str, "Bool"))   return HT_TypeKind_Bool;
-	else if (STR_Match(str, "Asset"))  return HT_TypeKind_AssetRef;
-	else if (STR_Match(str, "Struct")) return HT_TypeKind_Struct;
-	else if (STR_Match(str, "Array"))  return HT_TypeKind_Array;
-	else if (STR_Match(str, "String")) return HT_TypeKind_String;
+	/**/ if (STR_Match(str, "Float"))     return HT_TypeKind_Float;
+	else if (STR_Match(str, "Int"))       return HT_TypeKind_Int;
+	else if (STR_Match(str, "Bool"))      return HT_TypeKind_Bool;
+	else if (STR_Match(str, "Asset"))     return HT_TypeKind_AssetRef;
+	else if (STR_Match(str, "Struct"))    return HT_TypeKind_Struct;
+	else if (STR_Match(str, "Array"))     return HT_TypeKind_Array;
+	else if (STR_Match(str, "ItemTree"))  return HT_TypeKind_ItemTree;
+	else if (STR_Match(str, "String"))    return HT_TypeKind_String;
 	else if (STR_Match(str, "HT_Type"))   return HT_TypeKind_Type;
 	return HT_TypeKind_INVALID;
 }
@@ -212,6 +214,7 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_Bool:       { *out_size = 1; *out_alignment = 1; } return;
 	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_AssetHandle); *out_alignment = alignof(HT_AssetHandle); } return;
 	case HT_TypeKind_Array:      { *out_size = sizeof(HT_Array); *out_alignment = alignof(HT_Array); } return;
+	case HT_TypeKind_ItemTree:   { *out_size = sizeof(HT_ItemTree); *out_alignment = alignof(HT_ItemTree); } return;
 	case HT_TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
 	case HT_TypeKind_Struct:     {
 		Asset* struct_asset = GetAsset(tree, type->_struct);

@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS // for fopen
+
 #include "include/ht_internal.h"
 
 #define MD_FUNCTION extern "C"

@@ -72,7 +72,8 @@ float4 PSMain(PSInput input) : SV_TARGET
 	float3x3 TBN = DeriveTangentSpaceFromPSDerivatives(input.uv, input.ws_pos, normal);
 	float3 normal_adjusted = mul(n_ts, TBN);
 	
-	float lightness = dot(normal_adjusted, normalize(float3(0.5, 0.9, 1)))*0.5 + 0.5;
-	return tex_base_color.Sample(sampler0, input.uv) * lightness;
+	// float lightness = dot(normal_adjusted, normalize(float3(0.5, 0.9, 1)))*0.5 + 0.5;
+	// return pow(tex_base_color.Sample(sampler0, input.uv) * lightness, 1./2.2);
+	return float4(normal_adjusted*0.5 + 0.5, 1.);
 	// return float4(normal_adjusted, 1);
 }

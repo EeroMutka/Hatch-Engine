@@ -1,0 +1,22 @@
+type: "types/Scene"
+data: {
+	entities: {
+		"My box 1": {
+			x: 10
+			y: 0
+			z: 0
+			/*@children {
+				"My parented box": {
+					x: 10
+					y: 0
+					z: 0
+				}
+			}*/
+		}
+		"My box 2": {
+			x: 1
+			y: 3
+			z: 4
+		}
+	}
+}

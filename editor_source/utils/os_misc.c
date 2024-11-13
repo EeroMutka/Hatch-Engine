@@ -1,9 +1,15 @@
+#include <fire_ds.h>
+#include <fire_string.h>
+
 #include "os_misc.h"
 
 #include <shobjidl_core.h> // required for OS_FolderPicker
 
+#include <stdio.h> // for fopen
+
 OS_API void OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data) {
-	FILE* f = fopen(file, "rb");
+	FILE* f = NULL;
+	errno_t err = fopen_s(&f, file, "rb");
 	assert(f); // TODO
 
 	fseek(f, 0, SEEK_END);

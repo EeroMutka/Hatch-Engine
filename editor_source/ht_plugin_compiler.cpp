@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS // for fopen
+
 #include "include/ht_internal.h"
 
 #define WIN32_LEAN_AND_MEAN

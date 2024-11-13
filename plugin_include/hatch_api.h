@@ -81,6 +81,7 @@ typedef enum HT_TypeKind {
 	HT_TypeKind_AssetRef,
 	HT_TypeKind_Struct,
 	HT_TypeKind_Array,
+	HT_TypeKind_ItemTree,
 	HT_TypeKind_String,
 	HT_TypeKind_Type,
 	HT_TypeKind_COUNT,
@@ -88,6 +89,24 @@ typedef enum HT_TypeKind {
 } HT_TypeKind;
 
 typedef struct HT_AssetHandle_* HT_AssetHandle;
+
+typedef struct HT_ItemTree {
+	void** buckets;
+	u16 buckets_count;
+	u16 buckets_capacity;
+	i32 count;
+	i32 last_bucket_end;
+	i32 elems_per_bucket;
+} HT_ItemTree;
+
+typedef struct HT_ItemHandleDecoded {
+	u16 bucket;
+	u16 slot;
+	u32 generation;
+} HT_ItemHandleDecoded;
+
+// Not actually a pointer - encodes a HT_ItemHandleDecoded structure. Typedef'd to a pointer for type safety and easy comparison.
+typedef struct HT_ItemHandle_* HT_ItemHandle;
 
 typedef struct HT_Array {
 	void* data;
