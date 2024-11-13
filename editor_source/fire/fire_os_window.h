@@ -224,6 +224,8 @@ OS_WINDOW_API OS_Window OS_CreateWindow(uint32_t width, uint32_t height, const c
 OS_WINDOW_API OS_Window OS_CreateWindowHidden(uint32_t width, uint32_t height, const char* name);
 OS_WINDOW_API void OS_ShowWindow(OS_Window* window);
 
+OS_WINDOW_API bool OS_GetWindowSize(OS_Window* window, uint32_t* width, uint32_t* height);
+
 OS_WINDOW_API bool OS_SetWindowFullscreen(OS_Window* window, bool fullscreen);
 
 // * Returns false when the window is closed.
@@ -553,6 +555,14 @@ OS_WINDOW_API void OS_ShowWindow(OS_Window* window) {
 	ShowWindow((HWND)window->handle, SW_SHOW);
 }
 
+OS_WINDOW_API bool OS_GetWindowSize(OS_Window* window, uint32_t* width, uint32_t* height) {
+	RECT rect;
+	bool ok = (bool)GetWindowRect((HWND)window->handle, &rect);
+	*width = rect.right - rect.left;
+	*height = rect.bottom - rect.top;
+	return ok;
+}
+
 OS_WINDOW_API bool OS_SetWindowFullscreen(OS_Window* window, bool fullscreen) {
 	// https://devblogs.microsoft.com/oldnewthing/20100412-00/?p=14353
 
@@ -588,7 +598,7 @@ OS_WINDOW_API bool OS_SetWindowFullscreen(OS_Window* window, bool fullscreen) {
 
 		int32_t x = window->pre_fullscreen_state.left;
 		int32_t y = window->pre_fullscreen_state.top;
-		int32_t w = window->pre_fullscreen_state.left - x;
+		int32_t w = window->pre_fullscreen_state.right - x;
 		int32_t h = window->pre_fullscreen_state.bottom - y;
 		SetWindowPos((HWND)window->handle, HWND_TOP, x, y, w, h, SWP_FRAMECHANGED);
 	}

@@ -16,7 +16,6 @@
 #include "utils/os_misc.c"
 #include "utils/os_directory_watch.c"
 
-#include "fire/fire_ui/fire_ui.h"
 #include "fire/fire_ui/fire_ui.c"
 #include "fire/fire_ui/fire_ui_color_pickers.c"
 #include "fire/fire_ui/fire_ui_extras.c"
