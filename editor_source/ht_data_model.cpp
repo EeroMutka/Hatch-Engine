@@ -8,6 +8,7 @@ EXPORT STR_View HT_TypeKindToString(HT_TypeKind type) {
 	case HT_TypeKind_AssetRef:  return "Asset";
 	case HT_TypeKind_Struct:    return "Struct";
 	case HT_TypeKind_Array:     return "Array";
+	case HT_TypeKind_Any:       return "Any";
 	case HT_TypeKind_ItemGroup: return "ItemGroup";
 	case HT_TypeKind_String:    return "String";
 	case HT_TypeKind_Type:      return "HT_Type";
@@ -24,6 +25,7 @@ EXPORT HT_TypeKind StringToTypeKind(STR_View str) {
 	else if (STR_Match(str, "Asset"))     return HT_TypeKind_AssetRef;
 	else if (STR_Match(str, "Struct"))    return HT_TypeKind_Struct;
 	else if (STR_Match(str, "Array"))     return HT_TypeKind_Array;
+	else if (STR_Match(str, "Any"))       return HT_TypeKind_Any;
 	else if (STR_Match(str, "ItemGroup")) return HT_TypeKind_ItemGroup;
 	else if (STR_Match(str, "String"))    return HT_TypeKind_String;
 	else if (STR_Match(str, "HT_Type"))   return HT_TypeKind_Type;
@@ -220,6 +222,7 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_Bool:       { *out_size = 1; *out_alignment = 1; } return;
 	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_AssetHandle); *out_alignment = alignof(HT_AssetHandle); } return;
 	case HT_TypeKind_Array:      { *out_size = sizeof(HT_Array); *out_alignment = alignof(HT_Array); } return;
+	case HT_TypeKind_Any:        { *out_size = sizeof(HT_Any); *out_alignment = alignof(HT_Any); } return;
 	case HT_TypeKind_ItemGroup:   { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
 	case HT_TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
 	case HT_TypeKind_Struct:     {
@@ -255,6 +258,24 @@ EXPORT void ComputeStructLayout(AssetTree* tree, Asset* struct_type) {
 
 	struct_type->struct_type.size = DS_AlignUpPow2(offset, max_alignment);
 	struct_type->struct_type.alignment = max_alignment;
+}
+
+EXPORT void AnyChangeType(AssetTree* tree, HT_Any* any, HT_Type* new_type) {
+	if (any->data) AnyDeinit(tree, any);
+	
+	i32 size, align;
+	GetTypeSizeAndAlignment(tree, new_type, &size, &align);
+	any->data = DS_MemAlloc(DS_HEAP, size);
+	any->type = *new_type;
+	Construct(tree, any->data, new_type);
+}
+
+EXPORT void AnyDeinit(AssetTree* tree, HT_Any* any) {
+	if (any->data) {
+		Destruct(tree, any->data, &any->type);
+		DS_MemFree(DS_HEAP, any->data);
+	}
+	DS_DebugFillGarbage(any, sizeof(*any));
 }
 
 EXPORT void ArrayPush(HT_Array* array, int32_t elem_size) {

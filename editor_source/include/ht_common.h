@@ -241,6 +241,9 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset);
 EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type);
 EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type);
 
+EXPORT void AnyChangeType(AssetTree* tree, HT_Any* any, HT_Type* new_type);
+EXPORT void AnyDeinit(AssetTree* tree, HT_Any* any);
+
 EXPORT void ArrayPush(HT_Array* array, i32 elem_size);
 EXPORT void ArrayClear(HT_Array* array, i32 elem_size);
 EXPORT void ArrayDeinit(HT_Array* array);

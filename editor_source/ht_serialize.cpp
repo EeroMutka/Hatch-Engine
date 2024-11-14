@@ -299,6 +299,36 @@ static bool ParseMetadeskFloat(MD_Node* node, float *out_value) {
 	return true;
 }
 
+static HT_Type ParseMetadeskType(Asset* package, MD_Node* node) {
+	ASSERT(!MD_NodeIsNil(node));
+
+	HT_Type result;
+	STR_View type_name = StrFromMD(node->string);
+
+	HT_TypeKind builtin_type = StringToTypeKind(type_name);
+	if (builtin_type != HT_TypeKind_INVALID) {
+		result.kind = builtin_type;
+	}
+	else {
+		// Must be a user-defined type
+		Asset* struct_type = FindAssetFromPath(package, type_name);
+		ASSERT(struct_type);
+		result.kind = HT_TypeKind_Struct;
+		result._struct = struct_type->handle;
+	}
+
+	if (MD_NodeHasTag(node, MD_S8Lit("Array"), 0)) {
+		result.subkind = result.kind;
+		result.kind = HT_TypeKind_Array;
+	}
+
+	if (MD_NodeHasTag(node, MD_S8Lit("ItemGroup"), 0)) {
+		result.subkind = result.kind;
+		result.kind = HT_TypeKind_ItemGroup;
+	}
+	return result;
+}
+
 static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
 		if (!asset->reload_assets_pass2_needs_hotreload) continue;
@@ -343,31 +373,8 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				STR_View name = StrFromMD(it->string);
 				UI_TextSet(&member.name.text, name);
 				
-				ASSERT(!MD_NodeIsNil(it->first_child));
-				STR_View type_name = StrFromMD(it->first_child->string);
-				
-				HT_TypeKind builtin_type = StringToTypeKind(type_name);
-				if (builtin_type != HT_TypeKind_INVALID) {
-					member.type.kind = builtin_type;
-				}
-				else {
-					// Must be a user-defined type
-					Asset* struct_type = FindAssetFromPath(ctx->package, type_name);
-					ASSERT(struct_type);
-					member.type.kind = HT_TypeKind_Struct;
-					member.type._struct = struct_type->handle;
-				}
-				
-				if (MD_NodeHasTag(it->first_child, MD_S8Lit("Array"), 0)) {
-					member.type.subkind = member.type.kind;
-					member.type.kind = HT_TypeKind_Array;
-				}
+				member.type = ParseMetadeskType(ctx->package, it->first_child);
 
-				if (MD_NodeHasTag(it->first_child, MD_S8Lit("ItemGroup"), 0)) {
-					member.type.subkind = member.type.kind;
-					member.type.kind = HT_TypeKind_ItemGroup;
-				}
-				
 				DS_ArrPush(&asset->struct_type.members, member);
 			}
 			
@@ -438,7 +445,7 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 			ArrayPush(val, elem_size);
 			char* elem_data = (char*)val->data + elem_size*i;
 			Construct(tree, elem_data, &elem_type);
-			ReadMetadeskValue(tree, package, elem_data, &elem_type, child->first_child);
+			ReadMetadeskValue(tree, package, elem_data, &elem_type, child);
 			i++;
 		}
 	}break;
@@ -452,12 +459,33 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 		bool ok = ParseMetadeskFloat(node, val);
 		ASSERT(ok);
 	}break;
+	case HT_TypeKind_Bool: {
+		bool* val = (bool*)dst;
+		/**/ if (MD_S8Match(node->string, MD_S8Lit("true"), 0)) *val = true;
+		else if (MD_S8Match(node->string, MD_S8Lit("false"), 0)) *val = false;
+		else ASSERT(0);
+	}break;
+	case HT_TypeKind_String: {
+		TODO();
+	}break;
+	case HT_TypeKind_Type: {
+		TODO();
+	}break;
+	case HT_TypeKind_Any: {
+		HT_Any* val = (HT_Any*)dst;
+		MD_Node* type_tag = MD_TagFromString(node, MD_S8Lit("Type"), 0);
+		ASSERT(!MD_NodeIsNil(type_tag));
+		
+		HT_Type type = ParseMetadeskType(package, type_tag->first_child);
+		AnyChangeType(tree, val, &type);
+	}break;
 	case HT_TypeKind_AssetRef: {
 		HT_AssetHandle* val = (HT_AssetHandle*)dst;
 		Asset* found_asset = FindAssetFromPath(package, StrFromMD(node->string));
 		*val = found_asset ? found_asset->handle : NULL;
 	}break;
-	default: TODO();
+	case HT_TypeKind_COUNT: ASSERT(0); break;
+	case HT_TypeKind_INVALID: ASSERT(0); break;
 	}
 }
 

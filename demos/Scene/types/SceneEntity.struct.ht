@@ -1,5 +1,5 @@
 struct: {
-	// components: @Array Any
+	components: @Array Any
 	x: Float
 	y: Float
 	z: Float

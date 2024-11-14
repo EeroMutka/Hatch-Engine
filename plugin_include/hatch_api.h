@@ -81,6 +81,7 @@ typedef enum HT_TypeKind {
 	HT_TypeKind_AssetRef,
 	HT_TypeKind_Struct,
 	HT_TypeKind_Array,
+	HT_TypeKind_Any,
 	HT_TypeKind_ItemGroup,
 	HT_TypeKind_String,
 	HT_TypeKind_Type,
@@ -133,6 +134,11 @@ typedef struct HT_Type {
 	HT_TypeKind subkind; // for arrays, this is the element type
 	HT_AssetHandle _struct;
 } HT_Type;
+
+typedef struct HT_Any {
+	HT_Type type;
+	void* data;
+} HT_Any;
 
 typedef struct HT_Color {
 	u8 r, g, b, a;

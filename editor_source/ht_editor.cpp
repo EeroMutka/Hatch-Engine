@@ -423,6 +423,10 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			HT_Type* val = (HT_Type*)member_val->data;
 			UIAddValType(s, UI_KKEY(key), val);
 		} break;
+		case HT_TypeKind_Any: {
+			HT_Any* val = (HT_Any*)member_val->data;
+			UIAddValType(s, UI_KKEY(key), &val->type); // TODO: if editing type...
+		} break;
 		case HT_TypeKind_COUNT: break;
 		case HT_TypeKind_INVALID: break;
 		}
@@ -438,17 +442,16 @@ static void AddDataTreeNode(UI_DataTreeNode* parent, UI_DataTreeNode* node) { //
 	node->parent = parent;
 }
 
-static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent) {
-	if (parent->type.kind == HT_TypeKind_Struct) {
-		Asset* struct_asset = GetAsset(&s->asset_tree, parent->type._struct);
+static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, void* data, HT_Type* type) {
+	if (type->kind == HT_TypeKind_Struct) {
+		Asset* struct_asset = GetAsset(&s->asset_tree, type->_struct);
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
-
 			node->name = UI_TextToStr(member->name.text);
 			node->type = member->type;
-			node->data = (char*)parent->data + member->offset;
+			node->data = (char*)data + member->offset;
 			node->base.key = UI_HashInt(parent->base.key, i);
 			
 			bool* is_open = NULL;
@@ -456,13 +459,32 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			node->base.is_open_ptr = is_open;
 
 			AddDataTreeNode(&parent->base, &node->base);
-			BuildStructMemberValNodes(s, node);
+			BuildStructMemberValNodes(s, node, node->data, &node->type);
 		}
 	}
-	else if (parent->type.kind == HT_TypeKind_Array) {
-		HT_Array* array = (HT_Array*)parent->data;
+	else if (type->kind == HT_TypeKind_Any) {
+		HT_Any* any = (HT_Any*)data;
+		if (any->type.kind == HT_TypeKind_Struct) {
+			BuildStructMemberValNodes(s, parent, any->data, &any->type);
+		} else {
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			node->name = "data";
+			node->type = any->type;
+			node->data = any->data;
+			node->base.key = UI_KKEY(parent->base.key);
+			
+			bool* is_open = NULL;
+			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
+			node->base.is_open_ptr = is_open;
+			
+			AddDataTreeNode(&parent->base, &node->base);
+			BuildStructMemberValNodes(s, node, node->data, &node->type);
+		}
+	}
+	else if (type->kind == HT_TypeKind_Array) {
+		HT_Array* array = (HT_Array*)data;
 		
-		HT_Type elem_type = parent->type;
+		HT_Type elem_type = *type;
 		elem_type.kind = elem_type.subkind;
 		
 		i32 elem_size, elem_align;
@@ -480,13 +502,13 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			node->base.is_open_ptr = is_open;
 
 			AddDataTreeNode(&parent->base, &node->base);
-			BuildStructMemberValNodes(s, node);
+			BuildStructMemberValNodes(s, node, node->data, &node->type);
 		}
 	}
-	else if (parent->type.kind == HT_TypeKind_ItemGroup) {
-		HT_ItemGroup* group = (HT_ItemGroup*)parent->data;
+	else if (type->kind == HT_TypeKind_ItemGroup) {
+		HT_ItemGroup* group = (HT_ItemGroup*)data;
 		
-		HT_Type item_type = parent->type;
+		HT_Type item_type = *type;
 		item_type.kind = item_type.subkind;
 		
 		i32 item_size, item_align;
@@ -510,7 +532,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			node->base.is_open_ptr = is_open;
 
 			AddDataTreeNode(&parent->base, &node->base);
-			BuildStructMemberValNodes(s, node);
+			BuildStructMemberValNodes(s, node, node->data, &node->type);
 			
 			i = item->next;
 		}
@@ -523,7 +545,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	root.data = data;
 	root.type.kind = HT_TypeKind_Struct;
 	root.type._struct = struct_type->handle;
-	BuildStructMemberValNodes(s, &root);
+	BuildStructMemberValNodes(s, &root, data, &root.type);
 
 	UI_DataTree members_tree = {0};
 	members_tree.root = &root.base;

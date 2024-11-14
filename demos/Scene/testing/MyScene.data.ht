@@ -1,20 +1,21 @@
 type: "types/Scene"
 data: {
-	// maybe an "ItemGroup" could be called "IndexedGroup" or "IdGroup" or "IdList and "IdGroupHandle" or "Id"
 	entities: {
 		"My box 1": {
+			components: {
+				@Type("testing/Foo") {
+					speed: 500.4
+					age: 30.1
+				}
+				@Type(Int) 6
+				@Type(Int) 7
+			}
 			x: 10
 			y: 0
 			z: 0
-			/*@children {
-				"My parented box": {
-					x: 10
-					y: 0
-					z: 0
-				}
-			}*/
 		}
 		"My box 2": {
+			components: {}
 			x: 1
 			y: 3
 			z: 4
