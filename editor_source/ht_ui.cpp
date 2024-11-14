@@ -1,4 +1,4 @@
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 
 EXPORT void UIAddPadY(UI_Box* box) {
 	UI_AddBox(box, UI_SizeFit(), 10.f, 0); // Y-padding
@@ -107,7 +107,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		UI_Box* root = UI_KBOX(UI_HashPtr(UI_KEY(), panel));
 		UI_InitRootBox(root, panel_size.x, panel_size.y, UI_BoxFlag_DrawBorder);
 		UIRegisterOrderedRoot(s, root);
-		assert(root->parent == NULL);
+		ASSERT(root->parent == NULL);
 
 		if (!splitter_is_hovered && (UI_Pressed(root) || UI_PressedEx(root, UI_Input_MouseRight))) {
 			tree->active_panel = panel;
@@ -191,8 +191,8 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		}
 	}
 	else {
-		assert(panel->tabs.count == 0); // only leaf panels can have tabs
-		assert(panel->end_child[0] != panel->end_child[1]); // a panel may not have only one child
+		ASSERT(panel->tabs.count == 0); // only leaf panels can have tabs
+		ASSERT(panel->end_child[0] != panel->end_child[1]); // a panel may not have only one child
 
 		//DS_DynArray(float) panel_end_offsets = {UI_FrameArena()};
 		//
@@ -214,8 +214,8 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		int i = 0;
 		UI_Panel* prev = NULL;
 		for (UI_Panel* child = panel->end_child[0]; child; child = child->link[1]) {
-			assert(prev == child->link[0]); // tree validation
-			assert(child->parent == panel); // tree validation
+			ASSERT(prev == child->link[0]); // tree validation
+			ASSERT(child->parent == panel); // tree validation
 
 			// hmm... how can you click a rectangle but also splitter?
 			float end = splitters_state->panel_end_offsets[i];
@@ -236,7 +236,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 
 // Split panel and return the split
 EXPORT UI_Panel* SplitPanel(UI_PanelTree* tree, UI_Panel* panel, UI_Axis split_along) {
-	assert(panel->end_child[0] == NULL); // panel must be a leaf
+	ASSERT(panel->end_child[0] == NULL); // panel must be a leaf
 	UI_Panel* parent = panel->parent;
 	UI_Panel* split = NULL;
 
@@ -290,7 +290,7 @@ EXPORT UI_Panel* SplitPanel(UI_PanelTree* tree, UI_Panel* panel, UI_Axis split_a
 }
 
 EXPORT void ClosePanel(UI_PanelTree* tree, UI_Panel* panel) {
-	assert(panel->end_child[0] == NULL); // panel must be a leaf
+	ASSERT(panel->end_child[0] == NULL); // panel must be a leaf
 
 	UI_Panel* parent = panel->parent;
 	DS_ArrClear(&panel->tabs);
@@ -304,7 +304,7 @@ EXPORT void ClosePanel(UI_PanelTree* tree, UI_Panel* panel) {
 
 	FreeUIPanel(tree, panel);
 
-	assert(parent->end_child[0] != NULL); // child lists must always have more than 1 element
+	ASSERT(parent->end_child[0] != NULL); // child lists must always have more than 1 element
 
 	// if the parent now has only one child, then replace the parent with the last child
 	if (parent->end_child[0] && parent->end_child[0] == parent->end_child[1]) {

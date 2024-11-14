@@ -7,8 +7,13 @@
 
 #pragma once
 
-#include "../fire_ds.h"
-#include "../fire_string.h"
+#ifndef FIRE_DS_INCLUDED
+#error "fire_ds.h" must be included before this file!
+#endif
+
+#ifndef FIRE_STRING_INCLUDED
+#error "fire_string.h" must be included before this file!
+#endif
 
 #ifndef UI_ASSERT_OVERRIDE
 #include <assert.h>

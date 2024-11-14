@@ -66,11 +66,11 @@ typedef union ivec4 {
 
 typedef struct string { // utf8-encoded string
 	char* data;
-	int size;
+	size_t size;
 #ifdef __cplusplus
 	string() : data(0), size(0) {}
-	string(const char* _data, int _size) : data((char*)_data), size(_size) {}
-	string(const char* _cstr) : data((char*)_cstr), size(_cstr ? (int)strlen(_cstr) : 0) {}
+	string(const char* _data, size_t _size) : data((char*)_data), size(_size) {}
+	string(const char* _cstr) : data((char*)_cstr), size(_cstr ? strlen(_cstr) : 0) {}
 #endif
 } string;
 
@@ -81,7 +81,7 @@ typedef enum HT_TypeKind {
 	HT_TypeKind_AssetRef,
 	HT_TypeKind_Struct,
 	HT_TypeKind_Array,
-	HT_TypeKind_ItemTree,
+	HT_TypeKind_ItemGroup,
 	HT_TypeKind_String,
 	HT_TypeKind_Type,
 	HT_TypeKind_COUNT,
@@ -90,29 +90,43 @@ typedef enum HT_TypeKind {
 
 typedef struct HT_AssetHandle_* HT_AssetHandle;
 
-typedef struct HT_ItemTree {
-	void** buckets;
-	u16 buckets_count;
-	u16 buckets_capacity;
-	i32 count;
-	i32 last_bucket_end;
-	i32 elems_per_bucket;
-} HT_ItemTree;
-
-typedef struct HT_ItemHandleDecoded {
-	u16 bucket;
-	u16 slot;
-	u32 generation;
-} HT_ItemHandleDecoded;
-
-// Not actually a pointer - encodes a HT_ItemHandleDecoded structure. Typedef'd to a pointer for type safety and easy comparison.
-typedef struct HT_ItemHandle_* HT_ItemHandle;
-
 typedef struct HT_Array {
 	void* data;
 	i32 count;
 	i32 capacity;
 } HT_Array;
+
+#define HT_ITEM_INDEX_INVALID 0xFFFFFFFF
+
+typedef union HT_ItemIndex {
+	struct { u16 bucket, slot; };
+	u32 _u32; // may be HT_ITEM_INDEX_INVALID
+} HT_ItemIndex;
+
+// Each item is part of a doubly linked list, so everything is always ordered.
+typedef struct HT_ItemGroup {
+	HT_Array buckets;
+	i32 count;
+	i32 last_bucket_end;
+	i32 elems_per_bucket;
+	HT_ItemIndex first;
+	HT_ItemIndex last;
+	HT_ItemIndex freelist_first;
+} HT_ItemGroup;
+
+typedef struct HT_ItemHeader {
+	HT_ItemIndex prev;
+	HT_ItemIndex next;
+	string name;
+} HT_ItemHeader;
+
+typedef struct HT_ItemHandleDecoded {
+	HT_ItemIndex index;
+	u32 generation;
+} HT_ItemHandleDecoded;
+
+// Not actually a pointer - encodes a HT_ItemHandleDecoded structure. Typedef'd to a pointer for type safety and easy comparison.
+typedef struct HT_ItemHandle_* HT_ItemHandle;
 
 typedef struct HT_Type {
 	HT_TypeKind kind;

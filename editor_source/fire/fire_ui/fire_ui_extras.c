@@ -1,5 +1,7 @@
 // This file contains some experimental extra utilities
 
+#include <fire_ds.h>
+#include <fire_string.h>
 #include "fire_ui.h"
 
 static void UI_ValEditArrayScrollAreaComputeUnexpandedSize(UI_Box* box, UI_Axis axis, int pass, bool* request_second_pass) {

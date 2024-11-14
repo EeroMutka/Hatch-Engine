@@ -4,22 +4,30 @@
 // Convention for marking non-static / exported symbols
 #define EXPORT
 
+#ifdef DISABLE_ASSERT
+#define ASSERT(X)
+#else
+#define ASSERT(X) do { if (!(X)) __debugbreak(); } while (0)
+#endif
+
 #define TODO() __debugbreak()
+
+#define DS_ASSERT(X) ASSERT(X)
+#include <fire_ds.h>
+#include <fire_string.h>
 
 #define UI_CUSTOM_VEC2
 typedef vec2 UI_Vec2;
-#include "../fire/fire_ui/fire_ui.h"
+#include <fire_ui/fire_ui.h>
 
 #define OS_WINDOW_API extern "C"
-#include "../fire/fire_os_window.h"
+#include <fire_os_window.h>
 
 #define OS_CLIPBOARD_API extern "C"
-#include "../fire/fire_os_clipboard.h"
+#include <fire_os_clipboard.h>
 
 #define BUILD_API extern "C"
-#include "../fire/fire_build.h"
-
-#include "../fire/fire_string.h"
+#include <fire_build.h>
 
 #include "../utils/ui_data_tree.h"
 
@@ -208,8 +216,8 @@ EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle); // returns NULL 
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
 
-EXPORT void InitStructDataAsset(Asset* asset, Asset* struct_type);
-EXPORT void DeinitStructDataAssetIfInitialized(Asset* asset);
+EXPORT void InitStructDataAsset(AssetTree* tree, Asset* asset, Asset* struct_type);
+EXPORT void DeinitStructDataAssetIfInitialized(AssetTree* tree, Asset* asset);
 
 //EXPORT void StructMemberNodeInit(StructMemberNode* node);
 //EXPORT void StructMemberNodeDeinit(StructMemberNode* node);
@@ -230,8 +238,25 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 
 EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset);
 
+EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type);
+EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type);
+
 EXPORT void ArrayPush(HT_Array* array, i32 elem_size);
 EXPORT void ArrayClear(HT_Array* array, i32 elem_size);
+EXPORT void ArrayDeinit(HT_Array* array);
+
+EXPORT void ItemGroupInit(HT_ItemGroup* group);
+EXPORT void ItemGroupDeinit(HT_ItemGroup* group, i32 item_full_size);
+EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group, i32 item_full_size); // does not insert the asset into the list yet, you must call MoveItemToAfter
+EXPORT void ItemGroupRemove(HT_ItemGroup* group, HT_ItemIndex item, i32 item_full_size);
+
+EXPORT void CalculateItemOffsets(i32 item_size, i32 item_align, i32* out_item_offset, i32* out_item_full_size);
+
+// `item` may be HT_ITEM_INDEX_INVALID, in which case NULL is returned. Otherwise the index must be valid.
+EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item, i32 item_full_size);
+
+// if `move_after_this` is HT_ITEM_INDEX_INVALID, the item is moved to the beginning of the list.
+EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this, i32 item_full_size);
 
 EXPORT void StructMemberInit(StructMember* x);
 EXPORT void StructMemberDeinit(StructMember* x);

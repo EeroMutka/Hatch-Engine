@@ -1,3 +1,5 @@
+#include <fire_ds.h>
+#include <fire_string.h>
 #include "fire_ui.h"
 
 // -- Global state ---------

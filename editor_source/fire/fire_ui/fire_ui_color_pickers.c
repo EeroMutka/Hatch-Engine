@@ -1,3 +1,5 @@
+#include <fire_ds.h>
+#include <fire_string.h>
 #include "fire_ui.h"
 
 // r,g,b, should be in 0-1 range, returned h, s, v will be in 0-1 range

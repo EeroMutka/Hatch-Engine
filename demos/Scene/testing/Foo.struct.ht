@@ -1,0 +1,6 @@
+struct: {
+	// components: @Array Any
+	x: @Array Float
+	y: Float
+	z: Float
+}

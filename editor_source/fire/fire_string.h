@@ -17,15 +17,18 @@
 #include <stdarg.h>
 #include <math.h> // isnan, isinf
 
-#ifdef STR_CUSTOM_MALLOC
+#ifdef STR_CUSTOM_STDLIB
 // (Provide your own implementation before including this file)
 #elif defined(FIRE_DS_INCLUDED) /* Use memory functions from fire_ds.h */
 #define STR_MemAlloc(ALLOCATOR, SIZE) (void*)DS_MemAlloc((DS_Allocator*)ALLOCATOR, SIZE)
 #define STR_MemFree(ALLOCATOR, PTR) DS_MemFree((DS_Allocator*)ALLOCATOR, (void*)(PTR))
+#define STR_ASSERT(X) DS_ASSERT(X)
 #else
 #include <stdlib.h>
+#include <assert.h>
 #define STR_MemAlloc(ALLOCATOR, SIZE) (void*)malloc(SIZE)
 #define STR_MemFree(ALLOCATOR, PTR) free((void*)(PTR))
+#define STR_ASSERT(x) assert(x)
 #endif
 
 typedef struct STR_View {
@@ -43,10 +46,6 @@ typedef struct STR_View {
 #define STR_API static
 #endif
 
-#ifndef STR_ASSERT
-#include <assert.h>
-#define STR_ASSERT(x) assert(x)
-#endif
 
 #ifndef STR_PROFILER_MACROS
 // Function-level profiler scope. A single function may only have one of these, and it should span the entire function.

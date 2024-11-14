@@ -1,4 +1,4 @@
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 
 /*static void LogPrint(STR_View str) {
 	g_next_log_message_index++;

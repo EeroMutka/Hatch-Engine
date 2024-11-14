@@ -1,5 +1,6 @@
 type: "types/Scene"
 data: {
+	// maybe an "ItemGroup" could be called "IndexedGroup" or "IdGroup" or "IdList and "IdGroupHandle" or "Id"
 	entities: {
 		"My box 1": {
 			x: 10

@@ -1,4 +1,4 @@
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 #include "include/ht_editor_render.h"
 
 #include "fire/fire_ui/fire_ui_backend_fire_os.h"

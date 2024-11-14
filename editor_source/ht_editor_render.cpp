@@ -1,4 +1,4 @@
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 #include "include/ht_editor_render.h"
 
 #include "fire/fire_ui/fire_ui_backend_dx12.h"
@@ -17,7 +17,7 @@ static void CreateRenderTargets(RenderState* s) {
     for (int i = 0; i < BACK_BUFFER_COUNT; i++) {
         ID3D12Resource* back_buffer;
         bool ok = s->swapchain->GetBuffer(i, IID_PPV_ARGS(&back_buffer)) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         s->device->CreateRenderTargetView(back_buffer, NULL, rtv_handle);
         s->back_buffers[i] = back_buffer;
@@ -38,7 +38,7 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
     s->window_size = window_size;
 
     bool ok = D3D12CreateDevice(NULL, D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&s->device)) == S_OK;
-    assert(ok);
+    ASSERT(ok);
 
 //#ifdef UI_DX12_DEBUG_MODE
     if (debug_interface) {
@@ -58,7 +58,7 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 		queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 		queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 		ok = s->device->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(&s->command_queue)) == S_OK;
-		assert(ok);
+		ASSERT(ok);
 	}
 
 
@@ -69,41 +69,41 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 		rtv_heap_desc.NumDescriptors = BACK_BUFFER_COUNT;
 		rtv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
 		ok = s->device->CreateDescriptorHeap(&rtv_heap_desc, IID_PPV_ARGS(&s->rtv_heap)) == S_OK;
-		assert(ok);
+		ASSERT(ok);
 
         D3D12_DESCRIPTOR_HEAP_DESC srv_heap_desc = {};
         srv_heap_desc.NumDescriptors = 1;
         srv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
         srv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         ok = s->device->CreateDescriptorHeap(&srv_heap_desc, IID_PPV_ARGS(&s->srv_heap)) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
 		s->rtv_descriptor_size = s->device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	}
 
 	// Create command allocator
 	ok = s->device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&s->command_allocator)) == S_OK;
-	assert(ok);
+	ASSERT(ok);
 
     // Create the command list.
     ok = s->device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s->command_allocator, NULL, IID_PPV_ARGS(&s->command_list)) == S_OK;
-    assert(ok);
+    ASSERT(ok);
 
     // Command lists are created in the recording state, but there is nothing
     // to record yet. The main loop expects it to be closed, so close it now.
     ok = s->command_list->Close() == S_OK;
-    assert(ok);
+    ASSERT(ok);
 
     // Create synchronization objects
     {
         ok = s->device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s->fence)) == S_OK;
-        assert(ok);
+        ASSERT(ok);
         //s->render_finished_fence_value[0] = 1;
         //s->render_finished_fence_value[1] = 1;
 
         // Create an event handle to use for frame synchronization.
         s->fence_event = CreateEventW(NULL, FALSE, FALSE, NULL);
-        assert(s->fence_event != NULL);
+        ASSERT(s->fence_event != NULL);
     }
     
     // Create swapchain
@@ -119,14 +119,14 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 
         IDXGIFactory4* dxgi_factory = NULL;
         ok = CreateDXGIFactory1(IID_PPV_ARGS(&dxgi_factory)) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         IDXGISwapChain1* swapchain1 = NULL;
         ok = dxgi_factory->CreateSwapChainForHwnd(s->command_queue, (HWND)window.handle, &swapchain_desc, NULL, NULL, &swapchain1) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         ok = swapchain1->QueryInterface(IID_PPV_ARGS(&s->swapchain)) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         swapchain1->Release();
         dxgi_factory->Release();
@@ -150,7 +150,7 @@ EXPORT void ResizeSwapchain(RenderState* s, ivec2 size) {
 	FreeRenderTargets(s);
 	
 	bool ok = s->swapchain->ResizeBuffers(0, size.x, size.y, DXGI_FORMAT_UNKNOWN, 0) == S_OK;
-	assert(ok);
+	ASSERT(ok);
 	
 	CreateRenderTargets(s);
 	
@@ -166,13 +166,13 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
         // command lists have finished execution on the GPU; apps should use
         // fences to determine GPU execution progress.
         bool ok = s->command_allocator->Reset() == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         // However, when ExecuteCommandList() is called on a particular command 
         // list, that command list can then be reset at any time and must be before 
         // re-recording.
         ok = s->command_list->Reset(s->command_allocator, NULL) == S_OK;
-        assert(ok);
+        ASSERT(ok);
 
         D3D12_VIEWPORT viewport = {};
         viewport.Width = (float)s->window_size.x;
@@ -205,14 +205,14 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
         s->command_list->ResourceBarrier(1, &rt_to_present);
 
         ok = s->command_list->Close() == S_OK;
-        assert(ok);
+        ASSERT(ok);
     }
 
     ID3D12CommandList* command_lists[] = { s->command_list };
     s->command_queue->ExecuteCommandLists(DS_ArrayCount(command_lists), command_lists);
 
     bool ok = s->swapchain->Present(1, 0) == S_OK;
-    assert(ok);
+    ASSERT(ok);
 	
 	// Wait for GPU
 	{
@@ -231,7 +231,7 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
 		if (s->fence->GetCompletedValue() < s->render_finished_fence_value)
 		{
 			ok = s->fence->SetEventOnCompletion(s->render_finished_fence_value, s->fence_event) == S_OK;
-			assert(ok);
+			ASSERT(ok);
 			WaitForSingleObjectEx(s->fence_event, INFINITE, FALSE);
 		}
 

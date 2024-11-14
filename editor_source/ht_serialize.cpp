@@ -1,6 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS // for fopen
 
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 
 #define MD_FUNCTION extern "C"
 #include "third_party/md.h"
@@ -50,11 +50,11 @@ struct ReloadAssetsContext {
 
 // While we go, we also generate and update filesys_paths.
 static void SaveAsset(Asset* asset, STR_View filesys_path) {
-	assert(!STR_ContainsU(filesys_path, '\\'));
+	ASSERT(!STR_ContainsU(filesys_path, '\\'));
 
 	if (asset->kind == AssetKind_Folder || asset->kind == AssetKind_Package) {
 		bool ok = OS_MakeDirectory(MEM_TEMP(), filesys_path);
-		assert(ok);
+		ASSERT(ok);
 
 		OS_FileInfoArray files;
 		ok = OS_GetAllFilesInDirectory(MEM_SCOPE(TEMP), filesys_path, &files);
@@ -162,7 +162,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 }
 
 EXPORT void SavePackageToDisk(Asset* package) {
-	assert(package->kind == AssetKind_Package);
+	ASSERT(package->kind == AssetKind_Package);
 
 	if (package->package.filesys_path.size == 0) {
 		STR_View filesys_path;
@@ -245,7 +245,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* package, Asset* parent, ST
 			MoveAssetToInside(tree, asset, parent);
 		}
 
-		assert(info.last_write_time >= asset->modtime); // modtime should never decrease on windows
+		ASSERT(info.last_write_time >= asset->modtime); // modtime should never decrease on windows
 		asset->reload_assets_pass2_needs_hotreload = info.last_write_time != asset->modtime;
 		asset->modtime = info.last_write_time;
 
@@ -310,15 +310,15 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 
 			MD_ArenaClear(ctx->md_arena);
 			parse = MD_ParseWholeFile(ctx->md_arena, md_filepath);
-			assert(!MD_NodeIsNil(parse.node));
-			assert(parse.errors.node_count == 0);
+			ASSERT(!MD_NodeIsNil(parse.node));
+			ASSERT(parse.errors.node_count == 0);
 		}
 
 		// Queue up the plugin for recompilation if any source file has been modified
 		//if (asset->kind == AssetKind_Plugin && asset->plugin_active_data) {
 		//	DS_ForMapEach(uint64_t, PluginIncludeStamp, &asset->plugin_active_data->includes, IT) {
 		//		OS_FileTime last_write_time;
-		//		assert(OS_FileModtime(IT.value->file_path, &last_write_time));
+		//		ASSERT(OS_FileModtime(IT.value->file_path, &last_write_time));
 		//		if (OS_FileCmpModtime(last_write_time, IT.value->last_write_time) == 0) continue;
 		//		
 		//		DS_ArrPush(&ctx->queue_recompile_plugins, asset);
@@ -335,7 +335,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 			DS_ArrClear(&asset->struct_type.members);
 			
 			//DS_ArrClear(&asset->struct_members);
-			assert(!MD_NodeIsNil(struct_node));
+			ASSERT(!MD_NodeIsNil(struct_node));
 			for (MD_EachNode(it, struct_node->first_child)) {
 				StructMember member = {0};
 				StructMemberInit(&member);
@@ -343,14 +343,29 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				STR_View name = StrFromMD(it->string);
 				UI_TextSet(&member.name.text, name);
 				
-				assert(!MD_NodeIsNil(it->first_child));
+				ASSERT(!MD_NodeIsNil(it->first_child));
 				STR_View type_name = StrFromMD(it->first_child->string);
-				member.type.kind = StringToTypeKind(type_name);
-				assert(member.type.kind != HT_TypeKind_INVALID);
+				
+				HT_TypeKind builtin_type = StringToTypeKind(type_name);
+				if (builtin_type != HT_TypeKind_INVALID) {
+					member.type.kind = builtin_type;
+				}
+				else {
+					// Must be a user-defined type
+					Asset* struct_type = FindAssetFromPath(ctx->package, type_name);
+					ASSERT(struct_type);
+					member.type.kind = HT_TypeKind_Struct;
+					member.type._struct = struct_type->handle;
+				}
 				
 				if (MD_NodeHasTag(it->first_child, MD_S8Lit("Array"), 0)) {
 					member.type.subkind = member.type.kind;
 					member.type.kind = HT_TypeKind_Array;
+				}
+
+				if (MD_NodeHasTag(it->first_child, MD_S8Lit("ItemGroup"), 0)) {
+					member.type.subkind = member.type.kind;
+					member.type.kind = HT_TypeKind_ItemGroup;
 				}
 				
 				DS_ArrPush(&asset->struct_type.members, member);
@@ -364,15 +379,54 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 }
 
 // `dst` is expected to be zero-initialized.
-static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* member_node, MD_Node* value_node) {
+static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* node) {
+	// if the child is an array, struct or ItemGroup, then `node` is actually the first child in that container. Otherwise it's the value node itself.
+
 	switch (type->kind) {
+	case HT_TypeKind_Struct: {
+		Asset* struct_asset = GetAsset(tree, type->_struct);
+
+		MD_Node* child = node;
+		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
+			StructMember member = struct_asset->struct_type.members[i];
+			STR_View member_name = UI_TextToStr(member.name.text);
+
+			ASSERT(!MD_NodeIsNil(child));
+			ASSERT(MD_S8Match(child->string, StrToMD(member_name), 0));
+
+			ReadMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, child->first_child);
+			child = child->next;
+		}
+	}break;
+	case HT_TypeKind_ItemGroup: {
+		HT_ItemGroup* val = (HT_ItemGroup*)dst;
+
+		HT_Type item_type = *type;
+		item_type.kind = type->subkind;
+		
+		i32 item_size, item_align;
+		GetTypeSizeAndAlignment(tree, &item_type, &item_size, &item_align);
+
+		i32 item_offset, item_full_size;
+		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
+
+		for (MD_Node* child = node; !MD_NodeIsNil(child); child = child->next) {
+			HT_ItemIndex item_i = ItemGroupAdd(val, item_full_size);
+			
+			HT_ItemHeader* item = GetItemFromIndex(val, item_i, item_full_size);
+			STR_View name = STR_Clone(DS_HEAP, StrFromMD(child->string));
+			item->name = {name.data, name.size};
+			
+			MoveItemToAfter(val, item_i, val->last, item_full_size);
+
+			void* item_data = (char*)GetItemFromIndex(val, item_i, item_full_size) + item_offset;
+			Construct(tree, item_data, &item_type);
+			ReadMetadeskValue(tree, package, item_data, &item_type, child->first_child);
+		}
+	}break;
 	case HT_TypeKind_Array: {
 		HT_Array* val = (HT_Array*)dst;
 		
-		assert(member_node != NULL);
-		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
-		assert(member_node->flags & MD_NodeFlag_HasBraceLeft);
-
 		HT_Type elem_type = *type;
 		elem_type.kind = type->subkind;
 		
@@ -380,27 +434,27 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 		GetTypeSizeAndAlignment(tree, &elem_type, &elem_size, &elem_align);
 
 		int i = 0;
-		for (MD_Node* child = member_node->first_child; !MD_NodeIsNil(child); child = child->next) {
+		for (MD_Node* child = node; !MD_NodeIsNil(child); child = child->next) {
 			ArrayPush(val, elem_size);
 			char* elem_data = (char*)val->data + elem_size*i;
-			memset(elem_data, 0, elem_size);
-			ReadMetadeskValue(tree, package, elem_data, &elem_type, NULL, child);
+			Construct(tree, elem_data, &elem_type);
+			ReadMetadeskValue(tree, package, elem_data, &elem_type, child->first_child);
 			i++;
 		}
 	}break;
 	case HT_TypeKind_Int: {
 		int* val = (int*)dst;
-		bool ok = ParseMetadeskInt(value_node, val);
-		assert(ok);
+		bool ok = ParseMetadeskInt(node, val);
+		ASSERT(ok);
 	}break;
 	case HT_TypeKind_Float: {
 		float* val = (float*)dst;
-		bool ok = ParseMetadeskFloat(value_node, val);
-		assert(ok);
+		bool ok = ParseMetadeskFloat(node, val);
+		ASSERT(ok);
 	}break;
 	case HT_TypeKind_AssetRef: {
 		HT_AssetHandle* val = (HT_AssetHandle*)dst;
-		Asset* found_asset = FindAssetFromPath(package, StrFromMD(value_node->string));
+		Asset* found_asset = FindAssetFromPath(package, StrFromMD(node->string));
 		*val = found_asset ? found_asset->handle : NULL;
 	}break;
 	default: TODO();
@@ -417,8 +471,8 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 
 			MD_ArenaClear(ctx->md_arena);
 			parse = MD_ParseWholeFile(ctx->md_arena, md_filepath);
-			assert(!MD_NodeIsNil(parse.node));
-			assert(parse.errors.node_count == 0);
+			ASSERT(!MD_NodeIsNil(parse.node));
+			ASSERT(parse.errors.node_count == 0);
 		}
 		
 		if (asset->kind == AssetKind_Plugin) {
@@ -449,22 +503,17 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		if (asset->kind == AssetKind_StructData) {
 			MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("type"), 0);
 			Asset* type_asset = FindAssetFromPath(ctx->package, StrFromMD(type_node->first_child->string));
-			assert(type_asset != NULL);
-			assert(type_asset->kind == AssetKind_StructType);
+			ASSERT(type_asset != NULL);
+			ASSERT(type_asset->kind == AssetKind_StructType);
 			
-			DeinitStructDataAssetIfInitialized(asset);
-			InitStructDataAsset(asset, type_asset);
+			DeinitStructDataAssetIfInitialized(ctx->tree, asset);
+			InitStructDataAsset(ctx->tree, asset, type_asset);
 
 			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data"), 0);
-			for (int i = 0; i < type_asset->struct_type.members.count; i++) {
-				StructMember member = type_asset->struct_type.members[i];
-				STR_View member_name = UI_TextToStr(member.name.text);
-				
-				MD_Node* member_node = MD_ChildFromString(data_node, StrToMD(member_name), 0);
-				assert(!MD_NodeIsNil(member_node));
-				
-				ReadMetadeskValue(ctx->tree, ctx->package, (char*)asset->struct_data.data + member.offset, &member.type, member_node, member_node->first_child);
-			}
+
+			HT_Type type = { HT_TypeKind_Struct };
+			type._struct = type_asset->handle;
+			ReadMetadeskValue(ctx->tree, ctx->package, asset->struct_data.data, &type, data_node->first_child);
 		}
 
 		ReloadAssetsPass3(ctx, asset);
@@ -504,7 +553,7 @@ static void ReloadPackage(AssetTree* tree, Asset* package) {
 }
 
 EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path) {
-	assert(OS_PathIsAbsolute(path));
+	ASSERT(OS_PathIsAbsolute(path));
 
 	Asset* package = MakeNewAsset(tree, AssetKind_Package);
 	package->ui_state_is_open = true;
@@ -514,7 +563,7 @@ EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path) {
 	package->package.filesys_path = STR_Clone(DS_HEAP, path);
 	
 	bool ok = OS_InitDirectoryWatch(MEM_TEMP(), &package->package.dir_watch, package->package.filesys_path);
-	assert(ok);
+	ASSERT(ok);
 	
 	ReloadPackage(tree, package);
 

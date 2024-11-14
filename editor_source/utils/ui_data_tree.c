@@ -1,3 +1,5 @@
+#include <fire_ds.h>
+#include <fire_string.h>
 #include <fire_ui/fire_ui.h>
 
 #include "ui_data_tree.h"

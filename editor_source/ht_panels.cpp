@@ -1,5 +1,5 @@
 #if 0
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 
 static UI_Panel* NewUIPanel() {
 	UI_Panel* panel = (UI_Panel*)DS_TakeSlot(&g_panels);
@@ -16,7 +16,7 @@ static void FreeUIPanel(UI_Panel* panel) {
 
 // Split panel and return the split
 static UI_Panel* SplitPanel(UI_Panel* panel, UI_Axis split_along) {
-	assert(panel->end_child[0] == NULL); // panel must be a leaf
+	ASSERT(panel->end_child[0] == NULL); // panel must be a leaf
 	UI_Panel* parent = panel->parent;
 	UI_Panel* split = NULL;
 
@@ -70,7 +70,7 @@ static UI_Panel* SplitPanel(UI_Panel* panel, UI_Axis split_along) {
 }
 
 static void ClosePanel(UI_Panel* panel) {
-	assert(panel->end_child[0] == NULL); // panel must be a leaf
+	ASSERT(panel->end_child[0] == NULL); // panel must be a leaf
 	
 	UI_Panel* parent = panel->parent;
 	DS_ArrClear(&panel->tabs);
@@ -84,7 +84,7 @@ static void ClosePanel(UI_Panel* panel) {
 	
 	FreeUIPanel(panel);
 	
-	assert(parent->end_child[0] != NULL); // child lists must always have more than 1 element
+	ASSERT(parent->end_child[0] != NULL); // child lists must always have more than 1 element
 
 	// if the parent now has only one child, then replace the parent with the last child
 	if (parent->end_child[0] && parent->end_child[0] == parent->end_child[1]) {

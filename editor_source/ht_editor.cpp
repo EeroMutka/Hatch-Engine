@@ -8,7 +8,7 @@
 #include <d3dcompiler.h>
 #include <dxgidebug.h>
 
-#include "include/ht_internal.h"
+#include "include/ht_common.h"
 #include "include/ht_editor_render.h" // this should also be cleaned up!
 
 #include <stdio.h> // temporarily here just for HT_DebugPrint
@@ -389,8 +389,8 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			UI_AddCheckbox(UI_KBOX(key), (bool*)member_val->data);
 		}break;
 		case HT_TypeKind_Struct: {}break;
-		case HT_TypeKind_ItemTree: {
-			UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, "(ItemTree: TODO)");
+		case HT_TypeKind_ItemGroup: {
+			// UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, "(ItemGroup: TODO)");
 		}break;
 		case HT_TypeKind_Array: {
 			UI_Box* add_button = UI_KBOX(key);
@@ -429,67 +429,90 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 	}
 }
 
-static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, Asset* struct_type, void* struct_data_base);
-
-static void AddStructMemberNode(EditorState* s, StructMemberValNode* parent, StructMemberValNode* node, HT_Type* type) {
-	UI_DataTreeNode* p = &parent->base;
-	UI_DataTreeNode* n = &node->base;
-	
+static void AddDataTreeNode(UI_DataTreeNode* parent, UI_DataTreeNode* node) { // TODO: make this an utility fn?
 	// Push to doubly linked list
-	if (p->last_child) p->last_child->next = n;
-	else p->first_child = n;
-	n->prev = p->last_child;
-	p->last_child = n;
-	n->parent = p;
-
-	if (node->type.kind == HT_TypeKind_Struct) {
-		Asset* struct_asset = GetAsset(&s->asset_tree, node->type._struct);
-		if (struct_asset) {
-			BuildStructMemberValNodes(s, node, struct_asset, node->data);
-		}
-	}
+	if (parent->last_child) parent->last_child->next = node;
+	else parent->first_child = node;
+	node->prev = parent->last_child;
+	parent->last_child = node;
+	node->parent = parent;
 }
 
-static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, Asset* struct_type, void* struct_data_base) {
-	assert(struct_type->kind == AssetKind_StructType);
+static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent) {
+	if (parent->type.kind == HT_TypeKind_Struct) {
+		Asset* struct_asset = GetAsset(&s->asset_tree, parent->type._struct);
 
-	for (int i = 0; i < struct_type->struct_type.members.count; i++) {
-		StructMember* member = &struct_type->struct_type.members[i];
-		StructMemberValNode* member_val = DS_New(StructMemberValNode, UI_FrameArena());
+		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
+			StructMember* member = &struct_asset->struct_type.members[i];
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
 
-		member_val->name = UI_TextToStr(member->name.text);
-		member_val->type = member->type;
-		member_val->data = (char*)struct_data_base + member->offset;
-		member_val->base.key = UI_HashInt(parent->base.key, i);
-		
-		bool* is_open = NULL;
-		UI_BoxGetRetainedVar(UI_KBOX(member_val->base.key), UI_KEY(), &is_open);
-		member_val->base.is_open_ptr = is_open;
-
-		AddStructMemberNode(s, parent, member_val, &member->type);
-
-		if (member->type.kind == HT_TypeKind_Array) {
-			HT_Array* array = (HT_Array*)member_val->data;
-			HT_Type elem_type = member->type;
-			elem_type.kind = elem_type.subkind;
+			node->name = UI_TextToStr(member->name.text);
+			node->type = member->type;
+			node->data = (char*)parent->data + member->offset;
+			node->base.key = UI_HashInt(parent->base.key, i);
 			
-			i32 elem_size, elem_align;
-			GetTypeSizeAndAlignment(&s->asset_tree, &elem_type, &elem_size, &elem_align);
+			bool* is_open = NULL;
+			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
+			node->base.is_open_ptr = is_open;
 
-			for (int j = 0; j < array->count; j++) {
-				StructMemberValNode* element_val = DS_New(StructMemberValNode, UI_FrameArena());
-				
-				element_val->name = STR_Form(UI_FrameArena(), "[%d]", j);
-				element_val->type = elem_type;
-				element_val->data = (char*)array->data + elem_size * j;
-				element_val->base.key = UI_HashInt(member_val->base.key, j);
-				
-				bool* elem_is_open = NULL;
-				UI_BoxGetRetainedVar(UI_KBOX(element_val->base.key), UI_KEY(), &elem_is_open);
-				element_val->base.is_open_ptr = elem_is_open;
+			AddDataTreeNode(&parent->base, &node->base);
+			BuildStructMemberValNodes(s, node);
+		}
+	}
+	else if (parent->type.kind == HT_TypeKind_Array) {
+		HT_Array* array = (HT_Array*)parent->data;
+		
+		HT_Type elem_type = parent->type;
+		elem_type.kind = elem_type.subkind;
+		
+		i32 elem_size, elem_align;
+		GetTypeSizeAndAlignment(&s->asset_tree, &elem_type, &elem_size, &elem_align);
 
-				AddStructMemberNode(s, member_val, element_val, &elem_type);
-			}
+		for (int j = 0; j < array->count; j++) {
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			node->name = STR_Form(UI_FrameArena(), "[%d]", j);
+			node->type = elem_type;
+			node->data = (char*)array->data + elem_size * j;
+			node->base.key = UI_HashInt(parent->base.key, j);
+			
+			bool* is_open = NULL;
+			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
+			node->base.is_open_ptr = is_open;
+
+			AddDataTreeNode(&parent->base, &node->base);
+			BuildStructMemberValNodes(s, node);
+		}
+	}
+	else if (parent->type.kind == HT_TypeKind_ItemGroup) {
+		HT_ItemGroup* group = (HT_ItemGroup*)parent->data;
+		
+		HT_Type item_type = parent->type;
+		item_type.kind = item_type.subkind;
+		
+		i32 item_size, item_align;
+		GetTypeSizeAndAlignment(&s->asset_tree, &item_type, &item_size, &item_align);
+		
+		i32 item_offset, item_full_size;
+		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
+		
+		HT_ItemIndex i = group->first;
+		while (i._u32 != HT_ITEM_INDEX_INVALID) {
+			HT_ItemHeader* item = GetItemFromIndex(group, i, item_full_size);
+			
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			node->name = {item->name.data, item->name.size};
+			node->type = item_type;
+			node->data = (char*)item + item_offset;
+			node->base.key = UI_HashInt(parent->base.key, i._u32);
+			
+			bool* is_open = NULL;
+			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
+			node->base.is_open_ptr = is_open;
+
+			AddDataTreeNode(&parent->base, &node->base);
+			BuildStructMemberValNodes(s, node);
+			
+			i = item->next;
 		}
 	}
 }
@@ -497,8 +520,10 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Asset* struct_type) {
 	StructMemberValNode root = {0};
 	root.base.key = key;
-
-	BuildStructMemberValNodes(s, &root, struct_type, data);
+	root.data = data;
+	root.type.kind = HT_TypeKind_Struct;
+	root.type._struct = struct_type->handle;
+	BuildStructMemberValNodes(s, &root);
 
 	UI_DataTree members_tree = {0};
 	members_tree.root = &root.base;
@@ -754,7 +779,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				MoveAssetToInside(&s->asset_tree, new_asset, s->asset_tree.root);
 				s->assets_tree_ui_state.selection = (UI_Key)new_asset->handle;
 
-				InitStructDataAsset(new_asset, selected_asset);
+				InitStructDataAsset(&s->asset_tree, new_asset, selected_asset);
 
 				s->rmb_menu_open = false;
 			}
@@ -789,7 +814,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 #if 0
 			StructMemberNode* selected_member = (StructMemberNode*)g_properties_tree_type_ui_state.selection;
 			if (selected_member) {
-				assert(selected_member->parent);
+				ASSERT(selected_member->parent);
 
 				UI_Box* delete_button = UI_BOX();
 				UI_AddLabel(delete_button, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Delete");
@@ -962,7 +987,7 @@ static HT_TabClass* HT_CreateTabClass(STR_View name) {
 
 static void HT_DestroyTabClass(HT_TabClass* tab) {
 	UI_Tab* tab_class = (UI_Tab*)tab;
-	assert(tab_class->owner_plugin == g_plugin_call_ctx->plugin->handle); // a plugin may only destroy its own tab classes.
+	ASSERT(tab_class->owner_plugin == g_plugin_call_ctx->plugin->handle); // a plugin may only destroy its own tab classes.
 	DestroyTabClass(g_plugin_call_ctx->s, tab_class);
 }
 
