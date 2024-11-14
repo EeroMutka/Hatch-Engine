@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #define EXPORT
 
 #include "fire/fire_ds.h"

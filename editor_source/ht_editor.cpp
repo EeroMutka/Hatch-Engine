@@ -382,6 +382,16 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 		case HT_TypeKind_Float: {
 			UI_AddValFloat(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), (float*)member_val->data);
 		}break;
+		case HT_TypeKind_Vec2: TODO(); break;
+		case HT_TypeKind_Vec3: {
+			UI_AddValFloat(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &((vec3*)member_val->data)->x);
+			UI_AddValFloat(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &((vec3*)member_val->data)->y);
+			UI_AddValFloat(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &((vec3*)member_val->data)->z);
+		}break;
+		case HT_TypeKind_Vec4: TODO(); break;
+		case HT_TypeKind_IVec2: TODO(); break;
+		case HT_TypeKind_IVec3: TODO(); break;
+		case HT_TypeKind_IVec4: TODO(); break;
 		case HT_TypeKind_Int: {
 			UI_AddValInt(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), (int32_t*)member_val->data);
 		}break;

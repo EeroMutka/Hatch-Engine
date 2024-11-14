@@ -167,8 +167,7 @@ static void AppInit(EditorState* s) {
 }
 
 static void UpdateAndDraw(EditorState* s) {
-	// {s->icons_font, 18}
-	UI_BeginFrame(&s->ui_inputs, s->default_font);
+	UI_BeginFrame(&s->ui_inputs, s->default_font, s->icons_font);
 
 	s->frame = {};
 	DS_ArrInit(&s->frame.queued_custom_tab_updates, TEMP);

@@ -17,18 +17,15 @@
 #include <stdarg.h>
 #include <math.h> // isnan, isinf
 
-#ifdef STR_CUSTOM_STDLIB
+#ifdef STR_CUSTOM_MALLOC
 // (Provide your own implementation before including this file)
 #elif defined(FIRE_DS_INCLUDED) /* Use memory functions from fire_ds.h */
 #define STR_MemAlloc(ALLOCATOR, SIZE) (void*)DS_MemAlloc((DS_Allocator*)ALLOCATOR, SIZE)
 #define STR_MemFree(ALLOCATOR, PTR) DS_MemFree((DS_Allocator*)ALLOCATOR, (void*)(PTR))
-#define STR_ASSERT(X) DS_ASSERT(X)
 #else
 #include <stdlib.h>
-#include <assert.h>
 #define STR_MemAlloc(ALLOCATOR, SIZE) (void*)malloc(SIZE)
 #define STR_MemFree(ALLOCATOR, PTR) free((void*)(PTR))
-#define STR_ASSERT(x) assert(x)
 #endif
 
 typedef struct STR_View {
@@ -46,6 +43,10 @@ typedef struct STR_View {
 #define STR_API static
 #endif
 
+#ifndef STR_ASSERT
+#include <assert.h>
+#define STR_ASSERT(x) assert(x)
+#endif
 
 #ifndef STR_PROFILER_MACROS
 // Function-level profiler scope. A single function may only have one of these, and it should span the entire function.
@@ -71,9 +72,6 @@ typedef struct STR_Builder {
 typedef struct { STR_View* data; size_t size; } STR_Array;
 
 #define STR_IsUtf8FirstByte(c) (((c) & 0xC0) != 0x80) /* is c the start of a utf8 sequence? */
-
-//#define STR_Each(str, r, i) (size_t i=0, r = 0, i##_next=0; (r=STR_NextCodepoint(str, &i##_next)); i=i##_next)
-//#define STR_EachReverse(str, r, i) (size_t i=str.size, r = 0; r=STR_PrevCodepoint(str, &i);)
 
 typedef struct STR_Formatter {
 	void (*print)(STR_Builder* s, struct STR_Formatter* self);
@@ -710,12 +708,13 @@ STR_API uint32_t STR_PrevCodepoint(STR_View str, size_t* byteoffset) {
 
 STR_API size_t STR_CodepointCount(STR_View str) {
 	STR_ProfEnter();
+	size_t count = 0;
 	size_t i = 0;
 	for (uint32_t r; r = STR_NextCodepoint(str, &i);) {
-		i++;
+		count++;
 	}
 	STR_ProfExit();
-	return i;
+	return count;
 }
 
 // https://graphitemaster.github.io/aau/#unsigned-multiplication-can-overflow

@@ -386,7 +386,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 }
 
 // `dst` is expected to be zero-initialized.
-static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* node) {
+static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* node) {
 	// if the child is an array, struct or ItemGroup, then `node` is actually the first child in that container. Otherwise it's the value node itself.
 
 	switch (type->kind) {
@@ -401,7 +401,7 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 			ASSERT(!MD_NodeIsNil(child));
 			ASSERT(MD_S8Match(child->string, StrToMD(member_name), 0));
 
-			ReadMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, child->first_child);
+			ParseMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, child->first_child);
 			child = child->next;
 		}
 	}break;
@@ -428,7 +428,7 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 
 			void* item_data = (char*)GetItemFromIndex(val, item_i, item_full_size) + item_offset;
 			Construct(tree, item_data, &item_type);
-			ReadMetadeskValue(tree, package, item_data, &item_type, child->first_child);
+			ParseMetadeskValue(tree, package, item_data, &item_type, child->first_child);
 		}
 	}break;
 	case HT_TypeKind_Array: {
@@ -445,7 +445,7 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 			ArrayPush(val, elem_size);
 			char* elem_data = (char*)val->data + elem_size*i;
 			Construct(tree, elem_data, &elem_type);
-			ReadMetadeskValue(tree, package, elem_data, &elem_type, child);
+			ParseMetadeskValue(tree, package, elem_data, &elem_type, child);
 			i++;
 		}
 	}break;
@@ -459,6 +459,12 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 		bool ok = ParseMetadeskFloat(node, val);
 		ASSERT(ok);
 	}break;
+	case HT_TypeKind_Vec2: TODO(); break;
+	case HT_TypeKind_Vec3: break;
+	case HT_TypeKind_Vec4: TODO(); break;
+	case HT_TypeKind_IVec2: TODO(); break;
+	case HT_TypeKind_IVec3: TODO(); break;
+	case HT_TypeKind_IVec4: TODO(); break;
 	case HT_TypeKind_Bool: {
 		bool* val = (bool*)dst;
 		/**/ if (MD_S8Match(node->string, MD_S8Lit("true"), 0)) *val = true;
@@ -478,6 +484,7 @@ static void ReadMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Typ
 		
 		HT_Type type = ParseMetadeskType(package, type_tag->first_child);
 		AnyChangeType(tree, val, &type);
+		ParseMetadeskValue(tree, package, val->data, &type, node->first_child);
 	}break;
 	case HT_TypeKind_AssetRef: {
 		HT_AssetHandle* val = (HT_AssetHandle*)dst;
@@ -541,7 +548,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 
 			HT_Type type = { HT_TypeKind_Struct };
 			type._struct = type_asset->handle;
-			ReadMetadeskValue(ctx->tree, ctx->package, asset->struct_data.data, &type, data_node->first_child);
+			ParseMetadeskValue(ctx->tree, ctx->package, asset->struct_data.data, &type, data_node->first_child);
 		}
 
 		ReloadAssetsPass3(ctx, asset);

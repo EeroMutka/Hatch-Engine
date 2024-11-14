@@ -7,13 +7,8 @@
 
 #pragma once
 
-#ifndef FIRE_DS_INCLUDED
-#error "fire_ds.h" must be included before this file!
-#endif
-
-#ifndef FIRE_STRING_INCLUDED
-#error "fire_string.h" must be included before this file!
-#endif
+#include "../fire_ds.h"
+#include "../fire_string.h"
 
 #ifndef UI_ASSERT_OVERRIDE
 #include <assert.h>
@@ -361,6 +356,7 @@ typedef struct UI_State {
 	// -- Builder state -----------------------
 	
 	UI_Font default_font;
+	UI_Font icons_font;
 	DS_DynArray(UI_Box*) box_stack;
 
 	// -- Draw state --------------------------
@@ -477,7 +473,7 @@ UI_API void UI_RectPad(UI_Rect* rect, float pad);
 UI_API void UI_Init(DS_Allocator* allocator);
 UI_API void UI_Deinit(void);
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font);
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font icons_font);
 UI_API void UI_EndFrame(UI_Outputs* outputs);
 
 /*
@@ -526,8 +522,8 @@ UI_API UI_ValNumericState* UI_AddValNumeric(UI_Box* box, UI_Size w, UI_Size h, v
 
 // - Returns false if the collapsable header is closed.
 // TODO: draw a custom icon without relying on an icons font.
-//UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text, UI_Font icons_font);
-//UI_API void UI_PopCollapsing(UI_Box* box);
+UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text);
+UI_API void UI_PopCollapsing(UI_Box* box);
 
 UI_API void UI_TextInit(DS_Allocator* allocator, UI_Text* text, STR_View initial_value);
 UI_API void UI_TextDeinit(UI_Text* text);

@@ -1,5 +1,3 @@
-#include <fire_ds.h>
-#include <fire_string.h>
 #include "fire_ui.h"
 
 // -- Global state ---------
@@ -38,11 +36,12 @@ static float UI_XOffsetFromColumn(int col, STR_View line, UI_Font font) {
 	UI_ProfEnter();
 	float x = 0.f;
 
+	int iter_col = 0;
 	size_t i = 0, i_next = 0;
 	for (uint32_t r; r = STR_NextCodepoint(line, &i_next); i = i_next) {
-		if (i == col) break;
+		if (iter_col == col) break;
 		x += UI_GlyphAdvance(r, font);
-		i++;
+		iter_col++;
 	}
 
 	UI_ProfExit();
@@ -51,8 +50,8 @@ static float UI_XOffsetFromColumn(int col, STR_View line, UI_Font font) {
 
 static STR_View UI_GetLineString(int line, const UI_Text* text) {
 	UI_ProfEnter();
-	int lo = line == 0 ? 0 : DS_ArrGet(text->line_offsets, line - 1);
-	int hi = line == text->line_offsets.count ? text->text.count : DS_ArrGet(text->line_offsets, line);
+	size_t lo = line == 0 ? 0 : DS_ArrGet(text->line_offsets, line - 1);
+	size_t hi = line == text->line_offsets.count ? text->text.count : DS_ArrGet(text->line_offsets, line);
 	STR_View result = { text->text.data, hi - lo };
 	UI_ProfExit();
 	return result;
@@ -193,7 +192,7 @@ static void UI_MoveMarkByWord(UI_Mark* mark, const UI_Text* text, int dir) {
 
 	for (; r = next_codepoint_fn(UI_TextToStr(*text), &byteoffset); i++) {
 		bool whitespace = r == ' ' || r == '\t';
-		bool alnum = (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_';
+		bool alnum = (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r > 127;
 
 		if (i == 0 && r == '\n') break; // TODO: move to next line
 
@@ -607,6 +606,7 @@ UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text
 			if (UI_STATE.inputs.get_clipboard_string_fn) {
 				STR_View str = UI_STATE.inputs.get_clipboard_string_fn(UI_STATE.inputs.user_data);
 				*selection = UI_TextReplaceRange(text, selection->_[0], selection->_[1], str);
+				selection->_[0] = selection->_[1];
 			}
 		}
 
@@ -633,9 +633,7 @@ UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text
 
 UI_API void UI_AddCheckbox(UI_Box* box, bool* value) {
 	UI_ProfEnter();
-
-	__debugbreak();
-	/*
+	
 	float h = UI_STATE.default_font.size + 2.f * UI_DEFAULT_TEXT_PADDING.y;
 
 	UI_AddBox(box, h, h, 0);
@@ -656,7 +654,7 @@ UI_API void UI_AddCheckbox(UI_Box* box, bool* value) {
 	UI_PopBox(box);
 
 	if (UI_Pressed(inner)) *value = !*value;
-	*/
+	
 	UI_ProfExit();
 }
 
@@ -668,7 +666,7 @@ UI_API void UI_AddLabel(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, ST
 	UI_ProfExit();
 }
 
-/*UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text, UI_Font icons_font) {
+UI_API bool UI_PushCollapsing(UI_Box* box, UI_Size w, UI_Size h, UI_Size indent, UI_BoxFlags flags, STR_View text) {
 	UI_ProfEnter();
 	
 	UI_Box* header = UI_BBOX(box);
@@ -705,7 +703,7 @@ UI_API void UI_PopCollapsing(UI_Box* box) {
 	UI_PopBox(box->last_child);
 	UI_PopBox(box);
 	UI_ProfExit();
-}*/
+}
 
 UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y) {
 	UI_ProfEnter();
@@ -1333,12 +1331,15 @@ UI_API void UI_PopBoxN(UI_Box* box, int n) {
 	UI_ASSERT(last_popped == box);
 }
 
-UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font) {
+UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font icons_font) {
 	UI_ProfEnter();
 
 	const int max_vertices_default = 4096;
 	const int max_indices_default = 4096*4;
 	
+	UI_STATE.default_font = default_font;
+	UI_STATE.icons_font = icons_font;
+
 	UI_STATE.vertex_buffer_count = 0;
 	UI_STATE.vertex_buffer_capacity = max_vertices_default;
 	UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(max_vertices_default);
@@ -1357,7 +1358,6 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font) {
 	
 	UI_ASSERT(UI_STATE.box_stack.count == 1);
 	UI_STATE.mouse_pos = UI_AddV2(UI_STATE.inputs.mouse_position, UI_VEC2{ 0.5f, 0.5f });
-	UI_STATE.default_font = default_font;
 	
 	DS_Arena prev_frame_arena = UI_STATE.prev_frame_arena;
 	UI_STATE.prev_frame_arena = UI_STATE.frame_arena;

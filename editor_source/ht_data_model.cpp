@@ -5,6 +5,12 @@ EXPORT STR_View HT_TypeKindToString(HT_TypeKind type) {
 	case HT_TypeKind_Float:     return "Float";
 	case HT_TypeKind_Int:       return "Int";
 	case HT_TypeKind_Bool:      return "Bool";
+	case HT_TypeKind_Vec2:      return "Vec2";
+	case HT_TypeKind_Vec3:      return "Vec3";
+	case HT_TypeKind_Vec4:      return "Vec4";
+	case HT_TypeKind_IVec2:     return "IVec2";
+	case HT_TypeKind_IVec3:     return "IVec3";
+	case HT_TypeKind_IVec4:     return "IVec4";
 	case HT_TypeKind_AssetRef:  return "Asset";
 	case HT_TypeKind_Struct:    return "Struct";
 	case HT_TypeKind_Array:     return "Array";
@@ -22,6 +28,12 @@ EXPORT HT_TypeKind StringToTypeKind(STR_View str) {
 	/**/ if (STR_Match(str, "Float"))     return HT_TypeKind_Float;
 	else if (STR_Match(str, "Int"))       return HT_TypeKind_Int;
 	else if (STR_Match(str, "Bool"))      return HT_TypeKind_Bool;
+	else if (STR_Match(str, "Vec2"))      return HT_TypeKind_Vec2;
+	else if (STR_Match(str, "Vec3"))      return HT_TypeKind_Vec3;
+	else if (STR_Match(str, "Vec4"))      return HT_TypeKind_Vec4;
+	else if (STR_Match(str, "IVec2"))     return HT_TypeKind_IVec2;
+	else if (STR_Match(str, "IVec3"))     return HT_TypeKind_IVec3;
+	else if (STR_Match(str, "IVec4"))     return HT_TypeKind_IVec4;
 	else if (STR_Match(str, "Asset"))     return HT_TypeKind_AssetRef;
 	else if (STR_Match(str, "Struct"))    return HT_TypeKind_Struct;
 	else if (STR_Match(str, "Array"))     return HT_TypeKind_Array;
@@ -220,6 +232,12 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_Int:        { *out_size = 4; *out_alignment = 4; } return;
 	case HT_TypeKind_Float:      { *out_size = 4; *out_alignment = 4; } return;
 	case HT_TypeKind_Bool:       { *out_size = 1; *out_alignment = 1; } return;
+	case HT_TypeKind_Vec2:       { *out_size = sizeof(vec2); *out_alignment = alignof(vec2); } return;
+	case HT_TypeKind_Vec3:       { *out_size = sizeof(vec3); *out_alignment = alignof(vec3); } return;
+	case HT_TypeKind_Vec4:       { *out_size = sizeof(vec4); *out_alignment = alignof(vec4); } return;
+	case HT_TypeKind_IVec2:      { *out_size = sizeof(ivec2); *out_alignment = alignof(ivec2); } return;
+	case HT_TypeKind_IVec3:      { *out_size = sizeof(ivec3); *out_alignment = alignof(ivec3); } return;
+	case HT_TypeKind_IVec4:      { *out_size = sizeof(ivec4); *out_alignment = alignof(ivec4); } return;
 	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_AssetHandle); *out_alignment = alignof(HT_AssetHandle); } return;
 	case HT_TypeKind_Array:      { *out_size = sizeof(HT_Array); *out_alignment = alignof(HT_Array); } return;
 	case HT_TypeKind_Any:        { *out_size = sizeof(HT_Any); *out_alignment = alignof(HT_Any); } return;

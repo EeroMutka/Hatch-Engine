@@ -145,6 +145,7 @@ static void UI_DX12_ResizeAndMapBuffer(UI_DX12_Buffer* buffer, uint32_t size) {
 				// copy existing data over to the new buffer
 				memcpy(new_buffer_mapped_ptr, buffer->mapped_ptr, buffer->size);
 			}
+			
 			if (buffer->handle) {
 				buffer->handle->Release();
 			}
@@ -172,6 +173,7 @@ static uint32_t* UI_DX12_ResizeAndMapIndexBuffer(int num_indices) {
 	return (uint32_t*)UI_DX12_STATE.index_buffer.mapped_ptr;
 }
 
+// must be called *after* UI_Init
 static void UI_DX12_Init(ID3D12Device* device, D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor, D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor) {
 	memset(&UI_DX12_STATE, 0, sizeof(UI_DX12_STATE));
 	UI_DX12_STATE.device = device;

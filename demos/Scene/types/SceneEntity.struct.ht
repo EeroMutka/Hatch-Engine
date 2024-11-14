@@ -1,6 +1,6 @@
 struct: {
+	position: Vec3
+	rotation: Vec3
+	scale: Vec3
 	components: @Array Any
-	x: Float
-	y: Float
-	z: Float
 }

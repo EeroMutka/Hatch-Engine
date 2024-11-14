@@ -482,8 +482,7 @@ static bool BUILD_GenerateVisualStudioProject(const BUILD_Project* project,
 
 	BUILD_Print(&s, "</Project>\n");
 
-	FILE* file = NULL;
-	errno_t file_err = fopen_s(&file, project_filepath, "wb");
+	FILE* file = fopen(project_filepath, "wb");
 	bool ok = file != NULL;
 
 	if (ok) {
@@ -594,7 +593,7 @@ BUILD_API bool BUILD_CompileProject(BUILD_Project* project, const char* project_
 		BUILD_Print(&msvc_version_path, "\\VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt");
 		BUILD_WPrintNullTermination(&msvc_version_path);
 			
-		errno_t file_err = fopen_s(&msvc_version_file, msvc_version_path.data, "rb");
+		msvc_version_file = fopen(msvc_version_path.data, "rb");
 		ok = msvc_version_file != NULL;
 		BUILD_ArrayFree(&msvc_version_path);
 	}
@@ -890,8 +889,7 @@ BUILD_API bool BUILD_CreateVisualStudioSolution(const char* project_directory, c
 		BUILD_Print3(&solution_filepath, project_directory, "/", solution_name);
 		BUILD_PrintNullTermination(&solution_filepath);
 
-		FILE* file = NULL;
-		errno_t file_err = fopen_s(&file, solution_filepath.data, "wb");
+		FILE* file = fopen(solution_filepath.data, "wb");
 		ok = file != NULL;
 		if (ok) {
 			fwrite(s.data, s.count, 1, file);
