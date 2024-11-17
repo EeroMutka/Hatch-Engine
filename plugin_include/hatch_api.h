@@ -431,6 +431,12 @@ struct HT_API {
 	// The returned memory is uninitialized.
 	void* (*TempArenaPush)(size_t size, size_t align);
 	
+	// -- Log ----------------------------------------
+	
+	void (*LogInfo)(const char* fmt, ...);
+	void (*LogWarning)(const char* fmt, ...);
+	void (*LogError)(const char* fmt, ...);
+	
 	// -- Asset viewer -------------------------------
 	
 	bool (*RegisterAssetViewerForType)(HT_AssetHandle struct_type_asset);

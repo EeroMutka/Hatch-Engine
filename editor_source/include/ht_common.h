@@ -269,15 +269,6 @@ EXPORT void StringDeinit(String* x);
 // - returns NULL if not found
 EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path);
 
-// -- ht_log.cpp ------------------------------------------------------
-
-struct LogMessage {
-	int index;
-	STR_View string;
-};
-
-EXPORT void LogPrint(STR_View str);
-
 // -- ht_serialize.cpp ------------------------------------------------
 
 EXPORT STR_View AssetGetFilepath(DS_Arena* arena, Asset* asset);
@@ -362,6 +353,17 @@ EXPORT void AddNewTabToActivePanel(UI_PanelTree* tree, UI_Tab* tab);
 
 struct RenderState;
 
+enum LogMessageKind {
+	LogMessageKind_Info,
+	LogMessageKind_Warning,
+	LogMessageKind_Error,
+};
+
+struct LogMessage {
+	LogMessageKind kind;
+	STR_View string;
+};
+
 struct UI_Tab {
 	STR_View name; // empty string means free slot
 	HT_AssetHandle owner_plugin;
@@ -401,10 +403,8 @@ struct EditorState {
 	UI_Text dummy_text;
 	UI_Text dummy_text_2;
 
-	DS_Arena log_arenas[2];
-	DS_DynArray(LogMessage) log_messages[2];
-	int next_log_message_index;
-	int current_log_arena = 0;
+	DS_Arena log_arena;
+	DS_DynArray(LogMessage) log_messages;
 
 	AssetTree asset_tree;
 	UI_DataTreeState assets_tree_ui_state;
@@ -446,9 +446,9 @@ EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name);
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab);
 
 EXPORT void AddTopBar(EditorState* s);
-EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);
-EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
-EXPORT void UILogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
+EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);
+EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
+EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 
 EXPORT void InitAPI(EditorState* s);
 
@@ -459,6 +459,12 @@ EXPORT void UpdatePlugins(EditorState* s);
 EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
+
+// -- ht_log.cpp ------------------------------------------------------
+
+EXPORT void LogAny(EditorState* s, LogMessageKind kind, const char* fmt, va_list args);
+
+EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
 

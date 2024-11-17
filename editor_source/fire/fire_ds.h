@@ -142,9 +142,9 @@ static const DS_AllocatorBase DS_HEAP_ = { DS_HeapAllocatorProc };
 
 #ifdef __cplusplus
 template<typename T> static inline T* DS_Clone__(DS_Arena* a, const T& v) { T* x = (T*)DS_ArenaPush(a, sizeof(T)); *x = v; return x; }
-#define DS_Clone_(T, ARENA, VALUE) DS_Clone__<T>(ARENA, VALUE)
+#define DS_Clone_(T, ARENA, ...) DS_Clone__(ARENA, (__VA_ARGS__))
 #else
-#define DS_Clone_(T, ARENA, VALUE) ((T*)0 == &(VALUE), (T*)DS_MemClone(ARENA, &(VALUE), sizeof(VALUE)))
+#define DS_Clone_(T, ARENA, ...) ((T*)0 == &(__VA_ARGS__), (T*)DS_MemClone(ARENA, &(__VA_ARGS__), sizeof(__VA_ARGS__)))
 #endif
 
 // -------------------------------------------------------------------
@@ -168,7 +168,7 @@ static inline void DS_ArrBoundsCheck_(bool x) { DS_ASSERT(x); }
 #define DS_GIB(x) ((uint64_t)(x) << 30)
 #define DS_TIB(x) ((uint64_t)(x) << 40)
 
-#define DS_Clone(T, ARENA, VALUE) DS_Clone_(T, ARENA, VALUE)
+#define DS_Clone(T, ARENA, ...) DS_Clone_(T, (ARENA), (__VA_ARGS__))
 
 #define DS_New(T, ARENA) (T*)DS_Clone(T, (ARENA), DS_LangAgnosticZero(T))
 
@@ -604,6 +604,8 @@ struct DS_ArrayView {
 	inline T operator [](size_t i) const  { return DS_ArrBoundsCheck((*this), i), data[i]; }
 };
 #endif
+
+#define DS_Dup(ARENA, ...) DS_Clone__((ARENA), (__VA_ARGS__))
 
 // -- IMPLEMENTATION ------------------------------------------------------------------
 

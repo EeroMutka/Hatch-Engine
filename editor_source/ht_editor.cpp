@@ -42,7 +42,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 	}
 
 	if (*is_text_editing) {
-		UI_ValTextState* val_text_state = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &asset->name);
+		UI_ValTextState* val_text_state = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &asset->name, NULL);
 		text_box->flags &= ~UI_BoxFlag_DrawBorder;
 		if (!val_text_state->is_editing) {
 			*is_text_editing = false;
@@ -59,7 +59,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 }
 
 static UI_DataTreeNode* AddAssetUITreeNode(UI_DataTreeNode* parent, Asset* asset) {
-	UI_DataTreeNode* node = DS_New(UI_DataTreeNode, UI_FrameArena());
+	UI_DataTreeNode* node = DS_New(UI_DataTreeNode, UI_TEMP);
 	node->key = (UI_Key)asset->handle;
 	node->is_open_ptr = &asset->ui_state_is_open;
 	
@@ -144,7 +144,7 @@ EXPORT void AddTopBar(EditorState* s) {
 	UI_DrawBox(top_bar_box);
 }
 
-EXPORT void UIAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
+EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 	
 	/*if (UI_InputWasPressedOrRepeated(UI_Input_A) && UI_InputIsDown(UI_Input_Control)) {
 		if (UI_InputIsDown(UI_Input_Shift)) {
@@ -217,11 +217,11 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	UI_AddBox(box, w, h, UI_BoxFlag_Clickable | UI_BoxFlag_DrawBorder | UI_BoxFlag_DrawOpaqueBackground | UI_BoxFlag_Horizontal);
 
 	if (s->assets_tree_ui_state.drag_n_dropping != 0) {
-		box->draw_args = UI_DrawBoxDefaultArgsInit();
-		box->draw_args->opaque_bg_color = UI_BLACK;
+		box->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+		box->draw_opts->opaque_bg_color = DS_Dup(TEMP, UI_BLACK);
 
 		if (UI_IsHovered(box)) {
-			box->draw_args->border_color = ACTIVE_COLOR;
+			box->draw_opts->border_color = DS_Dup(TEMP, ACTIVE_COLOR);
 
 			if (!UI_InputIsDown(UI_Input_MouseLeft)) {
 				*handle = (HT_AssetHandle)s->assets_tree_ui_state.drag_n_dropping;
@@ -239,8 +239,8 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 
 	UI_Box* label = UI_BBOX(box);
 	UI_AddLabel(label, UI_SizeFlex(1.f), UI_SizeFit(), 0, asset_name);
-	label->draw_args = UI_DrawBoxDefaultArgsInit();
-	label->draw_args->text_color = asset_name_color;
+	label->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+	label->draw_opts->text_color = DS_Dup(TEMP, asset_name_color);
 
 	UI_Box* clear_button = UI_BBOX(box);
 	UI_AddLabel(clear_button, UI_SizeFit(), UI_SizeFlex(1.f), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable | UI_BoxFlag_DrawBorder, "\x4a");
@@ -350,7 +350,7 @@ static void UIStructMemberNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTree
 		}
 
 		if (*is_text_editing) {
-			UI_ValTextState* text_edit = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &member->name.text);
+			UI_ValTextState* text_edit = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &member->name.text, NULL);
 			text_box->flags &= ~UI_BoxFlag_DrawBorder;
 			if (!text_edit->is_editing) {
 				*is_text_editing = false;
@@ -427,7 +427,7 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			if (val->text.text.allocator == NULL) {
 				UI_TextInit(DS_HEAP, &val->text, "");
 			}
-			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &val->text);
+			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &val->text, NULL);
 		}break;
 		case HT_TypeKind_Type: {
 			HT_Type* val = (HT_Type*)member_val->data;
@@ -458,7 +458,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
-			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
 			node->name = UI_TextToStr(member->name.text);
 			node->type = member->type;
 			node->data = (char*)data + member->offset;
@@ -477,7 +477,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		if (any->type.kind == HT_TypeKind_Struct) {
 			BuildStructMemberValNodes(s, parent, any->data, &any->type);
 		} else {
-			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
 			node->name = "data";
 			node->type = any->type;
 			node->data = any->data;
@@ -501,8 +501,8 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		GetTypeSizeAndAlignment(&s->asset_tree, &elem_type, &elem_size, &elem_align);
 
 		for (int j = 0; j < array->count; j++) {
-			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
-			node->name = STR_Form(UI_FrameArena(), "[%d]", j);
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
+			node->name = STR_Form(UI_TEMP, "[%d]", j);
 			node->type = elem_type;
 			node->data = (char*)array->data + elem_size * j;
 			node->base.key = UI_HashInt(parent->base.key, j);
@@ -531,7 +531,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		while (i._u32 != HT_ITEM_INDEX_INVALID) {
 			HT_ItemHeader* item = GetItemFromIndex(group, i, item_full_size);
 			
-			StructMemberValNode* node = DS_New(StructMemberValNode, UI_FrameArena());
+			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
 			node->name = {item->name.data, item->name.size};
 			node->type = item_type;
 			node->data = (char*)item + item_offset;
@@ -567,7 +567,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	UI_AddDataTree(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &members_tree, &s->properties_tree_data_ui_state);
 }
 
-EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
+EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 	vec2 content_rect_size = UI_RectSize(content_rect);
 	UI_Box* root_box = UI_KBOX(key);
 	UI_InitRootBox(root_box, content_rect_size.x, content_rect_size.y, 0);
@@ -581,7 +581,7 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 		UI_DataTreeNode* p = &root.base;
 		
 		int members_count = selected_asset->struct_type.members.count;
-		StructMemberNode* members = (StructMemberNode*)DS_ArenaPushZero(UI_FrameArena(), sizeof(StructMemberNode) * members_count);
+		StructMemberNode* members = (StructMemberNode*)DS_ArenaPushZero(UI_TEMP, sizeof(StructMemberNode) * members_count);
 
 		for (int i = 0; i < members_count; i++) {
 			members[i].member_index = i;
@@ -631,8 +631,8 @@ EXPORT void UIPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
 		UI_Box* row = UI_KBOX(key);
 
 		UI_AddBox(row, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Horizontal | UI_BoxFlag_DrawOpaqueBackground);
-		row->draw_args = UI_DrawBoxDefaultArgsInit();
-		row->draw_args->opaque_bg_color = UI_COLOR{0, 0, 0, 200};
+		row->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+		row->draw_opts->opaque_bg_color = DS_Dup(TEMP, UI_COLOR{0, 0, 0, 200});
 
 		UI_PushBox(row);
 		UI_AddBox(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0);
@@ -802,7 +802,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		}
 
 		if (selected_asset && selected_asset->kind == AssetKind_StructType) {
-			STR_View text = STR_Form(UI_FrameArena(), "New Struct Data (%v)", UI_TextToStr(selected_asset->name));
+			STR_View text = STR_Form(UI_TEMP, "New Struct Data (%v)", UI_TextToStr(selected_asset->name));
 
 			UI_Box* new_struct_data = UI_BOX();
 			UI_AddLabel(new_struct_data, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, text);
@@ -1136,6 +1136,24 @@ static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
 	return rtv_handle;
 }
 
+EXPORT void HT_LogInfo(const char* fmt, ...) {
+	va_list args; va_start(args, fmt);
+	LogAny(g_plugin_call_ctx->s, LogMessageKind_Info, fmt, args);
+	va_end(args);
+}
+
+EXPORT void HT_LogWarning(const char* fmt, ...) {
+	va_list args; va_start(args, fmt);
+	LogAny(g_plugin_call_ctx->s, LogMessageKind_Warning, fmt, args);
+	va_end(args);
+}
+
+EXPORT void HT_LogError(const char* fmt, ...) {
+	va_list args; va_start(args, fmt);
+	LogAny(g_plugin_call_ctx->s, LogMessageKind_Error, fmt, args);
+	va_end(args);
+}
+	
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	api.DebugPrint = HT_DebugPrint;
@@ -1158,6 +1176,9 @@ EXPORT void InitAPI(EditorState* s) {
 	api.D3DCreateEvent = HT_D3DCreateEvent;
 	api.D3DDestroyEvent = HT_D3DDestroyEvent;
 	api.D3DWaitForEvent = HT_D3DWaitForEvent;
+	api.LogInfo = HT_LogInfo;
+	api.LogWarning = HT_LogWarning;
+	api.LogError = HT_LogError;
 	*(void**)&api.AssetGetType = HT_AssetGetType;
 	*(void**)&api.AssetGetData = HT_AssetGetData;
 	*(void**)&api.AssetGetModtime = HT_AssetGetModtime;

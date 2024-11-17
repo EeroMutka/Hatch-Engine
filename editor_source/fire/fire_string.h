@@ -160,7 +160,7 @@ STR_API STR_View STR_AfterLast(STR_View str, uint32_t codepoint);   // returns `
 
 STR_API bool STR_Find(STR_View str, STR_View substr, size_t* out_offset);
 STR_API bool STR_FindC(STR_View str, const char* substr, size_t* out_offset);
-STR_API STR_View STR_ParseUntilAndSkip(STR_View* remaining, uint32_t codepoint); // cuts forward until `codepoint` or end of the string is reached and an empty string is returned
+STR_API bool STR_ParseToAndSkip(STR_View* remaining, uint32_t codepoint, STR_View* result); // parses forward until codepoint is reached and jumps over it
 STR_API bool STR_FindFirst(STR_View str, uint32_t codepoint, size_t* out_offset);
 STR_API bool STR_FindLast(STR_View str, uint32_t codepoint, size_t* out_offset);
 STR_API bool STR_LastIdxOfAnyChar(STR_View str, STR_View chars, size_t* out_index);
@@ -212,22 +212,18 @@ static bool STR_ASCIISetContains(STR_ASCIISet set, char c) {
 	return (set.bytes[c / 8] & 1 << (c % 8)) != 0;
 }
 
-STR_API STR_View STR_ParseUntilAndSkip(STR_View* remaining, uint32_t codepoint) {
-	STR_View line = { remaining->data, 0 };
-
-	for (;;) {
-		size_t cp_size = 0;
-		uint32_t cp = STR_NextCodepoint(*remaining, &cp_size);
-		if (cp == 0) break;
-
-		remaining->data += cp_size;
-		remaining->size -= cp_size;
-
-		if (cp == codepoint) break;
-		line.size += cp_size;
+STR_API bool STR_ParseToAndSkip(STR_View* remaining, uint32_t codepoint, STR_View* result) {
+	size_t i = 0, i_next = 0;
+	for (uint32_t r; r = STR_NextCodepoint(*remaining, &i_next); i = i_next) {
+		if (r == codepoint) {
+			break;
+		}
 	}
-
-	return line;
+	result->data = remaining->data;
+	result->size = i;
+	remaining->data += i_next;
+	remaining->size -= i_next;
+	return i_next > 0;
 }
 
 STR_API bool STR_FindFirst(STR_View str, uint32_t codepoint, size_t* out_offset) {

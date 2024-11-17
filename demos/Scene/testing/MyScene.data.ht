@@ -1,22 +1,25 @@
 type: "types/Scene"
 data: {
 	entities: {
-		"My box 1": {
+		"Box": {
 			position: { 0, 0, 23 }
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
-				@Type("testing/Foo") {
-					speed: 500.4
-					age: 30.1
+				@Type("Components/BoxComponent") {
+					half_extent: { 1, 1, 1 }
 				}
 			}
 		}
-		"My box 2": {
+		"Floor": {
 			position: { 0, 0, 0 }
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
-			components: {}
+			components: {
+				@Type("Components/BoxComponent") {
+					half_extent: { 5, 5, 0.1 }
+				}
+			}
 		}
 	}
 }

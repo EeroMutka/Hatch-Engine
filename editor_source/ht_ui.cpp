@@ -117,8 +117,8 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		// And maybe instead of Window -> menu for splitting, we could do right click menu (on empty region or tab) for splitting.
 		// ALSO: tab buttons should have (very?) rounded corners only at the top, not bottom.
 		if (tree->active_panel == panel && panel->tabs.count == 0) {
-			root->draw_args = UI_DrawBoxDefaultArgsInit();
-			root->draw_args->border_color = ACTIVE_COLOR;
+			root->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+			root->draw_opts->border_color = DS_Dup(TEMP, ACTIVE_COLOR);
 		}
 
 		UI_BoxComputeRects(root, area_rect.min);
@@ -145,8 +145,8 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 			UI_AddBox(tab_button, UI_SizeFit(), UI_SizeFit(), button_flags);
 
 			if (i == panel->active_tab && panel == tree->active_panel) {
-				tab_button->draw_args = UI_DrawBoxDefaultArgsInit();
-				tab_button->draw_args->transparent_bg_color = ACTIVE_COLOR;
+				tab_button->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+				tab_button->draw_opts->transparent_bg_color = DS_Dup(TEMP, ACTIVE_COLOR);
 			}
 
 			UI_PushBox(tab_button);
@@ -194,7 +194,7 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		ASSERT(panel->tabs.count == 0); // only leaf panels can have tabs
 		ASSERT(panel->end_child[0] != panel->end_child[1]); // a panel may not have only one child
 
-		//DS_DynArray(float) panel_end_offsets = {UI_FrameArena()};
+		//DS_DynArray(float) panel_end_offsets = {UI_TEMP};
 		//
 		//float offset = 0.f;
 		int panel_count = 0;

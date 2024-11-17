@@ -1,0 +1,3 @@
+struct: {
+	half_extent: Vec3
+}

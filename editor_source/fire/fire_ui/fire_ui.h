@@ -148,10 +148,10 @@ struct UI_BoxVariableHeader {
 };
 
 typedef struct UI_DrawBoxDefaultArgs {
-	UI_Color text_color;
-	UI_Color transparent_bg_color;
-	UI_Color opaque_bg_color;
-	UI_Color border_color;
+	const UI_Color* text_color;
+	const UI_Color* transparent_bg_color;
+	const UI_Color* opaque_bg_color;
+	const UI_Color* border_color;
 } UI_DrawBoxDefaultArgs;
 
 typedef struct UI_Box UI_Box;
@@ -160,6 +160,17 @@ typedef struct UI_VarHolderBox {
 	UI_BoxVariableHeader* variables; // linked list of variables
 	UI_Box* prev_frame; // NULL if a box with the same key didn't exist (wasn't added to the tree) during the previous frame
 } UI_VarHolderBox;
+
+// You may always pass NULL to parameters that take in an "optional arguments" struct.
+// Additionally, any member of an "optional arguments" struct may be NULL.
+// IMPORTANT: When using optional argument structs, all non-null pointers
+// MUST point to data which persists until the drawing phase, i.e. copied into a temp arena!!
+typedef struct UI_BoxDrawOptArgs {
+	const UI_Color* text_color;
+	const UI_Color* transparent_bg_color;
+	const UI_Color* opaque_bg_color;
+	const UI_Color* border_color;
+} UI_BoxDrawOptArgs;
 
 struct UI_Box {
 	UI_BoxVariableHeader* variables; // linked list of variables
@@ -193,8 +204,10 @@ struct UI_Box {
 	UI_Rect computed_rect; // final rectangle including clipping
 	
 	// Drawing
-	void (*draw)(UI_Box* box); // UI_DrawBoxDefault by default
-	union { UI_DrawBoxDefaultArgs* draw_args; void* draw_args_custom; };
+	void (*draw)(UI_Box* box);
+	UI_BoxDrawOptArgs* draw_opts;
+	
+	void* extended_data; // This will soon replace the box variable system
 };
 
 typedef struct UI_Mark {
@@ -322,8 +335,8 @@ typedef struct UI_State {
 	
 	UI_Backend backend;
 
-	DS_Arena prev_frame_arena;
-	DS_Arena frame_arena;
+	DS_Arena _prev_frame_arena;
+	DS_Arena _frame_arena;
 
 	UI_PtrFromKeyMap prev_frame_data_from_key;
 	UI_PtrFromKeyMap data_from_key;
@@ -418,6 +431,14 @@ typedef struct UI_ValTextState {
 	UI_Selection selection;
 } UI_ValTextState;
 
+// You may always pass NULL to parameters that take in an "optional arguments" struct.
+// Additionally, any member of an "optional arguments" struct may be NULL.
+// IMPORTANT: When using optional argument structs, all non-null pointers
+// MUST point to data which persists until the drawing phase, i.e. copied into a temp arena!!
+typedef struct UI_ValTextOptArgs {
+	const UI_Color* text_color;
+} UI_ValTextOptArgs;
+
 typedef struct UI_ValNumericState {
 	double value_before_press;
 	bool is_dragging;
@@ -436,6 +457,7 @@ static const UI_Vec2 UI_DEFAULT_TEXT_PADDING = { 10.f, 5.f };
 
 // -- Global state -------
 UI_EXTERN UI_State UI_STATE;
+UI_EXTERN DS_Arena* UI_TEMP; // Temporary arena for per-frame allocations
 // -----------------------
 
 static inline bool UI_InputIsDown(UI_Input input)               { return UI_STATE.input_is_down[input]; }
@@ -443,8 +465,6 @@ static inline bool UI_InputWasPressed(UI_Input input)           { return UI_STAT
 static inline bool UI_InputWasPressedOrRepeated(UI_Input input) { return (UI_STATE.inputs.input_events[input] & UI_InputEvent_PressOrRepeat) != 0; }
 static inline bool UI_InputWasReleased(UI_Input input)          { return (UI_STATE.inputs.input_events[input] & UI_InputEvent_Release) != 0; }
 static inline bool UI_DoubleClickedAnywhere(void)               { return (UI_STATE.inputs.input_events[UI_Input_MouseLeft] & UI_InputEvent_DoubleClick) != 0; }
-
-static inline DS_Arena* UI_FrameArena(void) { return &UI_STATE.frame_arena; }
 
 static inline bool UI_MarkEquals(UI_Mark a, UI_Mark b) { return a.line == b.line && a.col == b.col; }
 
@@ -485,7 +505,6 @@ UI_API void UI_EndFrame(UI_Outputs* outputs);
 UI_API void UI_DrawBox(UI_Box* box);
 
 UI_API void UI_DrawBoxDefault(UI_Box* box);
-UI_API UI_DrawBoxDefaultArgs* UI_DrawBoxDefaultArgsInit();
 
 // -- Tree builder API with implicit context -------
 
@@ -511,7 +530,7 @@ UI_API void UI_AddButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, S
 
 UI_API void UI_AddCheckbox(UI_Box* box, bool* value);
 
-UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text* text);
+UI_API UI_ValTextState* UI_AddValText(UI_Box* box, UI_Size w, UI_Size h, UI_Text* text, const UI_ValTextOptArgs* optional);
 
 UI_API UI_ValNumericState* UI_AddValInt(UI_Box* box, UI_Size w, UI_Size h, int32_t* value);
 UI_API UI_ValNumericState* UI_AddValInt64(UI_Box* box, UI_Size w, UI_Size h, int64_t* value);

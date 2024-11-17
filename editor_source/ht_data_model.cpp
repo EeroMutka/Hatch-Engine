@@ -479,7 +479,10 @@ EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {
 	Asset* result = NULL;
 
 	for (STR_View remaining = path; remaining.size > 0 && parent;) {
-		STR_View name = STR_ParseUntilAndSkip(&remaining, '/');
+		STR_View name;
+		bool ok = STR_ParseToAndSkip(&remaining, '/', &name);
+		ASSERT(ok);
+
 		Asset* new_parent = NULL;
 		for (Asset* asset = parent->first_child; asset; asset = asset->next) {
 			if (STR_MatchCaseInsensitive(UI_TextToStr(asset->name), name)) {

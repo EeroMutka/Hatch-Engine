@@ -11,6 +11,7 @@ EXPORT DS_Arena* TEMP;
 
 extern "C" {
 	EXPORT UI_State UI_STATE;
+	EXPORT DS_Arena* UI_TEMP;
 	EXPORT UI_DX12_State UI_DX12_STATE;
 	EXPORT UI_STBTT_State UI_STBTT_STATE;
 }
@@ -24,13 +25,13 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
 	EditorState* s = (EditorState*)tree->user_data;
 	if (tab == s->assets_tab_class) {
-		UIAssetsBrowserTab(s, key, area_rect);
+		UpdateAndDrawAssetsBrowserTab(s, key, area_rect);
 	}
 	else if (tab == s->properties_tab_class) {
-		UIPropertiesTab(s, key, area_rect);
+		UpdateAndDrawPropertiesTab(s, key, area_rect);
 	}
 	else if (tab == s->log_tab_class) {
-		UILogTab(s, key, area_rect);
+		UpdateAndDrawLogTab(s, key, area_rect);
 	}
 	else if (tab == s->asset_viewer_tab_class) {
 		HT_AssetHandle selected_asset = (HT_AssetHandle)s->assets_tree_ui_state.selection;
@@ -78,6 +79,9 @@ static void AppInit(EditorState* s) {
 
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
+	DS_ArenaInit(&s->log_arena, 4096, DS_HEAP);
+	DS_ArrInit(&s->log_messages, &s->log_arena);
+
 	STR_View exe_path;
 	OS_GetThisExecutablePath(MEM_SCOPE(persist), &exe_path);
 	s->hatch_install_directory = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
@@ -123,11 +127,6 @@ static void AppInit(EditorState* s) {
 	log_panel->parent = root_left_panel;
 	asset_browser_panel->link[1] = log_panel;
 	log_panel->link[0] = asset_browser_panel;
-
-	DS_ArenaInit(&s->log_arenas[0], DS_KIB(16), DS_HEAP);
-	DS_ArenaInit(&s->log_arenas[1], DS_KIB(16), DS_HEAP);
-	DS_ArrInit(&s->log_messages[0], &s->log_arenas[0]);
-	DS_ArrInit(&s->log_messages[1], &s->log_arenas[1]);
 
 	UI_TextInit(DS_HEAP, &s->dummy_text, "");
 	UI_TextInit(DS_HEAP, &s->dummy_text_2, "");
