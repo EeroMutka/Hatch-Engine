@@ -716,10 +716,10 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	bool has_hovered_tab = s->frame.hovered_panel && s->frame.hovered_panel->tabs.count > 0;
 	UI_Tab* hovered_tab = has_hovered_tab ? s->frame.hovered_panel->tabs[s->frame.hovered_panel->active_tab] : NULL;
 
-	if (has_hovered_tab && hovered_tab == s->assets_tab_class && UI_InputWasPressed(UI_Input_MouseRight)) {
+	if (has_hovered_tab && UI_InputWasPressed(UI_Input_MouseRight)) {
 		s->rmb_menu_pos = UI_STATE.mouse_pos;
 		s->rmb_menu_open = true;
-		s->rmb_menu_tab_class = s->assets_tab_class;
+		s->rmb_menu_tab_class = hovered_tab;
 	}
 
 	UI_Box* rmb_menu = UI_BOX();
@@ -882,23 +882,24 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		}
 	}
 	else if (s->rmb_menu_open && s->rmb_menu_tab_class == s->log_tab_class) {
-		//UI_Key rmb_menu_key = UI_BOX();
-		//rmb_menu_open = UI_DropdownShouldKeepOpen(rmb_menu_key);
-		//UI_Box* box = UIPushDropdown(rmb_menu_key, UI_SizeFit(), UI_SizeFit());
-		//box->flags |= UI_BoxFlag_ChildPadding;
-		//
-		//if (UI_Clicked(UI_AddButton(UI_BOX(), UI_SizeFlex(1.f), UI_SizeFit(), STR_V("Clear Log"))->key)) {
-		//	g_next_log_message_index = 0;
-		//	DS_ArenaReset(&g_log_arenas[0]);
-		//	DS_ArenaReset(&g_log_arenas[1]);
-		//	DS_ArrInitA(&g_log_messages[0], &g_log_arenas[0]);
-		//	DS_ArrInitA(&g_log_messages[1], &g_log_arenas[1]);
-		//	rmb_menu_open = false;
-		//}
-		//
-		//UIPopDropdown(box);
-		//UI_BoxComputeRects(box, rmb_menu_pos);
-		//UI_DrawBox(box);
+		UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
+
+		UI_Box* clear_log = UI_BOX();
+		UI_AddLabel(clear_log, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Clear");
+		
+		UI_AddFmt(UI_BOX(), "(mem usage:%fMB)", (float)s->log_arena.total_mem_reserved / (1024.f*1024.f));
+		
+		if (UI_Clicked(clear_log)) {
+			DS_ArenaReset(&s->log_arena);
+			DS_ArrInit(&s->log_messages, &s->log_arena);
+			s->rmb_menu_open = false;
+		}
+
+		UIPopDropdown(rmb_menu);
+		if (s->rmb_menu_open) {
+			UI_BoxComputeRects(rmb_menu, s->rmb_menu_pos);
+			UI_DrawBox(rmb_menu);
+		}
 	}
 	else {
 		s->rmb_menu_open = false;
@@ -942,10 +943,6 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 		UI_BoxComputeRects(box, UI_STATE.mouse_pos);
 		UI_DrawBox(box);
 	}
-}
-
-static void HT_DebugPrint(const char* str) {
-	printf("DEBUG PRINT: %s\n", str);
 }
 
 static void* HT_AllocatorProc(void* ptr, size_t size) {
@@ -1064,7 +1061,7 @@ static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update)
 
 static STR_View HT_AssetGetFilepath(HT_AssetHandle asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
-	return ptr ? AssetGetFilepath(TEMP, ptr) : STR_View{};
+	return ptr ? AssetGetAbsoluteFilepath(TEMP, ptr) : STR_View{};
 }
 
 static u64 HT_AssetGetModtime(HT_AssetHandle asset) {
@@ -1138,25 +1135,24 @@ static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
 
 EXPORT void HT_LogInfo(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogAny(g_plugin_call_ctx->s, LogMessageKind_Info, fmt, args);
+	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Info, fmt, args);
 	va_end(args);
 }
 
 EXPORT void HT_LogWarning(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogAny(g_plugin_call_ctx->s, LogMessageKind_Warning, fmt, args);
+	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Warning, fmt, args);
 	va_end(args);
 }
 
 EXPORT void HT_LogError(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogAny(g_plugin_call_ctx->s, LogMessageKind_Error, fmt, args);
+	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Error, fmt, args);
 	va_end(args);
 }
 	
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
-	api.DebugPrint = HT_DebugPrint;
 	*(void**)&api.AddVertices = UI_AddVertices;
 	api.AddIndices = HT_AddIndices;
 	//*(void**)&api.DrawText = HT_DrawText;

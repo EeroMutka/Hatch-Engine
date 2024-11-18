@@ -11,7 +11,7 @@
 #define FIRE_OS_TIMING_INCLUDED
 
 #ifndef OS_TIMING_API
-#define OS_TIMING_API static
+#define OS_TIMING_API
 #endif
 
 #include <stdint.h>

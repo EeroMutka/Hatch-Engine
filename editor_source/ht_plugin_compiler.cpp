@@ -146,6 +146,42 @@ static void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 	CloseHandle(h);
 }
 
+struct BuildLog {
+	BUILD_Log base;
+	EditorState* s;
+	STR_Builder b;
+	size_t flushed_to;
+};
+
+static void FlushBuildLog(BuildLog* log) {
+	EditorState* s = log->s;
+
+	for (;;) {
+		STR_View remaining = STR_SliceAfter(log->b.str, log->flushed_to);
+
+		size_t at;
+		if (!STR_Find(remaining, "\n", &at)) break;
+
+		STR_View line = STR_SliceBefore(remaining, at);
+		log->flushed_to += at + 1;
+
+		size_t _;
+		bool is_error = STR_Find(line, ": error ", &_);
+		
+		LogMessage msg;
+		msg.kind = is_error ? LogMessageKind_Error : LogMessageKind_Info;
+		msg.string = STR_Clone(&s->log_arena, line);
+		msg.added_tick = OS_GetCPUTick();
+		DS_ArrPush(&s->log_messages, msg);
+	}
+}
+
+static void BuildLogFn(BUILD_Log* self, const char* message) {
+	BuildLog* log = (BuildLog*)self;
+	STR_PrintC(&log->b, message);
+	FlushBuildLog(log);
+}
+
 EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory) {
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
@@ -252,18 +288,19 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 		HT_AssetHandle source_file = *((HT_AssetHandle*)plugin_opts->source_files.data + i);
 		Asset* source_file_asset = GetAsset(&s->asset_tree, source_file);
 		if (source_file_asset) {
-			const char* file_name = STR_ToC(TEMP, AssetGetFilepath(TEMP, source_file_asset));
+			const char* file_name = STR_ToC(TEMP, AssetGetPackageRelativePath(TEMP, source_file_asset));
 			BUILD_AddSourceFile(&project, file_name);
 		}
 	}
 	if (project.source_files.count == 0) TODO();
 
-	//PluginBuildLog build_log = {0};
-	//build_log.plugin = new_plugin_data;
-	//build_log.str_builder.arena = UI_TEMP;
-	//build_log.base.print = PluginBuildLogPrint;
-	printf("\n\n");
-	ok = BUILD_CompileProject(&project, ".plugin_binaries", ".", BUILD_GetConsole());
+	BuildLog build_log = {0};
+	build_log.base.print = BuildLogFn;
+	build_log.s = s;
+	build_log.b = {TEMP};
+	ok = BUILD_CompileProject(&project, ".plugin_binaries", ".", &build_log.base);
+	
+	FlushBuildLog(&build_log);
 
 	if (ok) {
 		//wchar_t cwd[64];

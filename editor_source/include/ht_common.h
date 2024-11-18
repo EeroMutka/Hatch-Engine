@@ -13,6 +13,7 @@
 #define TODO() __debugbreak()
 
 #define DS_ASSERT(X) ASSERT(X)
+#define STR_ASSERT(X) ASSERT(X)
 #include <fire_ds.h>
 #include <fire_string.h>
 
@@ -22,6 +23,9 @@ typedef vec2 UI_Vec2;
 
 #define OS_WINDOW_API extern "C"
 #include <fire_os_window.h>
+
+#define OS_TIMING_API extern "C"
+#include <fire_os_timing.h>
 
 #define OS_CLIPBOARD_API extern "C"
 #include <fire_os_clipboard.h>
@@ -34,6 +38,8 @@ typedef vec2 UI_Vec2;
 #define OS_API extern "C"
 #include "../utils/os_misc.h"
 #include "../utils/os_directory_watch.h"
+
+#include <stdio.h> // for printf, this should be removed in the final product
 
 // -- Utility macros --------------------------------------------------
 
@@ -271,7 +277,8 @@ EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
-EXPORT STR_View AssetGetFilepath(DS_Arena* arena, Asset* asset);
+EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
+EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
 
 EXPORT void HotreloadPackages(AssetTree* tree);
 
@@ -362,6 +369,7 @@ enum LogMessageKind {
 struct LogMessage {
 	LogMessageKind kind;
 	STR_View string;
+	uint64_t added_tick;
 };
 
 struct UI_Tab {
@@ -387,6 +395,8 @@ struct PerFrameState {
 
 struct EditorState {
 	HT_API* api;
+
+	uint64_t cpu_frequency;
 
 	DS_Arena persistent_arena;
 	DS_Arena temporary_arena;
@@ -462,7 +472,8 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 
 // -- ht_log.cpp ------------------------------------------------------
 
-EXPORT void LogAny(EditorState* s, LogMessageKind kind, const char* fmt, va_list args);
+EXPORT void LogF(EditorState* s, LogMessageKind kind, const char* fmt, ...);
+EXPORT void LogVArgs(EditorState* s, LogMessageKind kind, const char* fmt, va_list args);
 
 EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 

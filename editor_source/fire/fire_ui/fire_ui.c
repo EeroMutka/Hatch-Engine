@@ -710,7 +710,7 @@ UI_API void UI_PopCollapsing(UI_Box* box) {
 	UI_ProfExit();
 }
 
-UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y) {
+UI_API UI_Vec2 UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y) {
 	UI_ProfEnter();
 
 	UI_Box* content = UI_BBOX(box);
@@ -778,6 +778,12 @@ UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags fla
 			UI_Box* scrollbar = UI_KBOX(y_key);
 			UI_AddBox(scrollbar, size[0], size[1],
 				UI_BoxFlag_PressingStaysWithoutHover | UI_BoxFlag_Clickable | UI_BoxFlag_DrawBorder | UI_BoxFlag_DrawTransparentBackground);
+			
+			float extra_size = 10.f - size[y];
+			if (extra_size > 0.f) {
+				scrollbar->offset._[y] += 0.5f*extra_size;
+				scrollbar->size[y] += extra_size;
+			}
 
 			size[x] = 18.f;
 			size[y] = UI_SizeFlex(1.f);
@@ -835,6 +841,7 @@ UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags fla
 	if (anchor_y == 1) temp_boxes[0]->flags |= UI_BoxFlag_ReverseLayoutY;
 
 	UI_ProfExit();
+	return offset;
 }
 
 UI_API void UI_PopScrollArea(UI_Box* box) {

@@ -159,13 +159,11 @@ STR_API STR_View STR_AfterFirst(STR_View str, uint32_t codepoint);  // returns `
 STR_API STR_View STR_AfterLast(STR_View str, uint32_t codepoint);   // returns `str` if no codepoint is found
 
 STR_API bool STR_Find(STR_View str, STR_View substr, size_t* out_offset);
-STR_API bool STR_FindC(STR_View str, const char* substr, size_t* out_offset);
 STR_API bool STR_ParseToAndSkip(STR_View* remaining, uint32_t codepoint, STR_View* result); // parses forward until codepoint is reached and jumps over it
 STR_API bool STR_FindFirst(STR_View str, uint32_t codepoint, size_t* out_offset);
 STR_API bool STR_FindLast(STR_View str, uint32_t codepoint, size_t* out_offset);
 STR_API bool STR_LastIdxOfAnyChar(STR_View str, STR_View chars, size_t* out_index);
 STR_API bool STR_Contains(STR_View str, STR_View substr);
-STR_API bool STR_ContainsC(STR_View str, const char* substr);
 STR_API bool STR_ContainsU(STR_View str, uint32_t codepoint);
 
 STR_API STR_View STR_Replace(void* allocator, STR_View str, STR_View search_for, STR_View replace_with);
@@ -342,32 +340,28 @@ STR_API STR_View STR_SliceBefore(STR_View str, size_t mid) {
 	return result;
 }
 
-STR_API bool STR_ContainsC(STR_View str, const char* substr) {
-	return STR_FindC(str, substr, NULL);
-}
-
 STR_API bool STR_Contains(STR_View str, STR_View substr) {
 	return STR_Find(str, substr, NULL);
 }
 
 STR_API bool STR_Find(STR_View str, STR_View substr, size_t* out_offset) {
 	STR_ProfEnter();
+	
 	bool found = false;
-	size_t i_last = str.size - substr.size;
-	for (size_t i = 0; i <= i_last; i++) {
-		if (STR_Match(STR_Slice(str, i, i + substr.size), substr)) {
-			if (out_offset) *out_offset = i;
-			found = true;
-			break;
+	if (str.size >= substr.size) {
+		char* ptr = (char*)str.data;
+		char* end = (char*)str.data + str.size - substr.size;
+		for (; ptr <= end; ptr++) {
+			if (memcmp(ptr, substr.data, substr.size) == 0) {
+				if (out_offset) *out_offset = (size_t)(ptr - str.data);
+				found = true;
+				break;
+			}
 		}
 	}
+
 	STR_ProfExit();
 	return found;
-};
-
-STR_API bool STR_FindC(STR_View str, const char* substr, size_t* out_offset) {
-	STR_View substr_v = STR_ToV(substr);
-	return STR_Find(str, substr_v, out_offset);
 };
 
 STR_API bool STR_ContainsU(STR_View str, uint32_t codepoint) {

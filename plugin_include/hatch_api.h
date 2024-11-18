@@ -376,8 +376,6 @@ struct HT_API {
 	// HT_EXPORT void HT_UpdatePlugin(HT_API* ht) 
 	// HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list)
 	
-	void (*DebugPrint)(const char* str);
-
 	// So, maybe we want to keep the plugin API minimal. Because that is *required* for everyone to use. If we had e.g. string utilities separately, then the user could copy
 	// the string utility header into their own plugin folder and keep using an older version if they wanted to.
 	// The best solution I can think of is to do semver on utility libraries and to ship all major versions as separate folders as part of hatch. Then you do

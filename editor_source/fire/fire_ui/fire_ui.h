@@ -549,7 +549,8 @@ UI_API void UI_TextDeinit(UI_Text* text);
 UI_API void UI_TextSet(UI_Text* text, STR_View value);
 
 // - `anchor_x` / `anchor_y` can be 0 or 1: A value of 0 means anchoring the scrollbar to left / top, 1 means anchoring it to right / bottom.
-UI_API void UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y);
+// Returns the scroll offset
+UI_API UI_Vec2 UI_PushScrollArea(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, int anchor_x, int anchor_y);
 UI_API void UI_PopScrollArea(UI_Box* box);
 
 UI_API void UI_PushArrangerSet(UI_Box* box, UI_Size w, UI_Size h);

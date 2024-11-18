@@ -22,13 +22,14 @@ static Globals GLOBALS;
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	GLOBALS.my_tab_class = ht->CreateTabClass("Scene Edit");
 	
-	ht->LogInfo("The\nlazy\ndog!\n");
+	/*ht->LogInfo("The\nlazy\ndog!\n");
 	ht->LogInfo("The quick brown fox jumped over the lazy dog!\n");
 	ht->LogInfo("The quick brown fox jumped over the lazy dog!\n");
 	ht->LogWarning("AAAAAAAAAAAAAAAAA!\n");
 	ht->LogError("This is a critical error!\n");
 	ht->LogError("This is a critical error!\n");
-	ht->LogError("This is a critical error!\n");
+	ht->LogError("This is a critical error!\n");*/
+	// ht->LogInfo("SceneEdit: Loading plugin OK!");
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
@@ -36,4 +37,5 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
+	// ht->LogInfo("YO!");
 }

@@ -19,7 +19,17 @@ EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
 	return result;
 }
 
-EXPORT STR_View AssetGetFilepath(DS_Arena* arena, Asset* asset) {
+EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset) {
+	if (asset->kind == AssetKind_Package) return "";
+
+	STR_View result = AssetGetFilename(TEMP, asset);
+	for (Asset* p = asset->parent; p->kind != AssetKind_Package; p = p->parent) {
+		result = STR_Form(TEMP, "%v/%v", UI_TextToStr(p->name), result);
+	}
+	return result;
+}
+
+EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset) {
 	if (asset->kind == AssetKind_Package) {
 		return STR_Clone(arena, asset->package.filesys_path);
 	}

@@ -276,6 +276,8 @@ int main() {
 	EditorState editor_state = {};
 	RenderState render_state = {};
 	
+	editor_state.cpu_frequency = OS_GetCPUFrequency();
+
 	editor_state.render_state = &render_state;
 	TEMP = &editor_state.temporary_arena;
 

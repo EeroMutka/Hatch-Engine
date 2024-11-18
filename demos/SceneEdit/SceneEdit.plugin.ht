@@ -1,4 +1,4 @@
 data_asset: ""
 source_files: {
-	"source/scene_edit.cpp"
+	"src/scene_edit.cpp"
 }

@@ -12,5 +12,8 @@
 #define FIRE_OS_WINDOW_IMPLEMENTATION
 #include "fire/fire_os_window.h"
 
+#define FIRE_OS_TIMING_IMPLEMENTATION
+#include "fire/fire_os_timing.h"
+
 #define FIRE_OS_CLIPBOARD_IMPLEMENTATION
 #include "fire/fire_os_clipboard.h"
