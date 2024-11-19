@@ -10,7 +10,7 @@
 
 #include <stdio.h>
 
-static void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
+EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 	// This function follows the method described in the article:
 	// https://blog.molecular-matters.com/2017/05/09/deleting-pdb-files-locked-by-visual-studio/
 	// It's... something.
@@ -178,41 +178,24 @@ static void FlushBuildLog(BuildLog* log) {
 
 static void BuildLogFn(BUILD_Log* self, const char* message) {
 	BuildLog* log = (BuildLog*)self;
-	STR_PrintC(&log->b, message);
+	STR_Print(&log->b, STR_ToV(message));
 	FlushBuildLog(log);
 }
 
-EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory) {
+EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
+	ASSERT(plugin->plugin.dll_handle == NULL); // plugin must not be running
+	
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-
-	if (package != plugin->parent) TODO();
-
 	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
 	ASSERT(ok);
 
 	STR_View plugin_name = UI_TextToStr(plugin->name);
 
-	if (plugin->plugin.dll_handle) {
+	/*if (plugin->plugin.dll_handle) {
 		printf("Unloading plugin with %d allocations\n", plugin->plugin.allocations.count);
 		UnloadPlugin(s, plugin);
-
-		OS_UnloadDLL(plugin->plugin.dll_handle);
-		
-		plugin->plugin.dll_handle = NULL;
-		plugin->plugin.LoadPlugin = NULL;
-		plugin->plugin.UnloadPlugin = NULL;
-		plugin->plugin.UpdatePlugin = NULL;
-
-		for (int i = 0; i < plugin->plugin.allocations.count; i++) {
-			PluginAllocationHeader* allocation = plugin->plugin.allocations[i];
-			DS_MemFree(DS_HEAP, allocation);
-		}
-		DS_ArrClear(&plugin->plugin.allocations);
-
-		STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", plugin_name);
-		ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
-	}
+	}*/
 
 	const char* header_name = STR_FormC(TEMP, "%v.inc.ht", plugin_name);
 	FILE* header = fopen(header_name, "wb");
@@ -253,7 +236,14 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 					case HT_TypeKind_String: { fprintf(header, "string"); }break;
 					case HT_TypeKind_Type: { fprintf(header, "HT_Type"); }break;
 					case HT_TypeKind_Array: { fprintf(header, "HT_Array"); }break;
-					case HT_TypeKind_AssetRef: { fprintf(header, "HT_AssetHandle"); }break;
+					case HT_TypeKind_ItemGroup: { fprintf(header, "HT_ItemGroup"); }break;
+					case HT_TypeKind_AssetRef: { fprintf(header, "HT_Asset"); }break;
+					case HT_TypeKind_Vec2: { fprintf(header, "vec2"); }break;
+					case HT_TypeKind_Vec3: { fprintf(header, "vec3"); }break;
+					case HT_TypeKind_Vec4: { fprintf(header, "vec4"); }break;
+					case HT_TypeKind_IVec2: { fprintf(header, "ivec2"); }break;
+					case HT_TypeKind_IVec3: { fprintf(header, "ivec3"); }break;
+					case HT_TypeKind_IVec4: { fprintf(header, "ivec4"); }break;
 					default: ASSERT(0); break;
 					}
 					STR_View member_name = UI_TextToStr(member.name.text);
@@ -282,10 +272,10 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 	BUILD_Project project;
 	BUILD_ProjectInit(&project, STR_ToC(TEMP, plugin_name), &opts);
 
-	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", hatch_install_directory)); // for hatch_types.h
+	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", s->hatch_install_directory));
 
 	for (int i = 0; i < plugin_opts->source_files.count; i++) {
-		HT_AssetHandle source_file = *((HT_AssetHandle*)plugin_opts->source_files.data + i);
+		HT_Asset source_file = *((HT_Asset*)plugin_opts->source_files.data + i);
 		Asset* source_file_asset = GetAsset(&s->asset_tree, source_file);
 		if (source_file_asset) {
 			const char* file_name = STR_ToC(TEMP, AssetGetPackageRelativePath(TEMP, source_file_asset));
@@ -302,23 +292,6 @@ EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_instal
 	
 	FlushBuildLog(&build_log);
 
-	if (ok) {
-		//wchar_t cwd[64];
-		//GetCurrentDirectoryW(64, cwd);
-
-		STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", plugin_name);
-		OS_DLL* dll = OS_LoadDLL(MEM_TEMP(), dll_path);
-		ok = dll != NULL;
-		ASSERT(ok);
-
-		plugin->plugin.dll_handle = dll;
-
-		*(void**)&plugin->plugin.LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
-		*(void**)&plugin->plugin.UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
-		*(void**)&plugin->plugin.UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
-
-		LoadPlugin(s, plugin);
-	}
-
 	BUILD_ProjectDeinit(&project);
+	return ok;
 }

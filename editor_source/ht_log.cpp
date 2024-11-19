@@ -11,7 +11,6 @@ EXPORT void LogVArgs(EditorState* s, LogMessageKind kind, const char* fmt, va_li
 	STR_Builder b = { TEMP };
 	STR_PrintVA(&b, fmt, args);
 	STR_PrintU(&b, 0);
-	printf("STR: `%s`", b.str.data);
 
 	for (STR_View line, tail = b.str; STR_ParseToAndSkip(&tail, '\n', &line);) {
 		LogMessage msg;

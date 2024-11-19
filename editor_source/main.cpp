@@ -34,7 +34,7 @@ void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_
 		UpdateAndDrawLogTab(s, key, area_rect);
 	}
 	else if (tab == s->asset_viewer_tab_class) {
-		HT_AssetHandle selected_asset = (HT_AssetHandle)s->assets_tree_ui_state.selection;
+		HT_Asset selected_asset = (HT_Asset)s->assets_tree_ui_state.selection;
 		if (AssetIsValid(&s->asset_tree, selected_asset)) {
 			HT_AssetViewerTabUpdate update = {};
 			update.data_asset = selected_asset;
@@ -51,6 +51,8 @@ void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_
 		DS_ArrPush(&s->frame.queued_custom_tab_updates, update);
 	}
 }
+
+
 
 static void AppInit(EditorState* s) {
 	DS_ArenaInit(&s->persistent_arena, 4096, DS_HEAP);
@@ -97,6 +99,7 @@ static void AppInit(EditorState* s) {
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
+	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
 	DS_ArrInit(&s->asset_tree.asset_buckets, DS_HEAP);
 	s->asset_tree.first_free_asset.val = ASSET_FREELIST_END;
 	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
@@ -161,6 +164,9 @@ static void AppInit(EditorState* s) {
 		
 		ComputeStructLayout(&s->asset_tree, s->asset_tree.plugin_options_struct_type);
 	}
+
+	STR_View startup_project_file = STR_Form(TEMP, "%v/user_startup_project/.htproject", s->hatch_install_directory);
+	LoadProject(&s->asset_tree, startup_project_file);
 
 	InitAPI(s);
 }
@@ -273,6 +279,7 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main() {
+
 	EditorState editor_state = {};
 	RenderState render_state = {};
 	

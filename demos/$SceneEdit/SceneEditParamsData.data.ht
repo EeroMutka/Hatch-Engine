@@ -1,0 +1,5 @@
+type: "SceneEditParams"
+data: {
+	scene_type: "$Scene/types/Scene"
+}
+

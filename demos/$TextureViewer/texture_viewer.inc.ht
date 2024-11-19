@@ -4,8 +4,8 @@
 #include <hatch_api.h>
 
 typedef struct params_type {
-	HT_AssetHandle texture_type;
+	HT_Asset texture_type;
 } params_type;
 typedef struct Texture {
-	HT_AssetHandle source_asset;
+	HT_Asset source_asset;
 } Texture;

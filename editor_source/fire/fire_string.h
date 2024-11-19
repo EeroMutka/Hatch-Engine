@@ -106,14 +106,13 @@ STR_API const char* STR_CloneC(void* allocator, const char* str); // Allocates a
 STR_API STR_View STR_Clone(void* allocator, STR_View str); // Allocates a new string
 STR_API void STR_Free(void* allocator, STR_View str);
 
-STR_API char* STR_FormC(void* allocator, const char* fmt, ...); // Allocates a new string
 STR_API STR_View STR_Form(void* allocator, const char* fmt, ...); // Allocates a new string
+STR_API const char* STR_FormC(void* allocator, const char* fmt, ...); // Allocates a new C-string
 
 STR_API void STR_BuilderInit(STR_Builder* s, void* allocator); // Alternatively, init by {}-initializer and passing in the allocator field
 STR_API void STR_BuilderDeinit(STR_Builder* s);
 
-STR_API void STR_PrintC(STR_Builder* s, const char* string);
-STR_API void STR_PrintV(STR_Builder* s, STR_View string);
+STR_API void STR_Print(STR_Builder* s, STR_View string);
 STR_API void STR_PrintF(STR_Builder* s, const char* fmt, ...);
 STR_API void STR_PrintVA(STR_Builder* s, const char* fmt, va_list args);
 STR_API void STR_PrintU(STR_Builder* s, uint32_t codepoint); // Print unicode codepoint
@@ -172,18 +171,12 @@ STR_API STR_View STR_ToLower(void* allocator, STR_View str);
 STR_API uint32_t STR_CodepointToLower(uint32_t codepoint);
 
 STR_API bool STR_EndsWith(STR_View str, STR_View end);
-STR_API bool STR_EndsWithC(STR_View str, const char* end);
 STR_API bool STR_StartsWith(STR_View str, STR_View start);
-STR_API bool STR_StartsWithC(STR_View str, const char* start);
 STR_API bool STR_CutEnd(STR_View* str, STR_View end);
-STR_API bool STR_CutEndC(STR_View* str, const char* end);
 STR_API bool STR_CutStart(STR_View* str, STR_View start);
-STR_API bool STR_CutStartC(STR_View* str, const char* start);
 
 STR_API bool STR_Match(STR_View a, STR_View b);
-STR_API bool STR_MatchC(const char* a, const char* b);
 STR_API bool STR_MatchCaseInsensitive(STR_View a, STR_View b);
-STR_API bool STR_MatchCaseInsensitiveC(const char* a, const char* b);
 
 STR_API STR_View STR_Slice(STR_View str, size_t lo, size_t hi);
 STR_API STR_View STR_SliceBefore(STR_View str, size_t mid);
@@ -314,14 +307,6 @@ STR_API bool STR_MatchCaseInsensitive(STR_View a, STR_View b) {
 	return equals;
 }
 
-STR_API bool STR_MatchC(const char* a, const char* b) {
-	return strcmp(a, b) == 0;
-}
-
-STR_API bool STR_MatchCaseInsensitiveC(const char* a, const char* b) {
-	return STR_MatchCaseInsensitive(STR_ToV(a), STR_ToV(b));
-}
-
 STR_API STR_View STR_Slice(STR_View str, size_t lo, size_t hi) {
 	STR_ASSERT(hi >= lo && hi <= str.size);
 	STR_View result = { str.data + lo, hi - lo };
@@ -371,11 +356,6 @@ STR_API bool STR_ContainsU(STR_View str, uint32_t codepoint) {
 	}
 	return false;
 }
-
-STR_API bool STR_EndsWithC(STR_View str, const char* end) { return STR_EndsWith(str, STR_ToV(end)); }
-STR_API bool STR_StartsWithC(STR_View str, const char* start) { return STR_StartsWith(str, STR_ToV(start)); }
-STR_API bool STR_CutEndC(STR_View* str, const char* end) { return STR_CutEnd(str, STR_ToV(end)); }
-STR_API bool STR_CutStartC(STR_View* str, const char* start) { return STR_CutStart(str, STR_ToV(start)); }
 
 STR_API bool STR_EndsWith(STR_View str, STR_View end) {
 	return str.size >= end.size && STR_Match(end, STR_SliceAfter(str, str.size - end.size));
@@ -933,12 +913,12 @@ STR_API STR_View STR_Replace(void* allocator, STR_View str, STR_View search_for,
 	size_t last = str.size - search_for.size;
 	for (size_t i = 0; i <= last;) {
 		if (memcmp(str.data + i, search_for.data, search_for.size) == 0) {
-			STR_PrintV(&builder, replace_with);
+			STR_Print(&builder, replace_with);
 			i += search_for.size;
 		}
 		else {
 			STR_View char_str = { &str.data[i], 1 };
-			STR_PrintV(&builder, char_str);
+			STR_Print(&builder, char_str);
 			i++;
 		}
 	}
@@ -962,7 +942,7 @@ STR_API STR_View STR_ReplaceMulti(void* allocator, STR_View str, STR_Array searc
 
 			if (memcmp(str.data + i, search_for_j.data, search_for_j.size) == 0) {
 				STR_View replace_with_j = ((STR_View*)replace_with.data)[j];
-				STR_PrintV(&builder, replace_with_j);
+				STR_Print(&builder, replace_with_j);
 				i += search_for_j.size;
 				replaced = true;
 				break;
@@ -971,7 +951,7 @@ STR_API STR_View STR_ReplaceMulti(void* allocator, STR_View str, STR_Array searc
 
 		if (!replaced) {
 			STR_View char_str = { &str.data[i], 1 };
-			STR_PrintV(&builder, char_str);
+			STR_Print(&builder, char_str);
 			i++;
 		}
 	}
@@ -1021,23 +1001,23 @@ STR_API void STR_PrintVA(STR_Builder* s, const char* fmt, va_list args) {
 			switch (*c) {
 			default: STR_ASSERT(0);
 			case 's': {
-				STR_PrintC(s, va_arg(args, char*));
+				STR_Print(s, STR_ToV(va_arg(args, char*)));
 			} break;
 			case 'v': {
-				STR_PrintV(s, va_arg(args, STR_View));
+				STR_Print(s, va_arg(args, STR_View));
 			} break;
 			case '?': {
 				STR_Formatter* printer = va_arg(args, STR_Formatter*);
 				printer->print(s, printer);
 			} break;
 			case '%': {
-				STR_PrintC(s, "%");
+				STR_Print(s, STR_V("%"));
 			} break;
 			case 'f': {
 				char buffer[64];
 				size_t size = STR_FloatToStrBuf(buffer, va_arg(args, double), 0);
 				STR_View value_str = { buffer, size };
-				STR_PrintV(s, value_str);
+				STR_Print(s, value_str);
 			} break;
 			case 'x': { radix = 16;       goto print_int; }
 			case 'd': { is_signed = true; goto print_int; }
@@ -1063,24 +1043,24 @@ STR_API void STR_PrintVA(STR_Builder* s, const char* fmt, va_list args) {
 				char buffer[100];
 				size_t size = STR_IntToStrBuf(buffer, value, is_signed, radix);
 				STR_View value_str = { buffer, size };
-				STR_PrintV(s, value_str);
+				STR_Print(s, value_str);
 			} break;
 			}
 			continue;
 		}
 
 		STR_View character_str = { c, 1 };
-		STR_PrintV(s, character_str);
+		STR_Print(s, character_str);
 	}
 }
 
-STR_API char* STR_FormC(void* allocator, const char* fmt, ...) {
+STR_API const char* STR_FormC(void* allocator, const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
 	STR_Builder builder = { allocator };
 	STR_PrintVA(&builder, fmt, args);
-	STR_PrintU(&builder, '\0');
+	STR_PrintU(&builder, 0); // null-terminate
 	va_end(args);
-	return (char*)builder.str.data;
+	return builder.str.data;
 }
 
 STR_API STR_View STR_Form(void* allocator, const char* fmt, ...) {
@@ -1100,12 +1080,7 @@ STR_API void STR_BuilderDeinit(STR_Builder* s) {
 	STR_Free(s->allocator, s->str);
 }
 
-STR_API void STR_PrintC(STR_Builder* s, const char* string) {
-	STR_View str = { string, strlen(string) };
-	STR_PrintV(s, str);
-}
-
-STR_API void STR_PrintV(STR_Builder* s, STR_View string) {
+STR_API void STR_Print(STR_Builder* s, STR_View string) {
 	size_t capacity = s->capacity;
 	size_t new_size = s->str.size + string.size;
 
@@ -1136,7 +1111,7 @@ STR_API void STR_PrintF(STR_Builder* s, const char* fmt, ...) {
 STR_API void STR_PrintU(STR_Builder* s, uint32_t codepoint) {
 	char buffer[4];
 	STR_View str = { buffer, STR_CodepointToUTF8(buffer, codepoint) };
-	STR_PrintV(s, str);
+	STR_Print(s, str);
 }
 
 #endif // FIRE_STRING_INCLUDED

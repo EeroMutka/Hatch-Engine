@@ -95,7 +95,8 @@ typedef enum HT_TypeKind {
 	HT_TypeKind_INVALID,
 } HT_TypeKind;
 
-typedef struct HT_AssetHandle_* HT_AssetHandle;
+typedef struct HT_Asset_* HT_Asset; // handle to an asset
+typedef struct HT_PluginInstance_* HT_PluginInstance; // handle to a plugin instance
 
 typedef struct HT_Array {
 	void* data;
@@ -138,7 +139,7 @@ typedef struct HT_ItemHandle_* HT_ItemHandle;
 typedef struct HT_Type {
 	HT_TypeKind kind;
 	HT_TypeKind subkind; // for arrays, this is the element type
-	HT_AssetHandle _struct;
+	HT_Asset _struct;
 } HT_Type;
 
 typedef struct HT_Any {
@@ -177,7 +178,7 @@ typedef struct HT_CachedGlyph {
 typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 
 typedef struct HT_AssetViewerTabUpdate {
-	HT_AssetHandle data_asset;
+	HT_Asset data_asset;
 	ivec2 rect_min;
 	ivec2 rect_max;
 } HT_AssetViewerTabUpdate;
@@ -398,24 +399,31 @@ struct HT_API {
 	const HT_GeneratedTypeTable* type_table;
 	
 	// Returns NULL if data asset is invalid or of different type than `type_id`
-	void* (*GetPluginData)(/*HT_AssetHandle type_id*/);
+	void* (*GetPluginData)(/*HT_Asset type_id*/);
 
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
-	void* (*AssetGetData)(HT_AssetHandle asset);
+	void* (*AssetGetData)(HT_Asset asset);
 
 	// Works on data assets. Returns NULL if asset ref is invalid or not a data asset.
-	HT_AssetHandle (*AssetGetType)(HT_AssetHandle asset);
+	HT_Asset (*AssetGetType)(HT_Asset asset);
 
-	// bool (*AssetIsValid)(/*HT_AssetHandle type_id, */HT_AssetHandle asset);
-	
+	// bool (*AssetIsValid)(/*HT_Asset type_id, */HT_Asset asset);
+	 
 	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
 	// The returned string is valid for this frame only.
-	string (*AssetGetFilepath)(HT_AssetHandle asset);
+	string (*AssetGetFilepath)(HT_Asset asset);
 	
 	// Whenever an asset data is changed, the modtime integer becomes larger.
 	// For folders, the modtime is always the maximum modtime of any asset inside it (applies recursively).
 	// Returns 0 if the asset ref is invalid.
-	u64 (*AssetGetModtime)(HT_AssetHandle asset);
+	u64 (*AssetGetModtime)(HT_Asset asset);
+	
+	// -- Plugins -------------------------------------
+	
+	// NOTE: A plugin may be unloaded in-between frames, never in the middle of a frame.
+	HT_PluginInstance (*GetPluginInstance)(HT_Asset plugin_asset); // returns NULL if plugin is not active
+	bool (*PluginInstanceIsValid)(HT_PluginInstance plugin_instance);
+	void* (*PluginInstanceFindProcAddress)(HT_PluginInstance plugin_instance, string name); // returns NULL if not found
 	
 	// -- Memory allocation ---------------------------
 	
@@ -437,8 +445,8 @@ struct HT_API {
 	
 	// -- Asset viewer -------------------------------
 	
-	bool (*RegisterAssetViewerForType)(HT_AssetHandle struct_type_asset);
-	void (*DeregisterAssetViewerForType)(HT_AssetHandle struct_type_asset);
+	bool (*RegisterAssetViewerForType)(HT_Asset struct_type_asset);
+	void (*UnregisterAssetViewerForType)(HT_Asset struct_type_asset);
 	bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
 	
 	// -- Input --------------------------------------

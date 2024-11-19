@@ -81,7 +81,7 @@ struct Shader {
 struct Globals {
 	u32 srv_descriptor_size; // constant
 	
-	HT_AssetHandle current_scene_asset;
+	HT_Asset current_scene_asset;
 	LoadedScene current_scene;
 	
 	ivec2 render_targets_size;
@@ -143,7 +143,7 @@ static void UnloadShader(Shader* shader) {
 	shader->pipeline = NULL;
 }
 
-static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_AssetHandle shader_asset, const ShaderParams* params) {
+static bool MaybeReloadShader(HT_API* ht, Shader* shader, HT_Asset shader_asset, const ShaderParams* params) {
 	bool reload = false;
 	
 	u64 modtime = ht->AssetGetModtime(shader_asset);
@@ -494,7 +494,7 @@ static ID3D12Resource* LoadTexture(HT_API* ht, TempGPUCmdContext* ctx, LoadedSce
 	return NULL;
 }
 
-static void LoadScene(HT_API* ht, LoadedScene* scene, HT_AssetHandle scene_asset) {
+static void LoadScene(HT_API* ht, LoadedScene* scene, HT_Asset scene_asset) {
 	ResetDescriptorSets(ht);
 	
 	TempGPUCmdContext ctx = CreateTempGPUCmdContext(ht);
@@ -659,7 +659,7 @@ HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandLis
 	Allocator _heap_allocator = {{HeapAllocatorProc}, ht};
 	HEAP = (DS_Allocator*)&_heap_allocator;
 	
-	HT_AssetHandle current_scene_asset = NULL;
+	HT_Asset current_scene_asset = NULL;
 	
 	HT_AssetViewerTabUpdate updates[8];
 	int updates_count = 0;

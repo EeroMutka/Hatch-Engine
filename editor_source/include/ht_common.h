@@ -96,8 +96,8 @@ union AssetHandleDecoded {
 	u64 val;
 };
 
-static inline HT_AssetHandle EncodeAssetHandle(AssetHandleDecoded handle) { return *(HT_AssetHandle*)&handle; }
-static inline AssetHandleDecoded DecodeAssetHandle(HT_AssetHandle handle) { return *(AssetHandleDecoded*)&handle; }
+static inline HT_Asset EncodeAssetHandle(AssetHandleDecoded handle) { return *(HT_Asset*)&handle; }
+static inline AssetHandleDecoded DecodeAssetHandle(HT_Asset handle) { return *(AssetHandleDecoded*)&handle; }
 
 #define AssetKind_FreeSlot (AssetKind)0
 enum AssetKind {
@@ -126,7 +126,7 @@ struct Asset_StructType {
 	DS_DynArray(StructMember) members;
 	i32 size;
 	i32 alignment;
-	HT_AssetHandle asset_viewer_registered_by_plugin;
+	HT_Asset asset_viewer_registered_by_plugin;
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
 
@@ -137,7 +137,7 @@ struct Asset_Package {
 
 struct PluginOptions {
 	HT_Array source_files; // Array<AssetRef>
-	HT_AssetHandle data;
+	HT_Asset data;
 };
 
 struct PluginAllocationHeader {
@@ -158,7 +158,7 @@ struct Asset_Plugin {
 };
 
 struct Asset_StructData {
-	HT_AssetHandle struct_type;
+	HT_Asset struct_type;
 
 	// When editing a type, just loop through all structs of that type and update the data layout.
 	// ... When changing a member type in the struct type, removing a member, or destroying the struct type asset, that is a destructive change.
@@ -170,7 +170,7 @@ struct Asset_StructData {
 struct Asset {
 	AssetKind kind;
 	UI_Text name; // not used for AssetKind_Package
-	HT_AssetHandle handle;
+	HT_Asset handle;
 	u64 modtime;
 
 	Asset* parent;
@@ -200,6 +200,8 @@ struct AssetBucket {
 };
 
 struct AssetTree {
+	DS_Map(u64, Asset*) package_from_name; // key is the DS_MurmurHash64A(0) of the package name (excluding the $)
+
 	DS_DynArray(AssetBucket*) asset_buckets;
 	int assets_num_allocated;
 	AssetHandleDecoded first_free_asset; // ASSET_FREELIST_END
@@ -217,8 +219,8 @@ struct AssetTree {
 EXPORT STR_View HT_TypeKindToString(HT_TypeKind type);
 EXPORT HT_TypeKind StringToTypeKind(STR_View str); // may return HT_TypeKind_INVALID
 
-EXPORT bool AssetIsValid(AssetTree* tree, HT_AssetHandle handle);
-EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle); // returns NULL if the handle is invalid
+EXPORT bool AssetIsValid(AssetTree* tree, HT_Asset handle);
+EXPORT Asset* GetAsset(AssetTree* tree, HT_Asset handle); // returns NULL if the handle is invalid
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
 
@@ -273,7 +275,7 @@ EXPORT void StringInit(String* x);
 EXPORT void StringDeinit(String* x);
 
 // - returns NULL if not found
-EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path);
+EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
@@ -286,7 +288,8 @@ EXPORT STR_View GetAssetFileExtension(Asset* asset);
 
 EXPORT void SavePackageToDisk(Asset* package);
 
-EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path);
+EXPORT void LoadProject(AssetTree* tree, STR_View project_file);
+EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
 
 // -- ui.cpp ----------------------------------------------------------
 
@@ -374,7 +377,7 @@ struct LogMessage {
 
 struct UI_Tab {
 	STR_View name; // empty string means free slot
-	HT_AssetHandle owner_plugin;
+	HT_Asset owner_plugin;
 	UI_Tab* freelist_next;
 };
 
@@ -452,6 +455,9 @@ struct EditorState {
 	PerFrameState frame; // cleared at the beginning of a frame
 };
 
+EXPORT void RunPlugin(EditorState* s, Asset* plugin);
+EXPORT void UnloadPlugin(EditorState* s, Asset* plugin);
+
 EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name);
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab);
 
@@ -461,9 +467,6 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
 
 EXPORT void InitAPI(EditorState* s);
-
-EXPORT void LoadPlugin(EditorState* s, Asset* plugin);
-EXPORT void UnloadPlugin(EditorState* s, Asset* plugin);
 
 EXPORT void UpdatePlugins(EditorState* s);
 EXPORT void BuildPluginD3DCommandLists(EditorState* s);
@@ -479,4 +482,6 @@ EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
 
-EXPORT void RecompilePlugin(EditorState* s, Asset* plugin, STR_View hatch_install_directory);
+EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath);
+
+EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin);

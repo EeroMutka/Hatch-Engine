@@ -90,11 +90,11 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 	parent->last_child = asset;
 }
 
-EXPORT bool AssetIsValid(AssetTree* tree, HT_AssetHandle handle) {
+EXPORT bool AssetIsValid(AssetTree* tree, HT_Asset handle) {
 	return GetAsset(tree, handle) != NULL;
 }
 
-EXPORT Asset* GetAsset(AssetTree* tree, HT_AssetHandle handle) {
+EXPORT Asset* GetAsset(AssetTree* tree, HT_Asset handle) {
 	AssetHandleDecoded decoded = *(AssetHandleDecoded*)&handle;
 	if (decoded.bucket_index < tree->asset_buckets.count) {
 		AssetBucket* bucket = tree->asset_buckets.data[decoded.bucket_index];
@@ -238,7 +238,7 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_IVec2:      { *out_size = sizeof(ivec2); *out_alignment = alignof(ivec2); } return;
 	case HT_TypeKind_IVec3:      { *out_size = sizeof(ivec3); *out_alignment = alignof(ivec3); } return;
 	case HT_TypeKind_IVec4:      { *out_size = sizeof(ivec4); *out_alignment = alignof(ivec4); } return;
-	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_AssetHandle); *out_alignment = alignof(HT_AssetHandle); } return;
+	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_Asset); *out_alignment = alignof(HT_Asset); } return;
 	case HT_TypeKind_Array:      { *out_size = sizeof(HT_Array); *out_alignment = alignof(HT_Array); } return;
 	case HT_TypeKind_Any:        { *out_size = sizeof(HT_Any); *out_alignment = alignof(HT_Any); } return;
 	case HT_TypeKind_ItemGroup:   { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
@@ -474,7 +474,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	tree->first_free_asset = DecodeAssetHandle(asset->handle);
 }
 
-EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {
+EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) {
 	Asset* parent = package;
 	Asset* result = NULL;
 
@@ -482,6 +482,16 @@ EXPORT Asset* FindAssetFromPath(Asset* package, STR_View path) {
 		STR_View name;
 		bool ok = STR_ParseToAndSkip(&remaining, '/', &name);
 		ASSERT(ok);
+
+		if (parent == package && STR_CutStart(&name, "$")) {
+			u64 name_hash = DS_MurmurHash64A(name.data, name.size, 0);
+			Asset* found_package = NULL;
+			bool found = DS_MapFind(&tree->package_from_name, name_hash, &found_package);
+			if (!found) break;
+			
+			parent = found_package;
+			continue;
+		}
 
 		Asset* new_parent = NULL;
 		for (Asset* asset = parent->first_child; asset; asset = asset->next) {

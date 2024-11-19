@@ -4,6 +4,6 @@
 #include <hatch_api.h>
 
 typedef struct params_type {
-	HT_AssetHandle shader_file;
+	HT_Asset shader_file;
 	float testing;
 } params_type;

@@ -29,7 +29,7 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 	EditorState* s = (EditorState*)tree->user_data;
 
 	UI_Key key = node->key;
-	Asset* asset = GetAsset(&s->asset_tree, (HT_AssetHandle)node->key);
+	Asset* asset = GetAsset(&s->asset_tree, (HT_Asset)node->key);
 
 	UIAddAssetIcon(UI_KBOX(key), asset, s->icons_font);
 
@@ -200,7 +200,7 @@ struct StructMemberValNode {
 	STR_View name;
 };
 
-static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, HT_AssetHandle* handle) {
+static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, HT_Asset* handle) {
 	STR_View asset_name = "(None)";
 	UI_Color asset_name_color = UI_GRAY;
 	
@@ -224,7 +224,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 			box->draw_opts->border_color = DS_Dup(TEMP, ACTIVE_COLOR);
 
 			if (!UI_InputIsDown(UI_Input_MouseLeft)) {
-				*handle = (HT_AssetHandle)s->assets_tree_ui_state.drag_n_dropping;
+				*handle = (HT_Asset)s->assets_tree_ui_state.drag_n_dropping;
 			}
 		}
 	}
@@ -419,7 +419,7 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			}
 		}break;
 		case HT_TypeKind_AssetRef: {
-			HT_AssetHandle* val = (HT_AssetHandle*)member_val->data;
+			HT_Asset* val = (HT_Asset*)member_val->data;
 			UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), val);
 		}break;
 		case HT_TypeKind_String: {
@@ -574,7 +574,7 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 	UIRegisterOrderedRoot(&s->dropdown_state, root_box);
 	UI_PushBox(root_box);
 
-	Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
+	Asset* selected_asset = GetAsset(&s->asset_tree, (HT_Asset)s->assets_tree_ui_state.selection);
 	if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 		StructMemberNode root = {0};
 		root.base.key = UI_HashPtr(UI_KKEY(key), selected_asset);
@@ -659,10 +659,27 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 
 		UIAddStructValueEditTree(s, UI_KKEY(key), &selected_asset->plugin.options, s->asset_tree.plugin_options_struct_type);
 
-		UI_Box* compile_button = UI_KBOX(key);
-		UI_AddButton(compile_button, UI_SizeFit(), UI_SizeFit(), 0, "Compile");
-		if (UI_Clicked(compile_button)) {
-			RecompilePlugin(s, selected_asset, s->hatch_install_directory);
+		// is plugin running?
+		if (selected_asset->plugin.dll_handle) {
+			UI_Box* stop_button = UI_KBOX(key);
+			UI_AddButton(stop_button, UI_SizeFit(), UI_SizeFit(), 0, "Stop");
+			if (UI_Clicked(stop_button)) {
+				UnloadPlugin(s, selected_asset);
+			}
+		}
+		else {
+			UI_Box* run_button = UI_KBOX(key);
+			UI_AddButton(run_button, UI_SizeFit(), UI_SizeFit(), 0, "Run");
+			if (UI_Clicked(run_button)) {
+				
+				// maybe instead of a recompile button, we can compile in the background. And instead of a run button, show errors underneath if it fails to compile.
+				
+				// TODO: only recompile if needs recompiling
+				bool ok = RecompilePlugin(s, selected_asset);
+				if (ok) {
+					RunPlugin(s, selected_asset);
+				}
+			}
 		}
 	}
 
@@ -730,7 +747,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	if (s->rmb_menu_open && s->rmb_menu_tab_class == s->assets_tab_class) {
 		UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
 
-		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
+		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_Asset)s->assets_tree_ui_state.selection);
 		if (selected_asset) {
 			// for christmas MVP version, we can just do cut-n-paste for getting things into and outside of folders.
 			UI_Box* new_folder = UI_BOX();
@@ -795,7 +812,8 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			if (UI_Clicked(load_package_box)) {
 				STR_View load_package_path;
 				if (OS_FolderPicker(MEM_SCOPE(TEMP), &load_package_path)) {
-					s->assets_tree_ui_state.selection = (UI_Key)LoadPackageFromDisk(&s->asset_tree, load_package_path)->handle;
+					//s->assets_tree_ui_state.selection = (UI_Key)...->handle
+					LoadPackages(&s->asset_tree, { &load_package_path, 1 });
 				}
 				s->rmb_menu_open = false;
 			}
@@ -839,7 +857,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		}
 	}
 	else if (s->rmb_menu_open && s->rmb_menu_tab_class == s->properties_tab_class) {
-		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.selection);
+		Asset* selected_asset = GetAsset(&s->asset_tree, (HT_Asset)s->assets_tree_ui_state.selection);
 		if (selected_asset && selected_asset->kind == AssetKind_StructType) {
 			UIPushDropdown(&s->dropdown_state, rmb_menu, UI_SizeFit(), UI_SizeFit());
 
@@ -929,7 +947,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 
 	// update drag n drop state
 	if (s->assets_tree_ui_state.drag_n_dropping) {
-		Asset* asset = GetAsset(&s->asset_tree, (HT_AssetHandle)s->assets_tree_ui_state.drag_n_dropping);
+		Asset* asset = GetAsset(&s->asset_tree, (HT_Asset)s->assets_tree_ui_state.drag_n_dropping);
 
 		UI_Box* box = UI_BOX();
 		UI_InitRootBox(box, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_Horizontal|UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
@@ -988,7 +1006,7 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
 	EditorState* s = g_plugin_call_ctx->s;
-	HT_AssetHandle data = g_plugin_call_ctx->plugin->plugin.options.data;
+	HT_Asset data = g_plugin_call_ctx->plugin->plugin.options.data;
 
 	Asset* data_asset = GetAsset(&s->asset_tree, data);
 	return data_asset ? data_asset->struct_data.data : NULL;
@@ -1059,17 +1077,17 @@ static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update)
 	return false;
 }
 
-static STR_View HT_AssetGetFilepath(HT_AssetHandle asset) {
+static STR_View HT_AssetGetFilepath(HT_Asset asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
 	return ptr ? AssetGetAbsoluteFilepath(TEMP, ptr) : STR_View{};
 }
 
-static u64 HT_AssetGetModtime(HT_AssetHandle asset) {
+static u64 HT_AssetGetModtime(HT_Asset asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
 	return ptr ? ptr->modtime : 0;
 }
 
-static bool HT_RegisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
+static bool HT_RegisterAssetViewerForType(HT_Asset struct_type_asset) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
 	if (asset && asset->kind == AssetKind_StructType) {
@@ -1082,7 +1100,7 @@ static bool HT_RegisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
 	return false;
 }
 
-static void HT_DeregisterAssetViewerForType(HT_AssetHandle struct_type_asset) {
+static void HT_DeregisterAssetViewerForType(HT_Asset struct_type_asset) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
 	if (asset && asset->kind == AssetKind_StructType) {
@@ -1104,7 +1122,7 @@ static void HT_AddIndices(u32* indices, int count) {
 	UI_AddIndices(indices, count, NULL);
 }
 
-static HT_AssetHandle HT_AssetGetType(HT_AssetHandle asset) {
+static HT_Asset HT_AssetGetType(HT_Asset asset) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* ptr = GetAsset(&s->asset_tree, asset);
 	if (ptr != NULL && ptr->kind == AssetKind_StructData) {
@@ -1113,7 +1131,7 @@ static HT_AssetHandle HT_AssetGetType(HT_AssetHandle asset) {
 	return NULL;
 }
 
-static void* HT_AssetGetData(HT_AssetHandle asset) {
+static void* HT_AssetGetData(HT_Asset asset) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* ptr = GetAsset(&s->asset_tree, asset);
 	if (ptr != NULL && ptr->kind == AssetKind_StructData) {
@@ -1160,7 +1178,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.TempArenaPush = HT_TempArenaPush;
 	api.GetPluginData = HT_GetPluginData_;
 	api.RegisterAssetViewerForType = HT_RegisterAssetViewerForType;
-	api.DeregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
+	api.UnregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
 	api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 	api.D3DCompile = D3DCompile;
@@ -1185,22 +1203,58 @@ EXPORT void InitAPI(EditorState* s) {
 	s->api = &api;
 }
 
-EXPORT void UnloadPlugin(EditorState* s, Asset* plugin) {
-	if (plugin->plugin.UnloadPlugin) {
-		PluginCallContext ctx = {s, plugin};
-		g_plugin_call_ctx = &ctx;
-		plugin->plugin.UnloadPlugin(s->api);
-		g_plugin_call_ctx = NULL;
-	}
-}
+EXPORT void RunPlugin(EditorState* s, Asset* plugin) {
+	ASSERT(plugin->plugin.dll_handle == NULL);
 
-EXPORT void LoadPlugin(EditorState* s, Asset* plugin) {
+	Asset* package = plugin;
+	for (;package->kind != AssetKind_Package; package = package->parent) {}
+	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+	ASSERT(ok);
+
+	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", UI_TextToStr(plugin->name));
+	OS_DLL* dll = OS_LoadDLL(MEM_TEMP(), dll_path);
+	ok = dll != NULL;
+	ASSERT(ok);
+
+	plugin->plugin.dll_handle = dll;
+
+	*(void**)&plugin->plugin.LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
+	*(void**)&plugin->plugin.UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
+	*(void**)&plugin->plugin.UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
+
 	if (plugin->plugin.LoadPlugin) {
 		PluginCallContext ctx = {s, plugin};
 		g_plugin_call_ctx = &ctx;
 		plugin->plugin.LoadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
 	}
+}
+
+EXPORT void UnloadPlugin(EditorState* s, Asset* plugin) {
+	ASSERT(plugin->plugin.dll_handle);
+
+	if (plugin->plugin.UnloadPlugin) {
+		PluginCallContext ctx = {s, plugin};
+		g_plugin_call_ctx = &ctx;
+		plugin->plugin.UnloadPlugin(s->api);
+		g_plugin_call_ctx = NULL;
+	}
+
+	OS_UnloadDLL(plugin->plugin.dll_handle);
+
+	plugin->plugin.dll_handle = NULL;
+	plugin->plugin.LoadPlugin = NULL;
+	plugin->plugin.UnloadPlugin = NULL;
+	plugin->plugin.UpdatePlugin = NULL;
+
+	for (int i = 0; i < plugin->plugin.allocations.count; i++) {
+		PluginAllocationHeader* allocation = plugin->plugin.allocations[i];
+		DS_MemFree(DS_HEAP, allocation);
+	}
+	DS_ArrClear(&plugin->plugin.allocations);
+
+	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin->name));
+	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 }
 
 EXPORT void BuildPluginD3DCommandLists(EditorState* s) {

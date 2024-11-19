@@ -1,0 +1,30 @@
+// A Hatch project contains a list of package-links for the project.
+// It also contains an ordered list of enabled plugins.
+
+packages: {
+	"$HATCH_DIR/demos/$Scene",
+	"$HATCH_DIR/demos/$SceneEdit",
+}
+
+// Plugins are like processes in an OS, with the distinction that you can have max 1 instance of a
+// plugin running at a time. A plugin may run once and close itself immediately, or it may continue
+// running forever. The update order of plugins is determined by the order in which you enable them.
+run_plugins: {
+	"$SceneEdit/SceneEdit",
+}
+
+// If in the future we want to allow i.e. making blank text documents in an empty hatch instance,
+// we can save those files in the directory of the .htproject file.
+// Or as an alternative future, we can rename this to .htpackage and allow packages to symlink to other packages.
+// In that alternative future, loading a project then is the same thing as loading a package.
+
+// Why have packages? Why not just have folders?
+// - Because of package IDs and referring to external packages through IDs enables drag-n-drop replacement.
+//   or does it? if all packages are root-level, then drag-n-drop works just fine!
+//   ... people would then make a convention that all "drag-n-drop-ready" folders should be top-level.
+//
+// So yes, packages are folders that get added to a global namespace. On disk, packages have the $ prefix (alternatively include a .htpackage) to distinguish them easily.
+// - To refer to a thing inside a package, use "$MyNamespace/thing"
+// - the use of $ prefix makes search-and-replace within a package easy.
+
+// Whether or not the startup project, or "projects" in general count as packages doesn't really matter.

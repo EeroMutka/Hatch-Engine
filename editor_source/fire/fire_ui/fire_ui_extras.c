@@ -163,7 +163,7 @@ UI_API void UI_AddFmt(UI_Box* box, const char* fmt, ...) {
 				//	STR_PrintV(s, va_arg(args, STR_View));
 				//} break;
 			case '%': {
-				STR_PrintC(&current_string, "%");
+				STR_Print(&current_string, STR_V("%"));
 			} break;
 			case 't': {
 				UI_InfoFmtFinishCurrent_(box, &current_string, &section_index);
@@ -262,7 +262,7 @@ UI_API void UI_AddFmt(UI_Box* box, const char* fmt, ...) {
 		}
 		else {
 			STR_View character_str = { c, 1 };
-			STR_PrintV(&current_string, character_str);
+			STR_Print(&current_string, character_str);
 		}
 	}
 

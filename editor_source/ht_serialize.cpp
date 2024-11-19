@@ -5,6 +5,9 @@
 #define MD_FUNCTION extern "C"
 #include "third_party/md.h"
 
+static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, str.size}; }
+static inline MD_String8 StrToMD(STR_View str) { return {(MD_u8*)str.data, (MD_u64)str.size}; }
+
 static STR_View GetAssetExt(AssetKind kind) {
 	switch (kind) {
 	case AssetKind_Plugin:     return ".plugin.ht";
@@ -17,6 +20,37 @@ static STR_View GetAssetExt(AssetKind kind) {
 EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
 	STR_View result = STR_Form(arena, "%v%v", UI_TextToStr(asset->name), GetAssetExt(asset->kind));
 	return result;
+}
+
+EXPORT void LoadProject(AssetTree* tree, STR_View project_file) {
+	ASSERT(OS_PathIsAbsolute(project_file));
+
+	STR_View exe_path;
+	OS_GetThisExecutablePath(MEM_SCOPE(TEMP), &exe_path);
+	STR_View hatch_dir = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
+
+	MD_Arena* md_arena = MD_ArenaAlloc();
+	
+	MD_String8 md_filepath = StrToMD(project_file);
+	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
+	ASSERT(!MD_NodeIsNil(parse.node));
+	ASSERT(parse.errors.node_count == 0);
+	
+	MD_Node* packages = MD_ChildFromString(parse.node, MD_S8Lit("packages"), 0);
+	ASSERT(!MD_NodeIsNil(packages));
+	DS_DynArray(STR_View) package_paths = {TEMP};
+
+	for (MD_Node* child = packages->first_child; !MD_NodeIsNil(child); child = child->next) {
+		STR_View path = StrFromMD(child->string);
+		if (STR_CutStart(&path, "$HATCH_DIR")) {
+			path = STR_Form(TEMP, "%v%v", hatch_dir, path);
+		}
+		DS_ArrPush(&package_paths, path);
+	}
+	
+	LoadPackages(tree, package_paths);
+
+	MD_ArenaRelease(md_arena);
 }
 
 EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset) {
@@ -48,12 +82,8 @@ EXPORT STR_View AssetGetFilepathUsingParentDirectory(DS_Arena* arena, STR_View d
 	return result;
 }
 
-static inline STR_View StrFromMD(MD_String8 str) { return {(char*)str.str, str.size}; }
-static inline MD_String8 StrToMD(STR_View str) { return {(MD_u8*)str.data, (MD_u64)str.size}; }
-
 struct ReloadAssetsContext {
 	AssetTree* tree;
-	Asset* package;
 	MD_Arena* md_arena;
 	DS_DynArray(Asset*) queue_recompile_plugins;
 };
@@ -189,7 +219,7 @@ EXPORT void SavePackageToDisk(Asset* package) {
 	SaveAsset(package, package->package.filesys_path);
 }
 
-static void ReloadAssetsPass1(AssetTree* tree, Asset* package, Asset* parent, STR_View parent_full_path) {
+static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path) {
 	OS_FileInfoArray files = {0};
 	OS_GetAllFilesInDirectory(MEM_SCOPE(TEMP), parent_full_path, &files);
 	
@@ -269,7 +299,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* package, Asset* parent, ST
 		asset->reload_assets_filesys_path = full_path;
 
 		if (info.is_directory) {
-			ReloadAssetsPass1(tree, package, asset, full_path);
+			ReloadAssetsPass1(tree, asset, full_path);
 		}
 	}
 }
@@ -309,7 +339,7 @@ static bool ParseMetadeskFloat(MD_Node* node, float *out_value) {
 	return true;
 }
 
-static HT_Type ParseMetadeskType(Asset* package, MD_Node* node) {
+static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MD_Node* node) {
 	ASSERT(!MD_NodeIsNil(node));
 
 	HT_Type result;
@@ -321,7 +351,7 @@ static HT_Type ParseMetadeskType(Asset* package, MD_Node* node) {
 	}
 	else {
 		// Must be a user-defined type
-		Asset* struct_type = FindAssetFromPath(package, type_name);
+		Asset* struct_type = FindAssetFromPath(tree, package, type_name);
 		ASSERT(struct_type);
 		result.kind = HT_TypeKind_Struct;
 		result._struct = struct_type->handle;
@@ -339,7 +369,7 @@ static HT_Type ParseMetadeskType(Asset* package, MD_Node* node) {
 	return result;
 }
 
-static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
+static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* package, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
 		if (!asset->reload_assets_pass2_needs_hotreload) continue;
 
@@ -383,7 +413,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 				STR_View name = StrFromMD(it->string);
 				UI_TextSet(&member.name.text, name);
 				
-				member.type = ParseMetadeskType(ctx->package, it->first_child);
+				member.type = ParseMetadeskType(ctx->tree, package, it->first_child);
 
 				DS_ArrPush(&asset->struct_type.members, member);
 			}
@@ -391,7 +421,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* parent) {
 			ComputeStructLayout(ctx->tree, asset);
 		}
 		
-		ReloadAssetsPass2(ctx, asset);
+		ReloadAssetsPass2(ctx, package, asset);
 	}
 }
 
@@ -492,13 +522,13 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		MD_Node* type_tag = MD_TagFromString(node, MD_S8Lit("Type"), 0);
 		ASSERT(!MD_NodeIsNil(type_tag));
 		
-		HT_Type type = ParseMetadeskType(package, type_tag->first_child);
+		HT_Type type = ParseMetadeskType(tree, package, type_tag->first_child);
 		AnyChangeType(tree, val, &type);
 		ParseMetadeskValue(tree, package, val->data, &type, node->first_child);
 	}break;
 	case HT_TypeKind_AssetRef: {
-		HT_AssetHandle* val = (HT_AssetHandle*)dst;
-		Asset* found_asset = FindAssetFromPath(package, StrFromMD(node->string));
+		HT_Asset* val = (HT_Asset*)dst;
+		Asset* found_asset = FindAssetFromPath(tree, package, StrFromMD(node->string));
 		*val = found_asset ? found_asset->handle : NULL;
 	}break;
 	case HT_TypeKind_COUNT: ASSERT(0); break;
@@ -506,7 +536,7 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 	}
 }
 
-static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
+static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
 		if (!asset->reload_assets_pass2_needs_hotreload) continue;
 
@@ -522,13 +552,13 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 		
 		if (asset->kind == AssetKind_Plugin) {
 			HT_Array* source_files = &asset->plugin.options.source_files;
-			ArrayClear(source_files, sizeof(HT_AssetHandle));
+			ArrayClear(source_files, sizeof(HT_Asset));
 
 			MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
 			
 			Asset* data_asset = NULL;
 			if (!MD_NodeIsNil(data_node)) {
-				data_asset = FindAssetFromPath(ctx->package, StrFromMD(data_node->first_child->string));
+				data_asset = FindAssetFromPath(ctx->tree, package, StrFromMD(data_node->first_child->string));
 			}
 			asset->plugin.options.data = data_asset ? data_asset->handle : NULL;
 
@@ -536,18 +566,18 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 			if (!MD_NodeIsNil(source_files_node)) {
 				for (MD_EachNode(it, source_files_node->first_child)) {
 					STR_View path = StrFromMD(it->string);
-					Asset* elem = FindAssetFromPath(ctx->package, path);
-					HT_AssetHandle elem_ref = elem ? elem->handle : NULL;
+					Asset* elem = FindAssetFromPath(ctx->tree, package, path);
+					HT_Asset elem_ref = elem ? elem->handle : NULL;
 
-					ArrayPush(source_files, sizeof(HT_AssetHandle));
-					((HT_AssetHandle*)source_files->data)[source_files->count - 1] = elem_ref;
+					ArrayPush(source_files, sizeof(HT_Asset));
+					((HT_Asset*)source_files->data)[source_files->count - 1] = elem_ref;
 				}
 			}
 		}
 
 		if (asset->kind == AssetKind_StructData) {
 			MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("type"), 0);
-			Asset* type_asset = FindAssetFromPath(ctx->package, StrFromMD(type_node->first_child->string));
+			Asset* type_asset = FindAssetFromPath(ctx->tree, package, StrFromMD(type_node->first_child->string));
 			ASSERT(type_asset != NULL);
 			ASSERT(type_asset->kind == AssetKind_StructType);
 			
@@ -558,14 +588,14 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* parent) {
 
 			HT_Type type = { HT_TypeKind_Struct };
 			type._struct = type_asset->handle;
-			ParseMetadeskValue(ctx->tree, ctx->package, asset->struct_data.data, &type, data_node->first_child);
+			ParseMetadeskValue(ctx->tree, package, asset->struct_data.data, &type, data_node->first_child);
 		}
 
-		ReloadAssetsPass3(ctx, asset);
+		ReloadAssetsPass3(ctx, package, asset);
 	}
 }
 
-static void ReloadPackage(AssetTree* tree, Asset* package) {
+static void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages) {
 	// We do loading in two passes.
 	// 1. pass: delete assets which don't exist in the filesystem and make empty assets for those which do exist and we don't have as assets yet
 	// 2. pass: per each asset, fully reload its contents from disk.
@@ -574,45 +604,61 @@ static void ReloadPackage(AssetTree* tree, Asset* package) {
 	// to other not-yet-loaded assets when loading an asset.
 	// 3. pass: load struct data assets. This needs to be done as a separate pass AFTER all struct types have been loaded.
 	
-	// LogPrint(STR_(" *RELOADING PACKAGE *"));
-	
-	OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
-	
 	ReloadAssetsContext ctx = {0};
 	ctx.tree = tree;
-	ctx.package = package;
 	ctx.md_arena = MD_ArenaAlloc();
 	DS_ArrInit(&ctx.queue_recompile_plugins, TEMP);
 
-	ReloadAssetsPass1(tree, package, package, package->package.filesys_path);
+	for (int i = 0; i < packages.count; i++) {
+		Asset* package = packages[i];
+		OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+		ReloadAssetsPass1(tree, package, package->package.filesys_path);
+	}
 	
-	ReloadAssetsPass2(&ctx, package);
+	for (int i = 0; i < packages.count; i++) {
+		Asset* package = packages[i];
+		OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+		ReloadAssetsPass2(&ctx, package, package);
+	}
 	
-	ReloadAssetsPass3(&ctx, package);
-	
-	//for (int i = 0; i < ctx.queue_recompile_plugins.length; i++) {
-	//	ReloadPlugin(ctx.queue_recompile_plugins.data[i]);
-	//}
+	for (int i = 0; i < packages.count; i++) {
+		Asset* package = packages[i];
+		OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+		ReloadAssetsPass3(&ctx, package, package);
+	}
 	
 	MD_ArenaRelease(ctx.md_arena);
 }
 
-EXPORT Asset* LoadPackageFromDisk(AssetTree* tree, STR_View path) {
-	ASSERT(OS_PathIsAbsolute(path));
+EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
+	DS_DynArray(Asset*) packages = {TEMP};
 
-	Asset* package = MakeNewAsset(tree, AssetKind_Package);
-	package->ui_state_is_open = true;
+	for (int i = 0; i < paths.count; i++) {
+		STR_View path = paths[i];
+		ASSERT(OS_PathIsAbsolute(path));
 
-	MoveAssetToInside(tree, package, tree->root);
-	
-	package->package.filesys_path = STR_Clone(DS_HEAP, path);
-	
-	bool ok = OS_InitDirectoryWatch(MEM_TEMP(), &package->package.dir_watch, package->package.filesys_path);
-	ASSERT(ok);
-	
-	ReloadPackage(tree, package);
+		Asset* package = MakeNewAsset(tree, AssetKind_Package);
+		package->ui_state_is_open = true;
 
-	return package;
+		STR_View package_name = STR_AfterLast(path, '/');
+		bool has_dollar = STR_CutStart(&package_name, "$");
+		ASSERT(has_dollar);
+		
+		u64 name_hash = DS_MurmurHash64A(package_name.data, package_name.size, 0);
+		bool newly_added = DS_MapInsert(&tree->package_from_name, name_hash, package);
+		ASSERT(newly_added);
+
+		MoveAssetToInside(tree, package, tree->root);
+		
+		package->package.filesys_path = STR_Clone(DS_HEAP, path);
+		
+		bool ok = OS_InitDirectoryWatch(MEM_TEMP(), &package->package.dir_watch, package->package.filesys_path);
+		ASSERT(ok);
+
+		DS_ArrPush(&packages, package);
+	}
+	
+	ReloadPackages(tree, packages);
 }
 
 EXPORT void HotreloadPackages(AssetTree* tree) {
@@ -620,8 +666,10 @@ EXPORT void HotreloadPackages(AssetTree* tree) {
 		if (asset->kind != AssetKind_Package) continue;
 
 		if (OS_DirectoryWatchHasChanges(&asset->package.dir_watch)) {
+			// TODO
+			
 			// printf("RELOADING PACKAGE!\n");
-			ReloadPackage(tree, asset);
+				//ReloadPackage(tree, asset);
 		}
 	}
 }
