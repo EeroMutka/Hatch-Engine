@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <immintrin.h>
+#include <intrin.h>
 
 typedef uint8_t   u8;
 typedef uint16_t  u16;
@@ -22,6 +24,9 @@ typedef int64_t   i64;
 #define HT_LangAgnosticLiteral(T) (T) // in C, struct and union literals are of the form (MyStructType){...}
 #endif
 
+// NOTE: may be omitted in debug builds!
+#define HT_ASSERT(X) do { if (!(X)) __debugbreak(); } while(0)
+
 typedef union vec2 {
 	struct { float x, y; };
 	float _[2];
@@ -35,12 +40,20 @@ typedef union vec3 {
 } vec3;
 
 typedef union vec4 {
-	struct { float x, y, z, w; };
-	struct { vec2 xy; vec2 zw; };
-	struct { float x; vec2 yz; float w; };
 	struct { vec3 xyz; float w; };
 	struct { float x; vec3 yzw; };
+	struct { vec2 xy; vec2 zw; };
+	struct { float x; vec2 yz; float w; };
+	struct { float x, y, z, w; };
 	float _[4];
+	__m128 SSE;
+//#ifdef __cplusplus
+//	vec4(float _x, float _y, float _z, float _w) {}
+//	vec4(vec2 xy, vec2 zw) {}
+//	vec4(float x, vec2 yz, float w) {}
+//	vec4(vec3 xyz, float w) {}
+//	vec4(float x, vec3 yzw) {}
+//#endif
 } vec4;
 
 typedef union ivec2 {

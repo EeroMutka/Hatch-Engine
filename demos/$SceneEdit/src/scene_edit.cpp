@@ -1,7 +1,8 @@
 #include <hatch_api.h>
 #include "../SceneEdit.inc.ht"
 
-#include <ht_utils/math/HandmadeMath.h>
+#include <ht_utils/math/math_core.h>
+#include <ht_utils/math/math_extras.h>
 
 #define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
@@ -10,6 +11,8 @@
 #define UI_CUSTOM_VEC2
 #define UI_Vec2 vec2
 #include <ht_utils/fire/fire_ui/fire_ui.c>
+
+#include <ht_utils/gizmos/gizmos.h>
 
 #define ASSERT(x) do { if (!(x)) __debugbreak(); } while(0)
 #define TODO() __debugbreak()
@@ -102,6 +105,20 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	while (ht->PollNextAssetViewerTabUpdate(&update)) {
 		vec2 rect_min = {(float)update.rect_min.x, (float)update.rect_min.y}; // TODO: it would be nice to support implicit conversion!
 		vec2 rect_max = {(float)update.rect_max.x, (float)update.rect_max.y};
+		
+		//vec3 camera_pos = {0.f, 0.f, -10.f};
+		// mat4 cs_from_ws = M_Perspective_LH_ZO(M_AngleDeg(70.f), 1.f, 0.01f, 100.f);// * M_Translate(-camera_pos);
+		
+		mat4 ws_to_cs = M_MakePerspectiveMatrixSimple(5.f); // * M_Translate(-camera_pos);
+		
+		GizmosViewport vp;
+		vp.camera.position = {0, 0, 0};
+		vp.camera.ws_to_cs = ws_to_cs;
+		// vp.camera.cs_to_ws = M_InvGeneralM4(cs_from_ws);
+		vp.window_size = {rect_max - rect_min};
+		vp.window_size_inv = {1.f / vp.window_size.x, 1.f / vp.window_size.y};
+		
+		DrawCuboid3D(&vp, vec3{-1, -1, -1+10}, vec3{1, 1, 1+10}, 5.f, UI_BLUE);
 		
 		vec2 middle = (rect_min + rect_max) * 0.5f;
 		UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
