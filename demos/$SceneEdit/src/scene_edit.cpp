@@ -1,12 +1,15 @@
 #include <hatch_api.h>
 #include "../SceneEdit.inc.ht"
 
+#include <ht_utils/math/HandmadeMath.h>
+
 #define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
 
 #define UI_API static
+#define UI_CUSTOM_VEC2
+#define UI_Vec2 vec2
 #include <ht_utils/fire/fire_ui/fire_ui.c>
-#include <stdio.h>
 
 #define ASSERT(x) do { if (!(x)) __debugbreak(); } while(0)
 #define TODO() __debugbreak()
@@ -72,29 +75,14 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
-	/*HT_AssetViewerTabUpdate update;
-	while (ht->PollNextAssetViewerTabUpdate(&update)) {
-		// update.rect_min
-	}*/
-	
 	// OR: maybe the scene edit plugin can act more like a library for the renderer plugin.
 	// The renderer plugin can then call functions from the scene edit plugin, like "UpdateScene" and "GenerateGizmos".
 	// This sounds good, because it lets us use our current simplistic hatch setup. Let's do it.
 	// THOUGH... if we do it library-style, then the code will be duplicated. Maybe we need a way to expose DLL calls in the future!
 	
-	// Ideally, the SceneEdit plugin could render a texture in the UI first
-	
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
 	
-	DS_DynArray(int) my_things = {temp_allocator};
-	DS_ArrPush(&my_things, 1);
-	DS_ArrPush(&my_things, 2);
-	DS_ArrPush(&my_things, 3);
-	DS_ArrPush(&my_things, 4);
-	
-	// ht->DrawText("Hello!", {400, 500}, HT_AlignH_Left, 100, {255, 0, 255, 255});
-
 	UI_Init(temp_allocator);
 	
 	// setup UI render backend
@@ -110,8 +98,16 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	UI_Inputs ui_inputs = {};
 	UI_BeginFrame(&ui_inputs, {0, 18}, {0, 18});
 	
-	UI_DrawCircle({500, 500}, 100.f, 12, {0, 255, 0, 255});
-	UI_DrawCircle({200, 400}, 50.f, 16, {255, 255, 0, 255});
+	HT_AssetViewerTabUpdate update;
+	while (ht->PollNextAssetViewerTabUpdate(&update)) {
+		vec2 rect_min = {(float)update.rect_min.x, (float)update.rect_min.y}; // TODO: it would be nice to support implicit conversion!
+		vec2 rect_max = {(float)update.rect_max.x, (float)update.rect_max.y};
+		
+		vec2 middle = (rect_min + rect_max) * 0.5f;
+		UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
+	}
+	
+	// UI_DrawCircle({200, 400}, 50.f, 16, {255, 255, 0, 255});
 
 	// Submit UI render commands to hatch
 	UI_Outputs ui_outputs;

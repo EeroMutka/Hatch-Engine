@@ -22,7 +22,7 @@ EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
 	return result;
 }
 
-EXPORT void LoadProject(AssetTree* tree, STR_View project_file) {
+EXPORT void LoadProject(EditorState* s, STR_View project_file) {
 	ASSERT(OS_PathIsAbsolute(project_file));
 
 	STR_View exe_path;
@@ -37,18 +37,29 @@ EXPORT void LoadProject(AssetTree* tree, STR_View project_file) {
 	ASSERT(parse.errors.node_count == 0);
 	
 	MD_Node* packages = MD_ChildFromString(parse.node, MD_S8Lit("packages"), 0);
-	ASSERT(!MD_NodeIsNil(packages));
-	DS_DynArray(STR_View) package_paths = {TEMP};
+	if (!MD_NodeIsNil(packages)) {
+		DS_DynArray(STR_View) package_paths = {TEMP};
 
-	for (MD_Node* child = packages->first_child; !MD_NodeIsNil(child); child = child->next) {
-		STR_View path = StrFromMD(child->string);
-		if (STR_CutStart(&path, "$HATCH_DIR")) {
-			path = STR_Form(TEMP, "%v%v", hatch_dir, path);
+		for (MD_Node* child = packages->first_child; !MD_NodeIsNil(child); child = child->next) {
+			STR_View path = StrFromMD(child->string);
+			if (STR_CutStart(&path, "$HATCH_DIR")) {
+				path = STR_Form(TEMP, "%v%v", hatch_dir, path);
+			}
+			DS_ArrPush(&package_paths, path);
 		}
-		DS_ArrPush(&package_paths, path);
+		
+		LoadPackages(&s->asset_tree, package_paths);
 	}
 	
-	LoadPackages(tree, package_paths);
+	MD_Node* run_plugins = MD_ChildFromString(parse.node, MD_S8Lit("run_plugins"), 0);
+	if (!MD_NodeIsNil(run_plugins)) {
+		for (MD_Node* child = run_plugins->first_child; !MD_NodeIsNil(child); child = child->next) {
+			STR_View path = StrFromMD(child->string);
+			Asset* plugin_asset = FindAssetFromPath(&s->asset_tree, NULL, path);
+			ASSERT(plugin_asset->kind == AssetKind_Plugin);
+			RunPlugin(s, plugin_asset);
+		}
+	}
 
 	MD_ArenaRelease(md_arena);
 }

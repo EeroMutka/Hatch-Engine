@@ -98,7 +98,7 @@
 */
 
 #pragma once
-#define MATH_INCLUDED
+#define HANDMADE_MATH_INCLUDED
 
 // Dummy macros for when test framework is not present.
 #ifndef COVERAGE

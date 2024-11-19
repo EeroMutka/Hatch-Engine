@@ -237,6 +237,9 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 					case HT_TypeKind_Type: { fprintf(header, "HT_Type"); }break;
 					case HT_TypeKind_Array: { fprintf(header, "HT_Array"); }break;
 					case HT_TypeKind_ItemGroup: { fprintf(header, "HT_ItemGroup"); }break;
+					case HT_TypeKind_Struct: {
+						fprintf(header, "long long");
+					}break;
 					case HT_TypeKind_AssetRef: { fprintf(header, "HT_Asset"); }break;
 					case HT_TypeKind_Vec2: { fprintf(header, "vec2"); }break;
 					case HT_TypeKind_Vec3: { fprintf(header, "vec3"); }break;

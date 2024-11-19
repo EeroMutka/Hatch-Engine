@@ -1,5 +1,0 @@
-struct: {
-	// components: @Array Any
-	speed: Float
-	age: Float
-}

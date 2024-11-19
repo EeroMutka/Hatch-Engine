@@ -673,12 +673,7 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 			if (UI_Clicked(run_button)) {
 				
 				// maybe instead of a recompile button, we can compile in the background. And instead of a run button, show errors underneath if it fails to compile.
-				
-				// TODO: only recompile if needs recompiling
-				bool ok = RecompilePlugin(s, selected_asset);
-				if (ok) {
-					RunPlugin(s, selected_asset);
-				}
+				RunPlugin(s, selected_asset);
 			}
 		}
 	}
@@ -1204,11 +1199,15 @@ EXPORT void InitAPI(EditorState* s) {
 }
 
 EXPORT void RunPlugin(EditorState* s, Asset* plugin) {
+	// TODO: only recompile if needs recompiling
+	bool ok = RecompilePlugin(s, plugin);
+	if (!ok) return;
+	
 	ASSERT(plugin->plugin.dll_handle == NULL);
 
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+	ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
 	ASSERT(ok);
 
 	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", UI_TextToStr(plugin->name));

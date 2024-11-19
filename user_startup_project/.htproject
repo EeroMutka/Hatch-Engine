@@ -4,6 +4,7 @@
 packages: {
 	"$HATCH_DIR/demos/$Scene",
 	"$HATCH_DIR/demos/$SceneEdit",
+	"$HATCH_DIR/demos/$PhysicsGame",
 }
 
 // Plugins are like processes in an OS, with the distinction that you can have max 1 instance of a

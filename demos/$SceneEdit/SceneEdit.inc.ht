@@ -4,10 +4,6 @@
 typedef struct BoxComponent {
 	vec3 half_extent;
 } BoxComponent;
-typedef struct Foo {
-	float speed;
-	float age;
-} Foo;
 typedef struct Scene {
 	HT_ItemGroup entities;
 } Scene;
@@ -20,3 +16,6 @@ typedef struct SceneEntity {
 typedef struct SceneEditParams {
 	HT_Asset scene_type;
 } SceneEditParams;
+typedef struct FollowerComponent {
+	long long target;
+} FollowerComponent;

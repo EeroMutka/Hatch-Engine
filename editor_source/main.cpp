@@ -165,10 +165,10 @@ static void AppInit(EditorState* s) {
 		ComputeStructLayout(&s->asset_tree, s->asset_tree.plugin_options_struct_type);
 	}
 
-	STR_View startup_project_file = STR_Form(TEMP, "%v/user_startup_project/.htproject", s->hatch_install_directory);
-	LoadProject(&s->asset_tree, startup_project_file);
-
 	InitAPI(s);
+
+	STR_View startup_project_file = STR_Form(TEMP, "%v/user_startup_project/.htproject", s->hatch_install_directory);
+	LoadProject(s, startup_project_file);
 }
 
 static void UpdateAndDraw(EditorState* s) {

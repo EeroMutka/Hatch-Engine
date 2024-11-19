@@ -6,6 +6,7 @@
 //
 
 #pragma once
+#define FIRE_UI_INCLUDED
 
 #include "../fire_ds.h"
 #include "../fire_string.h"

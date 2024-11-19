@@ -478,7 +478,7 @@ EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) 
 	Asset* parent = package;
 	Asset* result = NULL;
 
-	for (STR_View remaining = path; remaining.size > 0 && parent;) {
+	for (STR_View remaining = path; remaining.size > 0;) {
 		STR_View name;
 		bool ok = STR_ParseToAndSkip(&remaining, '/', &name);
 		ASSERT(ok);
@@ -500,6 +500,8 @@ EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) 
 				break;
 			}
 		}
+		if (new_parent == NULL) break;
+		
 		parent = new_parent;
 		result = parent;
 	}

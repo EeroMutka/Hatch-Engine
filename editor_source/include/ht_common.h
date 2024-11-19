@@ -277,20 +277,6 @@ EXPORT void StringDeinit(String* x);
 // - returns NULL if not found
 EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path);
 
-// -- ht_serialize.cpp ------------------------------------------------
-
-EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
-EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
-
-EXPORT void HotreloadPackages(AssetTree* tree);
-
-EXPORT STR_View GetAssetFileExtension(Asset* asset);
-
-EXPORT void SavePackageToDisk(Asset* package);
-
-EXPORT void LoadProject(AssetTree* tree, STR_View project_file);
-EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
-
 // -- ui.cpp ----------------------------------------------------------
 
 struct UI_Tab; // Placeholder for the user
@@ -472,6 +458,20 @@ EXPORT void UpdatePlugins(EditorState* s);
 EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
+
+// -- ht_serialize.cpp ------------------------------------------------
+
+EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
+EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
+
+EXPORT void HotreloadPackages(AssetTree* tree);
+
+EXPORT STR_View GetAssetFileExtension(Asset* asset);
+
+EXPORT void SavePackageToDisk(Asset* package);
+
+EXPORT void LoadProject(EditorState* s, STR_View project_file);
+EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
 

@@ -1,4 +1,4 @@
-type: "Scene:types/Scene"
+type: "$Scene/types/Scene"
 data: {
 	// array of SceneEntities - this looks suspiciously similar to an AssetTree.
 	// Maybe we should have a "ItemTree" be a built-in type. What does a data tree look like then?
@@ -6,8 +6,30 @@ data: {
 	// Items may be parented to other items.
 	// But before an ItemTree, we can get the main benefits as ItemList and just having a flat hierarchy.
 	
-	// entities: @ItemList "Scene:types/SceneEntity"
+	// entities: @ItemList "$Scene/types/SceneEntity"
 	entities: {
+		"Box": {
+			position: { 0, 0, 23 }
+			rotation: { 0, 0, 0 }
+			scale:    { 1, 1, 1 }
+			components: {
+				@Type("$Scene/Components/BoxComponent") {
+					half_extent: { 1, 1, 1 }
+				}
+			}
+		}
+		"Floor": {
+			position: { 0, 0, 0 }
+			rotation: { 0, 0, 0 }
+			scale:    { 1, 1, 1 }
+			components: {
+				@Type("$Scene/Components/BoxComponent") {
+					half_extent: { 5, 5, 0.1 }
+				}
+			}
+		}
+		
+		/*
 		"My box 1": {
 			components: { // array of "any"
 				@any("PBRRender:Components/MeshComponent") {
@@ -37,6 +59,6 @@ data: {
 			x: 0
 			y: 0
 			z: 50
-		}
+		}*/
 	}
 }
