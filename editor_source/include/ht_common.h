@@ -14,24 +14,24 @@
 
 #define DS_ASSERT(X) ASSERT(X)
 #define STR_ASSERT(X) ASSERT(X)
-#include <fire_ds.h>
-#include <fire_string.h>
+#include <ht_utils/fire/fire_ds.h>
+#include <ht_utils/fire/fire_string.h>
 
 #define UI_CUSTOM_VEC2
 typedef vec2 UI_Vec2;
-#include <fire_ui/fire_ui.h>
+#include <ht_utils/fire/fire_ui/fire_ui.h>
 
 #define OS_WINDOW_API extern "C"
-#include <fire_os_window.h>
+#include <ht_utils/fire/fire_os_window.h>
 
 #define OS_TIMING_API extern "C"
-#include <fire_os_timing.h>
+#include <ht_utils/fire/fire_os_timing.h>
 
 #define OS_CLIPBOARD_API extern "C"
-#include <fire_os_clipboard.h>
+#include <ht_utils/fire/fire_os_clipboard.h>
 
 #define BUILD_API extern "C"
-#include <fire_build.h>
+#include <ht_utils/fire/fire_build.h>
 
 #include "../utils/ui_data_tree.h"
 

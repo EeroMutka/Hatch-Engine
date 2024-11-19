@@ -1,4 +1,4 @@
-data_asset: ""
+data_asset: "SceneEditParamsData"
 source_files: {
 	"src/scene_edit.cpp"
 }

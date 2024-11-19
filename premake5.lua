@@ -19,9 +19,10 @@ project "Hatch"
 	
 	SpecifyWarnings()
 	
-	includedirs "editor_source/fire"
+	includedirs "plugin_include"
 	
 	files "editor_source/**"
+	files "plugin_include/ht_utils/fire/**"
 	
 	-- for CloseVisualStudioPDBHandle
 	links "Rstrtmgr.lib"

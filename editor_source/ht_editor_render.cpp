@@ -1,7 +1,7 @@
 #include "include/ht_common.h"
 #include "include/ht_editor_render.h"
 
-#include "fire/fire_ui/fire_ui_backend_dx12.h"
+#include <ht_utils/fire/fire_ui/fire_ui_backend_dx12.h>
 
 static void FreeRenderTargets(RenderState* s) {
     for (int i = 0; i < BACK_BUFFER_COUNT; i++) {

@@ -1,9 +1,9 @@
 #include "include/ht_common.h"
 #include "include/ht_editor_render.h"
 
-#include "fire/fire_ui/fire_ui_backend_fire_os.h"
-#include "fire/fire_ui/fire_ui_backend_dx12.h"
-#include "fire/fire_ui/fire_ui_backend_stb_truetype.h"
+#include <ht_utils/fire/fire_ui/fire_ui_backend_fire_os.h>
+#include <ht_utils/fire/fire_ui/fire_ui_backend_dx12.h>
+#include <ht_utils/fire/fire_ui/fire_ui_backend_stb_truetype.h>
 
 // -- Globals -----------------------------
 
@@ -73,8 +73,8 @@ static void AppInit(EditorState* s) {
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
-	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
-	OS_ReadEntireFile(MEM_SCOPE(persist), "../editor_source/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
+	OS_ReadEntireFile(MEM_SCOPE(persist), "../plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
+	OS_ReadEntireFile(MEM_SCOPE(persist), "../plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
 	s->default_font = { UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f), 18 };
 	s->icons_font = { UI_STBTT_FontInit(icons_ttf.data, -2.f), 18 };

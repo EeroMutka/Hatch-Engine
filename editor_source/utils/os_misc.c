@@ -1,5 +1,5 @@
-#include <fire_ds.h>
-#include <fire_string.h>
+#include <ht_utils/fire/fire_ds.h>
+#include <ht_utils/fire/fire_string.h>
 
 #include "os_misc.h"
 

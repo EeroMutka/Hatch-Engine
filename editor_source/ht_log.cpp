@@ -1,5 +1,5 @@
 #include "include/ht_common.h"
-#include "fire/fire_os_timing.h"
+#include <ht_utils/fire/fire_os_timing.h>
 
 EXPORT void LogF(EditorState* s, LogMessageKind kind, const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
