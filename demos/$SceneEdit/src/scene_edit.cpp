@@ -4,6 +4,8 @@
 #include <ht_utils/math/math_core.h>
 #include <ht_utils/math/math_extras.h>
 
+#include <ht_utils/input/input.h>
+
 #define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
 
@@ -13,6 +15,8 @@
 #include <ht_utils/fire/fire_ui/fire_ui.c>
 
 #include <ht_utils/gizmos/gizmos.h>
+
+#include "camera.h"
 
 #define ASSERT(x) do { if (!(x)) __debugbreak(); } while(0)
 #define TODO() __debugbreak()
@@ -95,6 +99,10 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
 	UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
 	
+	static float time = 0.f;
+	static Camera camera = {};
+	time += 1.f/100.f;
+	
 	// setup UI text rendering backend
 	UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
 	
@@ -106,26 +114,28 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		vec2 rect_min = {(float)update.rect_min.x, (float)update.rect_min.y}; // TODO: it would be nice to support implicit conversion!
 		vec2 rect_max = {(float)update.rect_max.x, (float)update.rect_max.y};
 		
-		//vec3 camera_pos = {0.f, 0.f, -10.f};
-		// mat4 cs_from_ws = M_Perspective_LH_ZO(M_AngleDeg(70.f), 1.f, 0.01f, 100.f);// * M_Translate(-camera_pos);
+		UpdateCamera(&camera, ht->input_frame);
 		
-		mat4 ws_to_cs = M_MakePerspectiveMatrixSimple(5.f); // * M_Translate(-camera_pos);
+		vec2 rect_size = rect_max - rect_min;
+		vec2 middle = (rect_min + rect_max) * 0.5f;
+		
+		float aspect = rect_size.x / rect_size.y;
+		mat4 vs_to_cs = M_MakePerspectiveMatrixSimple(aspect, 2.f);
+		
+		mat4 ws_to_cs = M_MakeTranslationMatrix(-1.f*camera.pos) * vs_to_cs;
 		
 		GizmosViewport vp;
 		vp.camera.position = {0, 0, 0};
-		vp.camera.ws_to_cs = ws_to_cs;
-		// vp.camera.cs_to_ws = M_InvGeneralM4(cs_from_ws);
-		vp.window_size = {rect_max - rect_min};
-		vp.window_size_inv = {1.f / vp.window_size.x, 1.f / vp.window_size.y};
 		
-		DrawCuboid3D(&vp, vec3{-1, -1, -1+10}, vec3{1, 1, 1+10}, 5.f, UI_BLUE);
+		vp.camera.ws_to_ss = ws_to_cs * M_MakeScaleMatrix(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f})
+			* M_MakeTranslationMatrix(vec3{middle.x, middle.y, 0});
+			
+		DrawCuboid3D(&vp, vec3{1, 0, 10}, vec3{2, 1, 11}, 5.f, UI_BLUE);
+		DrawCuboid3D(&vp, vec3{1, 0, 20}, vec3{2, 1, 21}, 5.f, UI_PINK);
 		
-		vec2 middle = (rect_min + rect_max) * 0.5f;
-		UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
+		// UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
 	}
 	
-	// UI_DrawCircle({200, 400}, 50.f, 16, {255, 255, 0, 255});
-
 	// Submit UI render commands to hatch
 	UI_Outputs ui_outputs;
 	UI_EndFrame(&ui_outputs);

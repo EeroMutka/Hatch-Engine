@@ -12,7 +12,6 @@
 
 typedef struct GizmosViewport {
 	M_PerspectiveCamera camera;
-	vec2 window_size, window_size_inv;
 } GizmosViewport;
 
 typedef enum TranslationAxis {
@@ -575,35 +574,32 @@ GIZMOS_API void RotationGizmoDraw(const GizmosViewport* vp, const RotationGizmo*
 // To do a blender-style translation modal, we want to calculate how much the mouse is moved along the 2D line. Then, move the object origin in screen space by that delta. Then, project that to the original 3D axis.
 
 GIZMOS_API void DrawLine3D(const GizmosViewport* vp, vec3 a, vec3 b, float thickness, UI_Color color) {
-	vec4 a_clip = vec4{a, 1.f} * vp->camera.ws_to_cs;
-	vec4 b_clip = vec4{b, 1.f} * vp->camera.ws_to_cs;
+	vec4 a_ss = vec4{a, 1.f} * vp->camera.ws_to_ss;
+	vec4 b_ss = vec4{b, 1.f} * vp->camera.ws_to_ss;
 
 	bool in_front = true;
-	if (a_clip.z > 0.f && b_clip.z < 0.f) { // a is in view, b is behind view plane
-		// z = 0 at the view plane, so just solve t from lerp(a_clip.z, b_clip.z, t) = 0
-		float t = -a_clip.z / (b_clip.z - a_clip.z);
-		b_clip = M_Lerp4(a_clip, b_clip, t);
+	if (a_ss.z > 0.f && b_ss.z < 0.f) { // a is in view, b is behind view plane
+		// z = 0 at the view plane, so just solve t from lerp(a_ss.z, b_ss.z, t) = 0
+		float t = -a_ss.z / (b_ss.z - a_ss.z);
+		b_ss = M_Lerp4(a_ss, b_ss, t);
 	}
-	else if (a_clip.z < 0.f && b_clip.z > 0.f) { // b is in view, a is behind view plane
-		float t = -a_clip.z / (b_clip.z - a_clip.z);
-		a_clip = M_Lerp4(a_clip, b_clip, t);
+	else if (a_ss.z < 0.f && b_ss.z > 0.f) { // b is in view, a is behind view plane
+		float t = -a_ss.z / (b_ss.z - a_ss.z);
+		a_ss = M_Lerp4(a_ss, b_ss, t);
 	}
-	else if (b_clip.z < 0.f && a_clip.z < 0.f) {
+	else if (b_ss.z < 0.f && a_ss.z < 0.f) {
 		in_front = false; // both points are behind the view plane
 	}
 
 	if (in_front) {
-		vec2 a_screen = M_CSToSS(a_clip, vp->window_size);
-		vec2 b_screen = M_CSToSS(b_clip, vp->window_size);
-		UI_DrawLine(UI_VEC2{a_screen.x, a_screen.y}, UI_VEC2{b_screen.x, b_screen.y}, thickness, color);
+		UI_DrawLine(a_ss.xy / a_ss.w, b_ss.xy / b_ss.w, thickness, color);
 	}
 }
 
 GIZMOS_API void DrawPoint3D(const GizmosViewport* vp, vec3 p, float thickness, UI_Color color) {
-	vec4 p_clip = vec4{p, 1.f} * vp->camera.ws_to_cs;
-	if (p_clip.z > 0.f) {
-		vec2 p_screen = M_CSToSS(p_clip, vp->window_size);
-		UI_DrawPoint(UI_VEC2{p_screen.x, p_screen.y}, thickness, color);
+	vec4 p_ss = vec4{p, 1.f} * vp->camera.ws_to_ss;
+	if (p_ss.z > 0.f) {
+		UI_DrawPoint(p_ss.xy / p_ss.w, thickness, color);
 	}
 }
 
@@ -688,23 +684,18 @@ GIZMOS_API void DrawCuboid3D(const GizmosViewport* vp, vec3 min, vec3 max, float
 }
 
 GIZMOS_API void DrawQuad3D(const GizmosViewport* vp, vec3 a, vec3 b, vec3 c, vec3 d, UI_Color color) {
-	vec4 a_clip = vec4{a, 1.f} * vp->camera.ws_to_cs;
-	vec4 b_clip = vec4{b, 1.f} * vp->camera.ws_to_cs;
-	vec4 c_clip = vec4{c, 1.f} * vp->camera.ws_to_cs;
-	vec4 d_clip = vec4{d, 1.f} * vp->camera.ws_to_cs;
-	
-	if (a_clip.z > 0.f && b_clip.z > 0.f && c_clip.z > 0.f && d_clip.z > 0.f) {
-		vec2 a_screen = M_CSToSS(a_clip, vp->window_size);
-		vec2 b_screen = M_CSToSS(b_clip, vp->window_size);
-		vec2 c_screen = M_CSToSS(c_clip, vp->window_size);
-		vec2 d_screen = M_CSToSS(d_clip, vp->window_size);
-		
+	vec4 a_ss = vec4{a, 1.f} * vp->camera.ws_to_ss;
+	vec4 b_ss = vec4{b, 1.f} * vp->camera.ws_to_ss;
+	vec4 c_ss = vec4{c, 1.f} * vp->camera.ws_to_ss;
+	vec4 d_ss = vec4{d, 1.f} * vp->camera.ws_to_ss;
+
+	if (a_ss.z > 0.f && b_ss.z > 0.f && c_ss.z > 0.f && d_ss.z > 0.f) {
 		uint32_t first_vertex;
 		UI_DrawVertex* verts = UI_AddVerticesUnsafe(4, &first_vertex);
-		verts[0] = UI_DRAW_VERTEX{{a_screen.x, a_screen.y}, {0, 0}, color};
-		verts[1] = UI_DRAW_VERTEX{{b_screen.x, b_screen.y}, {0, 0}, color};
-		verts[2] = UI_DRAW_VERTEX{{c_screen.x, c_screen.y}, {0, 0}, color};
-		verts[3] = UI_DRAW_VERTEX{{d_screen.x, d_screen.y}, {0, 0}, color};
+		verts[0] = UI_DRAW_VERTEX{a_ss.xy, {0, 0}, color};
+		verts[1] = UI_DRAW_VERTEX{b_ss.xy, {0, 0}, color};
+		verts[2] = UI_DRAW_VERTEX{c_ss.xy, {0, 0}, color};
+		verts[3] = UI_DRAW_VERTEX{d_ss.xy, {0, 0}, color};
 		UI_AddQuadIndices(first_vertex, first_vertex+1, first_vertex+2, first_vertex+3, NULL);
 	}
 }
@@ -762,9 +753,9 @@ GIZMOS_API void DrawQuadFrame3D(const GizmosViewport* vp, vec3 a, vec3 b, vec3 c
 GIZMOS_API void DrawArrow3D(const GizmosViewport* vp, vec3 from, vec3 to,
 	float head_length, float head_radius, int vertices, float thickness, UI_Color color)
 {
-	vec4 to_clip = vec4{to, 1.f} * vp->camera.ws_to_cs;
-	head_radius *= to_clip.w;
-	head_length *= to_clip.w;
+	vec4 to_ss = vec4{to, 1.f} * vp->camera.ws_to_ss;
+	head_radius *= to_ss.w;
+	head_length *= to_ss.w;
 
 	vec3 dir = M_Norm3(to - from);
 	vec3 head_base = to - dir * head_length;
@@ -778,10 +769,9 @@ GIZMOS_API void DrawArrow3D(const GizmosViewport* vp, vec3 from, vec3 to,
 	uint32_t first_vertex;
 	UI_DrawVertex* vertices_data = UI_AddVerticesUnsafe(vertices+1, &first_vertex);
 	
-	vec2 to_screen = M_CSToSS(to_clip, vp->window_size);
-	vertices_data[0] = UI_DRAW_VERTEX{{to_screen.x, to_screen.y}, {0, 0}, color};
+	vertices_data[0] = UI_DRAW_VERTEX{to_ss.xy / to_ss.w, {0, 0}, color};
 
-	bool head_is_visible = to_clip.z > 0.f;
+	bool head_is_visible = to_ss.z > 0.f;
 	if (head_is_visible) {
 
 		for (int i = 0; i < vertices; i++) {
@@ -789,11 +779,8 @@ GIZMOS_API void DrawArrow3D(const GizmosViewport* vp, vec3 from, vec3 to,
 
 			vec3 vertex_dir = tangent*cosf(theta) + bitangent*sinf(theta);
 			
-			vec4 p_world = { head_base + vertex_dir*head_radius, 1.f};
-			vec4 p_clip = p_world * vp->camera.ws_to_cs;
-
-			vec2 p_screen = M_CSToSS(p_clip, vp->window_size);
-			vertices_data[1+i] = UI_DRAW_VERTEX{{p_screen.x, p_screen.y}, {0, 0}, color}; 
+			vec4 p_ss = vec4{head_base + vertex_dir*head_radius, 1.f} * vp->camera.ws_to_ss;
+			vertices_data[1+i] = UI_DRAW_VERTEX{p_ss.xy / p_ss.w, {0, 0}, color}; 
 
 			UI_AddTriangleIndices(first_vertex, first_vertex + 1 + i, first_vertex + 1 + ((i + 1) % vertices), NULL);
 		}

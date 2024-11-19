@@ -7,8 +7,10 @@
 
 typedef struct M_PerspectiveCamera {
 	vec3 position;
-	mat4 ws_to_cs;
-	mat4 cs_to_ws;
+	
+	// Screen-space Z is clipped at Z=0
+	mat4 ws_to_ss; // world-space to screen-space
+	mat4 ss_to_ws; // screen-space to world-space
 } M_PerspectiveCamera;
 
 // Implicit plane; stores the coefficients A, B, C and D to the plane equation A*x + B*y + C*z + D = 0
@@ -25,7 +27,12 @@ typedef vec4 M_Plane;
 // except that the Z is not flipped.
 // static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect_w_to_y, float near, float far);
 
-static mat4 M_MakePerspectiveMatrixSimple(float d);
+// `aspect` is width over height
+static mat4 M_MakePerspectiveMatrixSimple(float aspect, float d);
+
+// To be used with row-vectors
+static mat4 M_MakeTranslationMatrix(vec3 v);
+static mat4 M_MakeScaleMatrix(vec3 s);
 
 static M_Plane M_PlaneFromPointAndNormal(vec3 plane_p, vec3 plane_n);
 static M_Plane M_FlipPlane(M_Plane plane);
@@ -40,20 +47,7 @@ static bool M_RayPlaneIntersect(vec3 ro, vec3 rd, M_Plane plane, float* out_t, v
 // static M_PerspectiveCamera M_MakePerspectiveCamera(vec3 position, quat rotation,
 //	float FOV_radians, float aspect_ratio_x_over_y, float z_near, float z_far);
 
-// Terms:
-// WS - world space
-// VS - view space
-// CS: Clip space
-// SS: Screen space
-// NDC: Normalized device coordinate space
-// TODO: get rid of these!!!
-static inline vec2 M_CSToSS(vec4 p_cs, vec2 screen_size);
-static inline vec4 M_SSToCS(vec2 p_ss, vec2 screen_size_inv);
-static inline vec2 M_NDCToSS(vec2 p_ndc, vec2 screen_size);
-static inline vec2 M_SSToNDC(vec2 p_ss, vec2 screen_size_inv);
-
-static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss, vec2 screen_size_inv);
-static vec3 M_RayDirectionFromCSPoint(const M_PerspectiveCamera* camera, vec4 p_cs);
+static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss);
 
 static bool M_GetPointScreenSpaceScale(const M_PerspectiveCamera* camera, vec3 p_ws, float* out_scale);
 
@@ -65,12 +59,32 @@ static float M_SignedDistanceToPlane(vec3 p, M_Plane plane);
 
 // ---------------------------------------------
 
-static mat4 M_MakePerspectiveMatrixSimple(float d) {
+static mat4 M_MakePerspectiveMatrixSimple(float aspect, float d) {
 	mat4 result = {
-		1.f,   0.f,   0.f,     0.f,
-		0.f,   1.f,   0.f,     0.f,
-		0.f,   0.f,   1.f, 1.f / d,
-		0.f,   0.f,   0.f,     0.f,
+		1.f,    0.f,   0.f,     0.f,
+		0.f, aspect,   0.f,     0.f,
+		0.f,    0.f,   1.f, 1.f / d,
+		0.f,    0.f,   0.f,     0.f,
+	};
+	return result;
+}
+
+static mat4 M_MakeTranslationMatrix(vec3 v) {
+	mat4 result = {
+		1.f,  0.f,  0.f,  0.f,
+		0.f,  1.f,  0.f,  0.f,
+		0.f,  0.f,  1.f,  0.f,
+		v.x,  v.y,  v.z,  1.f,
+	};
+	return result;
+}
+
+static mat4 M_MakeScaleMatrix(vec3 s) {
+	mat4 result = {
+		s.x,  0.f,  0.f,  0.f,
+		0.f,  s.y,  0.f,  0.f,
+		0.f,  0.f,  s.z,  0.f,
+		0.f,  0.f,  0.f,  1.f,
 	};
 	return result;
 }
@@ -93,19 +107,13 @@ static mat4 M_MakePerspectiveMatrixSimple(float d) {
 
 static bool M_GetPointScreenSpaceScale(const M_PerspectiveCamera* camera, vec3 p, float* out_scale) {
 	vec4 p_w1 = {p, 1.f};
-	vec4 p_clip = p_w1 * camera->ws_to_cs;
-	*out_scale = p_clip.w;
-	return p_clip.z > 0;
+	vec4 p_ss = p_w1 * camera->ws_to_ss;
+	*out_scale = p_ss.w;
+	return p_ss.z > 0;
 }
 
-static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss, vec2 screen_size_inv) {
-	vec4 p_cs = M_SSToCS(p_ss, screen_size_inv);
-	vec3 dir = M_RayDirectionFromCSPoint(camera, p_cs);
-	return dir;
-}
-
-static vec3 M_RayDirectionFromCSPoint(const M_PerspectiveCamera* camera, vec4 p_cs) {
-	vec4 point_in_front = p_cs * camera->cs_to_ws;
+static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss) {
+	vec4 point_in_front = vec4{p_ss.x, p_ss.y, 0.f, 1.f} * camera->ss_to_ws;
 	point_in_front = point_in_front / point_in_front.w;
 
 	// I guess we can derive position from the camera matrix...?
@@ -142,50 +150,6 @@ static float M_DistanceToPolygon2D(vec2 p, const vec2* v, int v_count) {
 		if ((cx && cy && cz) || (!cx && !cy && !cz)) s *= -1.f;
 	}
 	return s * sqrtf(d);
-}
-
-static inline vec4 M_SSToCS(vec2 p_ss, vec2 screen_size_inv) {
-	vec4 p_cs = {0.f, 0.f, 0.f, 1.f};
-	p_cs.x = 2.f * p_ss.x * screen_size_inv.x - 1.f;
-#ifdef M_CLIP_SPACE_INVERT_Y
-	p_cs.y = 2.f - 2.f * p_ss.y * screen_size_inv.y - 1.f;
-#else
-	p_cs.y = 2.f * p_ss.y * screen_size_inv.y - 1.f;
-#endif
-	return p_cs;
-}
-
-static inline vec2 M_SSToNDC(vec2 p_ss, vec2 screen_size_inv) {
-	vec2 p_ndc;
-	p_ndc.x = 2.f * p_ss.x * screen_size_inv.x - 1.f;
-#ifdef M_CLIP_SPACE_INVERT_Y
-	p_ndc.y = 2.f - 2.f * p_ss.y * screen_size_inv.y - 1.f;
-#else
-	p_ndc.y = 2.f * p_ss.y * screen_size_inv.y - 1.f;
-#endif
-	return p_ndc;
-}
-
-static inline vec2 M_NDCToSS(vec2 p_ndc, vec2 screen_size) {
-	vec2 p_ss;
-	p_ss.x = (0.5f * p_ndc.x + 0.5f) * screen_size.x;
-#ifdef M_CLIP_SPACE_INVERT_Y
-	p_ss.y = (0.5f - 0.5f * p_ndc.y) * screen_size.y;
-#else
-	p_ss.y = (0.5f * p_ndc.y + 0.5f) * screen_size.y;
-#endif
-	return p_ss;
-}
-
-static inline vec2 M_CSToSS(vec4 p_cs, vec2 screen_size) {
-	vec2 result;
-	result.x = (0.5f * p_cs.x / p_cs.w + 0.5f) * screen_size.x;
-#ifdef GIZMOS_CLIP_SPACE_INVERT_Y
-	result.y = (0.5f - 0.5f * p_cs.y / p_cs.w) * screen_size.y;
-#else
-	result.y = (0.5f * p_cs.y / p_cs.w + 0.5f) * screen_size.y;
-#endif
-	return result;
 }
 
 static M_Plane M_FlipPlane(M_Plane plane) {
