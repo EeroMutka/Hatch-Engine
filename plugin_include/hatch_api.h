@@ -127,7 +127,7 @@ typedef union HT_ItemIndex {
 // Each item is part of a doubly linked list, so everything is always ordered.
 typedef struct HT_ItemGroup {
 	HT_Array buckets;
-	i32 count;
+	//i32 count;
 	i32 last_bucket_end;
 	i32 elems_per_bucket;
 	HT_ItemIndex first;

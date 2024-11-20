@@ -105,18 +105,21 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	
 	vec2 rect_size = rect_max - rect_min;
 	vec2 rect_middle = (rect_min + rect_max) * 0.5f;
-	
-	mat4 ws_to_cs = GLOBALS.camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
+	mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
 	
 	UpdateCamera(&GLOBALS.camera, ht->input_frame);
+	mat4 ws_to_cs = GLOBALS.camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
+	mat4 ws_to_ss = ws_to_cs * cs_to_ss;
 	
+	// transform some
 	GizmosViewport vp;
 	vp.camera.position = {0, 0, 0};
-	vp.camera.ws_to_ss = ws_to_cs *
-		M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) *
-		M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
+	vp.camera.ws_to_ss = ws_to_ss;
 	
 	DrawGrid3D(&vp, UI_GRAY);
+	DrawArrow3D(&vp, {}, vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+	DrawArrow3D(&vp, {}, vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
+	DrawArrow3D(&vp, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
 	
 	i32 item_offset, item_full_size;
 	CalculateItemOffsets(sizeof(SceneEntity), alignof(SceneEntity), &item_offset, &item_full_size);
@@ -130,22 +133,26 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
 			
-			// so we can define component logic here...
-			if (comp_any->type._struct == params->box_component_type) {
+			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type._struct == params->box_component_type) {
 				BoxComponent* box_component = (BoxComponent*)comp_any->data;
 				
+				vp.camera.ws_to_ss =
+					M_MatScale(entity->scale) *
+					M_MatRotateX(entity->rotation.x*M_DegToRad) *
+					M_MatRotateY(entity->rotation.y*M_DegToRad) *
+					M_MatRotateZ(entity->rotation.z*M_DegToRad) *
+					M_MatTranslate(entity->position) *
+					ws_to_ss;
+				
 				DrawCuboid3D(&vp,
-					entity->position - box_component->half_extent,
-					entity->position + box_component->half_extent,
+					box_component->half_extent * -1.f,
+					box_component->half_extent,
 					5.f,
 					UI_GOLD);
-				// DrawArrow3D(&vp, entity->position, entity->position + vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-				// DrawArrow3D(&vp, entity->position, entity->position + vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
-				// DrawArrow3D(&vp, entity->position, entity->position + vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
+				vp.camera.ws_to_ss = ws_to_ss;
 			}
 		}
 		
-	
 		item_idx = item->next;
 	}
 	

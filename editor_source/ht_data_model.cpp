@@ -529,14 +529,19 @@ EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type) {
 }
 
 EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type) {
-	i32 size, align;
-	GetTypeSizeAndAlignment(tree, type, &size, &align);
 	
 	if (type->kind == HT_TypeKind_Array) {
 	}
 	else if (type->kind == HT_TypeKind_ItemGroup) {
+		HT_Type item_type = *type;
+		item_type.kind = item_type.subkind;
+		
+		i32 item_size, item_align;
+		GetTypeSizeAndAlignment(tree, &item_type, &item_size, &item_align);
+		
 		i32 item_offset, item_full_size;
-		CalculateItemOffsets(size, align, &item_offset, &item_full_size);
+		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
+		
 		ItemGroupDeinit((HT_ItemGroup*)data, item_full_size);
 	}
 	else if (type->kind == HT_TypeKind_Struct) {

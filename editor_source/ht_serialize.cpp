@@ -511,7 +511,15 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		ASSERT(ok);
 	}break;
 	case HT_TypeKind_Vec2: TODO(); break;
-	case HT_TypeKind_Vec3: break;
+	case HT_TypeKind_Vec3: {
+		MD_Node* child = node;
+		for (int i = 0; i < 3; i++) {
+			ASSERT(!MD_NodeIsNil(child));
+			bool ok = ParseMetadeskFloat(child, &((float*)dst)[i]);
+			ASSERT(ok);
+			child = child->next;
+		}
+	}break;
 	case HT_TypeKind_Vec4: TODO(); break;
 	case HT_TypeKind_IVec2: TODO(); break;
 	case HT_TypeKind_IVec3: TODO(); break;
@@ -677,10 +685,8 @@ EXPORT void HotreloadPackages(AssetTree* tree) {
 		if (asset->kind != AssetKind_Package) continue;
 
 		if (OS_DirectoryWatchHasChanges(&asset->package.dir_watch)) {
-			// TODO
-			
-			// printf("RELOADING PACKAGE!\n");
-				//ReloadPackage(tree, asset);
+			printf("RELOADING PACKAGE!\n");
+			ReloadPackages(tree, {&asset, 1});
 		}
 	}
 }
