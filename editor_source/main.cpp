@@ -22,38 +22,6 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 	return tab->name;
 }
 
-void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
-	EditorState* s = (EditorState*)tree->user_data;
-	if (tab == s->assets_tab_class) {
-		UpdateAndDrawAssetsBrowserTab(s, key, area_rect);
-	}
-	else if (tab == s->properties_tab_class) {
-		UpdateAndDrawPropertiesTab(s, key, area_rect);
-	}
-	else if (tab == s->log_tab_class) {
-		UpdateAndDrawLogTab(s, key, area_rect);
-	}
-	else if (tab == s->asset_viewer_tab_class) {
-		HT_Asset selected_asset = (HT_Asset)s->assets_tree_ui_state.selection;
-		if (AssetIsValid(&s->asset_tree, selected_asset)) {
-			HT_AssetViewerTabUpdate update = {};
-			update.data_asset = selected_asset;
-			update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
-			update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
-			DS_ArrPush(&s->frame.queued_asset_viewer_tab_updates, update);
-		}
-	}
-	else {
-		HT_CustomTabUpdate update;
-		update.tab_class = (HT_TabClass*)tab;
-		update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
-		update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
-		DS_ArrPush(&s->frame.queued_custom_tab_updates, update);
-	}
-}
-
-
-
 static void AppInit(EditorState* s) {
 	DS_ArenaInit(&s->persistent_arena, 4096, DS_HEAP);
 	DS_ArenaInit(&s->temporary_arena, 4096, DS_HEAP);
@@ -174,9 +142,10 @@ static void AppInit(EditorState* s) {
 static void UpdateAndDraw(EditorState* s) {
 	UI_BeginFrame(&s->ui_inputs, s->default_font, s->icons_font);
 
+
 	s->frame = {};
 	DS_ArrInit(&s->frame.queued_custom_tab_updates, TEMP);
-	DS_ArrInit(&s->frame.queued_asset_viewer_tab_updates, TEMP);
+	// DS_ArrInit(&s->frame.queued_asset_viewer_tab_updates, TEMP);
 	
 	UIDropdownStateBeginFrame(&s->dropdown_state);
 	
@@ -193,9 +162,11 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_InitRootBox(root_box, (float)s->window_size.x, (float)s->window_size.y, 0);
 	UI_PushBox(root_box);
 
+
 	UI_PopBox(root_box);
 	UI_BoxComputeRects(root_box, vec2{0, 0});
 	UI_DrawBox(root_box);
+
 
 	UpdatePlugins(s);
 	

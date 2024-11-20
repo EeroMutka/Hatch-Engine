@@ -15,6 +15,7 @@ typedef struct SceneEntity {
 } SceneEntity;
 typedef struct SceneEditParams {
 	HT_Asset scene_type;
+	HT_Asset box_component_type;
 } SceneEditParams;
 typedef struct FollowerComponent {
 	long long target;

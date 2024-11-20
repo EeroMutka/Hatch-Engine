@@ -239,6 +239,7 @@ typedef struct UI_Texture UI_Texture; // user-defined structure
 
 typedef struct UI_DrawCommand {
 	UI_Texture* texture; // NULL means the atlas texture
+	UI_Rect scissor_rect;
 	uint32_t first_index;
 	uint32_t index_count;
 } UI_DrawCommand;
@@ -383,6 +384,7 @@ typedef struct UI_State {
 	int vertex_buffer_count;
 	int vertex_buffer_capacity;
 	
+	UI_Rect active_scissor_rect;
 	UI_Texture* active_texture; // NULL means the atlas texture
 	DS_DynArray(UI_DrawCommand) draw_commands;
 } UI_State;
@@ -608,6 +610,12 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font);
 // returns "true" if the rect is fully clipped, "false" if there is still some area left
 UI_API bool UI_ClipRect(UI_Rect* rect, const UI_Rect* scissor);
 UI_API bool UI_ClipRectEx(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
+
+// At the beginning of each frame, the scissor rect is reset such that it covers the entire screen.
+// Try to minimize calls to UI_SetActiveScissorRect, as calling it internally splits the current draw
+// batch into a new one, and having too many draw batches / draw calls can be expensive for the GPU.
+UI_API void UI_SetActiveScissorRect(UI_Rect rect);
+UI_API UI_Rect UI_GetActiveScissorRect();
 
 UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count); // Returns the index of the first new vertex
 UI_API UI_DrawVertex* UI_AddVerticesUnsafe(int count, uint32_t* out_first_vertex); // WARNING: Returned pointer may be invalid on the next call to UI_AddVerticesUnsafe

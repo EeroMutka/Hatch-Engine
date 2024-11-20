@@ -18,13 +18,13 @@
 
 #include "camera.h"
 
-#define ASSERT(x) do { if (!(x)) __debugbreak(); } while(0)
 #define TODO() __debugbreak()
 
 // -----------------------------------------------------
 
 struct Globals {
 	HT_TabClass* my_tab_class;
+	Camera camera;
 };
 
 struct Allocator {
@@ -68,25 +68,12 @@ static u32* UIResizeAndMapIndexBuffer(int num_indices) {
 
 // -----------------------------------------------------
 
-HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	SceneEditParams* params = HT_GetPluginData(SceneEditParams, ht);
-	ASSERT(params);
-
-	// hmm... so maybe SceneEdit can provide an API for unlocking the asset viewer registration.
-	// That way, by default it can take the asset viewer, but it also specifies that others can take it if they want to.
-	bool ok = ht->RegisterAssetViewerForType(params->scene_type);
-	ASSERT(ok);
+static void CalculateItemOffsets(i32 item_size, i32 item_align, i32* out_item_offset, i32* out_item_full_size) {
+	*out_item_offset = DS_AlignUpPow2(sizeof(HT_ItemHeader), item_align);
+	*out_item_full_size = DS_AlignUpPow2(*out_item_offset + item_size, item_align);
 }
 
-HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
-}
-
-HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
-	// OR: maybe the scene edit plugin can act more like a library for the renderer plugin.
-	// The renderer plugin can then call functions from the scene edit plugin, like "UpdateScene" and "GenerateGizmos".
-	// This sounds good, because it lets us use our current simplistic hatch setup. Let's do it.
-	// THOUGH... if we do it library-style, then the code will be duplicated. Maybe we need a way to expose DLL calls in the future!
-	
+static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
 	
@@ -99,70 +86,70 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
 	UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
 	
-	static float time = 0.f;
-	static Camera camera = {};
-	time += 1.f/100.f;
-	
 	// setup UI text rendering backend
 	UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
 	
 	UI_Inputs ui_inputs = {};
 	UI_BeginFrame(&ui_inputs, {0, 18}, {0, 18});
 	
-	HT_AssetViewerTabUpdate update;
-	while (ht->PollNextAssetViewerTabUpdate(&update)) {
-		vec2 rect_min = {(float)update.rect_min.x, (float)update.rect_min.y}; // TODO: it would be nice to support implicit conversion!
-		vec2 rect_max = {(float)update.rect_max.x, (float)update.rect_max.y};
+	// -----------------------------------------------
+	
+	vec2 rect_min = {(float)update_info->rect_min.x, (float)update_info->rect_min.y}; // TODO: it would be nice to support implicit conversion!
+	vec2 rect_max = {(float)update_info->rect_max.x, (float)update_info->rect_max.y};
+	
+	Scene* scene = HT_GetAssetData(Scene, ht, update_info->data_asset);
+	HT_ASSERT(scene);
+	
+	SceneEditParams* params = HT_GetPluginData(SceneEditParams, ht);
+	HT_ASSERT(params);
+	
+	vec2 rect_size = rect_max - rect_min;
+	vec2 rect_middle = (rect_min + rect_max) * 0.5f;
+	
+	mat4 ws_to_cs = GLOBALS.camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
+	
+	UpdateCamera(&GLOBALS.camera, ht->input_frame);
+	
+	GizmosViewport vp;
+	vp.camera.position = {0, 0, 0};
+	vp.camera.ws_to_ss = ws_to_cs *
+		M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) *
+		M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
+	
+	DrawGrid3D(&vp, UI_GRAY);
+	
+	i32 item_offset, item_full_size;
+	CalculateItemOffsets(sizeof(SceneEntity), alignof(SceneEntity), &item_offset, &item_full_size);
+	
+	HT_ItemIndex item_idx = {};
+	while (item_idx._u32 != HT_ITEM_INDEX_INVALID) {
+		char* bucket = ((char**)scene->entities.buckets.data)[item_idx.bucket];
+		HT_ItemHeader* item = (HT_ItemHeader*)(bucket + item_idx.slot*item_full_size);
+		SceneEntity* entity = (SceneEntity*)((char*)item + item_offset);
 		
-		UpdateCamera(&camera, ht->input_frame);
-		
-		vec2 rect_size = rect_max - rect_min;
-		vec2 middle = (rect_min + rect_max) * 0.5f;
-		
-		float aspect = rect_size.x / rect_size.y;
-		mat4 vs_to_cs = M_MakePerspectiveMatrix(M_DegToRad*70.f, aspect, 0.1f, 100.f);
-		
-		// ok. Now we want to represent world space as +Z up and have camera facing +X forward by default.
-		// NOTE: view-space has +Y down, and is right-handed (+X right, +Z forward)!!
-		// +x -> +z
-		// +y -> -x
-		// +z -> -y
-		// mat4 ws_to_vs =
-		// 	// M_MatRotateZ(0.5f*sinf(time)) *
-		// 	M_MatTranslate(-1.f*camera.pos) *
-		// 	mat4{
-		// 		 0.f,  0.f,  1.f, 0.f,
-		// 		-1.f,  0.f,  0.f, 0.f,
-		// 		 0.f, -1.f,  0.f, 0.f,
-		// 		 0.f,  0.f,  0.f, 1.f,
-		// 	};
-		
-		mat4 ws_to_cs = camera.ws_to_vs * vs_to_cs;
-		
-		GizmosViewport vp;
-		vp.camera.position = {0, 0, 0};
-		
-		vp.camera.ws_to_ss = ws_to_cs *
-			M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) *
-			M_MatTranslate(vec3{middle.x, middle.y, 0});
-		
-		  DrawGrid3D(&vp, UI_WHITE);
-		
-		for (float i = -10.f; i <= 10.1f; i++) {
-			for (float j = -10.f; j <= 10.1f; j++) {
-				DrawPoint3D(&vp, vec3{i, j, 0}, 5.f, UI_RED);
+		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
+			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
+			
+			// so we can define component logic here...
+			if (comp_any->type._struct == params->box_component_type) {
+				BoxComponent* box_component = (BoxComponent*)comp_any->data;
+				
+				DrawCuboid3D(&vp,
+					entity->position - box_component->half_extent,
+					entity->position + box_component->half_extent,
+					5.f,
+					UI_GOLD);
+				// DrawArrow3D(&vp, entity->position, entity->position + vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+				// DrawArrow3D(&vp, entity->position, entity->position + vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
+				// DrawArrow3D(&vp, entity->position, entity->position + vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
 			}
 		}
 		
-		DrawCuboid3D(&vp, vec3{10, 0, 0}, vec3{11, 1, 1}, 5.f, UI_PINK);
-		 DrawCuboid3D(&vp, vec3{1, 0, 10}, vec3{2, 1, 11}, 5.f, UI_BLUE);
-		 DrawCuboid3D(&vp, vec3{1, 0, 20}, vec3{2, 1, 21}, 5.f, UI_PINK);
-		
-		DrawArrow3D(&vp, {}, {1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-		DrawArrow3D(&vp, {}, {0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
-		DrawArrow3D(&vp, {}, {0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
-		//// UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
+	
+		item_idx = item->next;
 	}
+	
+	// -----------------------------------------------
 	
 	// Submit UI render commands to hatch
 	UI_Outputs ui_outputs;
@@ -179,4 +166,26 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		UI_DrawCommand* draw_command = &ui_outputs.draw_commands[i];
 		ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
 	}
+}
+
+HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
+	SceneEditParams* params = HT_GetPluginData(SceneEditParams, ht);
+	HT_ASSERT(params);
+
+	// hmm... so maybe SceneEdit can provide an API for unlocking the asset viewer registration.
+	// That way, by default it can take the asset viewer, but it also specifies that others can take it if they want to.
+	bool ok = ht->RegisterAssetViewerForType(params->scene_type, DebugSceneTabUpdate);
+	HT_ASSERT(ok);
+}
+
+HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
+}
+
+HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
+	// OR: maybe the scene edit plugin can act more like a library for the renderer plugin.
+	// The renderer plugin can then call functions from the scene edit plugin, like "UpdateScene" and "GenerateGizmos".
+	// This sounds good, because it lets us use our current simplistic hatch setup. Let's do it.
+	// THOUGH... if we do it library-style, then the code will be duplicated. Maybe we need a way to expose DLL calls in the future!
+	
+	
 }

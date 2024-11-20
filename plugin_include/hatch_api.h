@@ -196,6 +196,8 @@ typedef struct HT_AssetViewerTabUpdate {
 	ivec2 rect_max;
 } HT_AssetViewerTabUpdate;
 
+typedef void (*TabUpdateProc)(struct HT_API* ht, const HT_AssetViewerTabUpdate* update_info);
+
 typedef struct HT_TabClass HT_TabClass;
 
 typedef struct HT_CustomTabUpdate {
@@ -458,9 +460,9 @@ struct HT_API {
 	
 	// -- Asset viewer -------------------------------
 	
-	bool (*RegisterAssetViewerForType)(HT_Asset struct_type_asset);
+	bool (*RegisterAssetViewerForType)(HT_Asset struct_type_asset, TabUpdateProc update_proc);
 	void (*UnregisterAssetViewerForType)(HT_Asset struct_type_asset);
-	bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
+	// bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
 	
 	// -- Input --------------------------------------
 	

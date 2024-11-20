@@ -179,10 +179,6 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
         viewport.Height = (float)s->window_size.y;
         s->command_list->RSSetViewports(1, &viewport);
 
-        D3D12_RECT scissor_rect = {};
-        scissor_rect.right = s->window_size.x;
-        scissor_rect.bottom = s->window_size.y;
-        s->command_list->RSSetScissorRects(1, &scissor_rect);
 
         D3D12_RESOURCE_BARRIER present_to_rt = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
         s->command_list->ResourceBarrier(1, &present_to_rt);
@@ -199,6 +195,12 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
 
         UI_DX12_Draw(ui_outputs, {(float)s->window_size.x, (float)s->window_size.y}, s->command_list);
 
+		// Reset scissor state after fire-UI might have messed with it
+        D3D12_RECT scissor_rect = {};
+        scissor_rect.right = s->window_size.x;
+        scissor_rect.bottom = s->window_size.y;
+        s->command_list->RSSetScissorRects(1, &scissor_rect);
+		
         BuildPluginD3DCommandLists(editor_state);
 
         D3D12_RESOURCE_BARRIER rt_to_present = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);

@@ -1,4 +1,5 @@
 type: "SceneEditParams"
 data: {
 	scene_type: "$Scene/types/Scene"
+	box_component_type: "$Scene/components/BoxComponent"
 }

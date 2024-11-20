@@ -127,6 +127,7 @@ struct Asset_StructType {
 	i32 size;
 	i32 alignment;
 	HT_Asset asset_viewer_registered_by_plugin;
+	TabUpdateProc asset_viewer_update_proc;
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
 
@@ -378,7 +379,7 @@ struct PerFrameState {
 	UI_Box* type_dropdown;
 	UI_Box* type_dropdown_button;
 
-	DS_DynArray(HT_AssetViewerTabUpdate) queued_asset_viewer_tab_updates;
+	// DS_DynArray(HT_AssetViewerTabUpdate) queued_asset_viewer_tab_updates;
 	DS_DynArray(HT_CustomTabUpdate) queued_custom_tab_updates;
 };
 
@@ -446,6 +447,8 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin);
 
 EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name);
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab);
+
+EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect);
 
 EXPORT void AddTopBar(EditorState* s);
 EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);

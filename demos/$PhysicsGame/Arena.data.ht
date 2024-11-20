@@ -13,7 +13,7 @@ data: {
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
-				@Type("$Scene/Components/BoxComponent") {
+				@Type("$Scene/components/BoxComponent") {
 					half_extent: { 1, 1, 1 }
 				}
 			}
@@ -23,7 +23,7 @@ data: {
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
-				@Type("$Scene/Components/BoxComponent") {
+				@Type("$Scene/components/BoxComponent") {
 					half_extent: { 5, 5, 0.1 }
 				}
 			}

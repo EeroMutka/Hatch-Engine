@@ -1050,7 +1050,7 @@ static bool HT_PollNextCustomTabUpdate(HT_CustomTabUpdate* tab_update) {
 	return false;
 }
 
-static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update) {
+/*static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update) {
 	EditorState* s = g_plugin_call_ctx->s;
 
 	for (int i = 0; i < s->frame.queued_asset_viewer_tab_updates.count; i++)
@@ -1070,7 +1070,7 @@ static bool HT_PollNextAssetViewerTabUpdate(HT_AssetViewerTabUpdate* tab_update)
 	}
 
 	return false;
-}
+}*/
 
 static STR_View HT_AssetGetFilepath(HT_Asset asset) {
 	Asset* ptr = GetAsset(&g_plugin_call_ctx->s->asset_tree, asset);
@@ -1082,13 +1082,14 @@ static u64 HT_AssetGetModtime(HT_Asset asset) {
 	return ptr ? ptr->modtime : 0;
 }
 
-static bool HT_RegisterAssetViewerForType(HT_Asset struct_type_asset) {
+static bool HT_RegisterAssetViewerForType(HT_Asset struct_type_asset, TabUpdateProc update_proc) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
 	if (asset && asset->kind == AssetKind_StructType) {
 		Asset* already_registered_by = GetAsset(&s->asset_tree, asset->struct_type.asset_viewer_registered_by_plugin);
 		if (already_registered_by == NULL || already_registered_by == g_plugin_call_ctx->plugin) {
 			asset->struct_type.asset_viewer_registered_by_plugin = g_plugin_call_ctx->plugin->handle;
+			asset->struct_type.asset_viewer_update_proc = update_proc;
 			return true;
 		}
 	}
@@ -1102,6 +1103,51 @@ static void HT_DeregisterAssetViewerForType(HT_Asset struct_type_asset) {
 		if (struct_type_asset == asset->struct_type.asset_viewer_registered_by_plugin) {
 			asset->struct_type.asset_viewer_registered_by_plugin = NULL;
 		}
+	}
+}
+
+EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
+	EditorState* s = (EditorState*)tree->user_data;
+	if (tab == s->assets_tab_class) {
+		UpdateAndDrawAssetsBrowserTab(s, key, area_rect);
+	}
+	else if (tab == s->properties_tab_class) {
+		UpdateAndDrawPropertiesTab(s, key, area_rect);
+	}
+	else if (tab == s->log_tab_class) {
+		UpdateAndDrawLogTab(s, key, area_rect);
+	}
+	else if (tab == s->asset_viewer_tab_class) {
+		HT_Asset selected_asset = (HT_Asset)s->assets_tree_ui_state.selection;
+		
+		Asset* data_asset = GetAsset(&s->asset_tree, selected_asset);
+		if (data_asset && data_asset->kind == AssetKind_StructData) {
+			Asset* type_asset = GetAsset(&s->asset_tree, data_asset->struct_data.struct_type);
+			Asset* plugin = type_asset ? GetAsset(&s->asset_tree, type_asset->struct_type.asset_viewer_registered_by_plugin) : NULL;
+			if (plugin) {
+				HT_AssetViewerTabUpdate update = {};
+				update.data_asset = selected_asset;
+				update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
+				update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
+				
+				UI_Rect parent_rect = UI_GetActiveScissorRect();
+				UI_SetActiveScissorRect(area_rect);
+				
+				PluginCallContext ctx = {s, plugin};
+				g_plugin_call_ctx = &ctx;
+				type_asset->struct_type.asset_viewer_update_proc(s->api, &update);
+				g_plugin_call_ctx = NULL;
+				
+				UI_SetActiveScissorRect(parent_rect);
+			}
+		}
+	}
+	else {
+		HT_CustomTabUpdate update;
+		update.tab_class = (HT_TabClass*)tab;
+		update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
+		update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
+		DS_ArrPush(&s->frame.queued_custom_tab_updates, update);
 	}
 }
 
@@ -1175,7 +1221,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.RegisterAssetViewerForType = HT_RegisterAssetViewerForType;
 	api.UnregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
-	api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
+	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 	api.D3DCompile = D3DCompile;
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
@@ -1285,6 +1331,8 @@ EXPORT void UpdatePlugins(EditorState* s) {
 			if (asset->kind != AssetKind_Plugin) continue;
 			
 			if (asset->plugin.dll_handle && asset->plugin.UpdatePlugin != NULL) {
+				// UI_SetActiveScissorRect({{50.f, 50.f}, {400.f, 900.f}});
+
 				PluginCallContext ctx = {s, asset};
 				g_plugin_call_ctx = &ctx;
 				asset->plugin.UpdatePlugin(s->api);

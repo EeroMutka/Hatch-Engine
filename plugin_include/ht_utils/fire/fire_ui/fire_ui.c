@@ -1153,7 +1153,7 @@ UI_API bool UI_SelectionMovementInput(UI_Box* box, UI_Key* out_new_selected_box)
 
 	bool result = false;
 	if (UI_IsSelected(box) && box->parent && box->flags & UI_BoxFlag_Selectable) { // UI_BoxFlag_Selectable might have been removed for this new frame
-		if (UI_InputWasPressedOrRepeated(UI_Input_Down) || (UI_InputWasPressedOrRepeated(UI_Input_Tab) && !UI_InputIsDown(UI_Input_Shift))) {
+		if ((UI_InputWasPressedOrRepeated(UI_Input_Tab) && !UI_InputIsDown(UI_Input_Shift))) {
 			UI_Box* n = box;
 			for (;;) {
 				if (n->first_child) {
@@ -1181,7 +1181,7 @@ UI_API bool UI_SelectionMovementInput(UI_Box* box, UI_Key* out_new_selected_box)
 				}
 			}
 		}
-		if (UI_InputWasPressedOrRepeated(UI_Input_Up) || (UI_InputWasPressedOrRepeated(UI_Input_Tab) && UI_InputIsDown(UI_Input_Shift))) {
+		if (UI_InputWasPressedOrRepeated(UI_Input_Tab) && UI_InputIsDown(UI_Input_Shift)) {
 			UI_Box* n = box;
 			for (;;) {
 				// go to the previous node
@@ -1358,6 +1358,7 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font
 	UI_ASSERT(UI_STATE.index_buffer != NULL);
 	
 	UI_STATE.active_texture = NULL;
+	UI_STATE.active_scissor_rect = UI_RECT{{0.f, 0.f}, {10000000.f, 10000000.f}};
 	DS_ArrInit(&UI_STATE.draw_commands, UI_TEMP);
 	
 	UI_STATE.inputs = *inputs;
@@ -1365,7 +1366,6 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font
 	
 	UI_ASSERT(UI_STATE.box_stack.count == 1);
 	UI_STATE.mouse_pos = UI_AddV2(UI_STATE.inputs.mouse_position, UI_VEC2{ 0.5f, 0.5f });
-	
 
 	UI_STATE.prev_frame_data_from_key = UI_STATE.data_from_key;
 	DS_MapInit(&UI_STATE.data_from_key, UI_TEMP);
@@ -1598,10 +1598,13 @@ static void UI_FinalizeDrawBatch() {
 	uint32_t index_count = UI_STATE.index_buffer_count - first_index;
 	if (index_count > 0) {
 		UI_DrawCommand draw_call = {0};
+		draw_call.scissor_rect = UI_STATE.active_scissor_rect;
 		draw_call.texture = UI_STATE.active_texture;
 		draw_call.first_index = first_index;
 		draw_call.index_count = index_count;
-		DS_ArrPush(&UI_STATE.draw_commands, draw_call);
+		if (draw_call.scissor_rect.max.x > draw_call.scissor_rect.min.x && draw_call.scissor_rect.max.y > draw_call.scissor_rect.min.y) {
+			DS_ArrPush(&UI_STATE.draw_commands, draw_call);
+		}
 	}
 	UI_ProfExit();
 }
@@ -1769,6 +1772,15 @@ UI_API UI_DrawVertex* UI_AddVerticesUnsafe(int count, uint32_t* out_first_vertex
 	
 	UI_ProfExit();
 	return result_data;
+}
+
+UI_API void UI_SetActiveScissorRect(UI_Rect rect) {
+	UI_FinalizeDrawBatch();
+	UI_STATE.active_scissor_rect = rect;
+}
+
+UI_API UI_Rect UI_GetActiveScissorRect() {
+	return UI_STATE.active_scissor_rect;
 }
 
 UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count) {
