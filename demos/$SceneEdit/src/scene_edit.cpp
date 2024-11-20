@@ -120,14 +120,16 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		vec2 middle = (rect_min + rect_max) * 0.5f;
 		
 		float aspect = rect_size.x / rect_size.y;
-		mat4 vs_to_cs = M_MakePerspectiveMatrixSimple(aspect, 2.f);
+		mat4 vs_to_cs = M_MakePerspectiveMatrix(M_DegToRad*90.f, aspect, 0.1f, 100.f);
 		
 		// ok. Now we want to represent world space as +Z up and have camera facing +X forward by default.
-		// NOTE: view-space has +Y down!!!
+		// NOTE: view-space has +Y down, and is right-handed (+X right, +Z forward)!!
 		// +x -> +z
 		// +y -> -x
 		// +z -> -y
-		mat4 ws_to_vs = M_MakeTranslationMatrix(-1.f*camera.pos) *
+		mat4 ws_to_vs =
+			// M_MatRotateZ(0.5f*sinf(time)) *
+			M_MatTranslate(-1.f*camera.pos) *
 			mat4{
 				 0.f,  0.f,  1.f, 0.f,
 				-1.f,  0.f,  0.f, 0.f,
@@ -140,19 +142,26 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		GizmosViewport vp;
 		vp.camera.position = {0, 0, 0};
 		
-		vp.camera.ws_to_ss = ws_to_cs * M_MakeScaleMatrix(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f})
-			* M_MakeTranslationMatrix(vec3{middle.x, middle.y, 0});
+		vp.camera.ws_to_ss = ws_to_cs *
+			M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) *
+			M_MatTranslate(vec3{middle.x, middle.y, 0});
 		
-		DrawGrid3D(&vp, UI_WHITE);
+		  DrawGrid3D(&vp, UI_WHITE);
+		
+		for (float i = -10.f; i <= 10.1f; i++) {
+			for (float j = -10.f; j <= 10.1f; j++) {
+				DrawPoint3D(&vp, vec3{i, j, 0}, 5.f, UI_RED);
+			}
+		}
 		
 		DrawCuboid3D(&vp, vec3{10, 0, 0}, vec3{11, 1, 1}, 5.f, UI_PINK);
-		// DrawCuboid3D(&vp, vec3{1, 0, 10}, vec3{2, 1, 11}, 5.f, UI_BLUE);
-		// DrawCuboid3D(&vp, vec3{1, 0, 20}, vec3{2, 1, 21}, 5.f, UI_PINK);
+		 DrawCuboid3D(&vp, vec3{1, 0, 10}, vec3{2, 1, 11}, 5.f, UI_BLUE);
+		 DrawCuboid3D(&vp, vec3{1, 0, 20}, vec3{2, 1, 21}, 5.f, UI_PINK);
 		
 		DrawArrow3D(&vp, {}, {1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
 		DrawArrow3D(&vp, {}, {0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
 		DrawArrow3D(&vp, {}, {0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
-		// UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
+		//// UI_DrawCircle(middle, 100.f, 12, {0, 255, 0, 255});
 	}
 	
 	// Submit UI render commands to hatch

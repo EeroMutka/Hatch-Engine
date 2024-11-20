@@ -6,6 +6,9 @@
 #define M_PI 3.14159265358979323846f
 #define M_TAU 6.28318530717958647693f
 
+#define M_DegToRad (M_PI / 180.f)
+#define M_RadToDeg (180.f / M_PI)
+
 static inline float M_Min(float a, float b) {
 	return a < b ? a : b;
 }
@@ -197,7 +200,22 @@ static inline vec4 M_Lerp4(vec4 a, vec4 b, float t) {
 
 // -- mat4 -------------------------------------------------
 
-// Row-major matrix
+// Row-major matrix.
+// The reason for picking row-major is so that we can write matrix literals like the following:
+//   mat4 M = {
+//      1, 0, 0, 0,
+//      0, 1, 0, 0,
+//      0, 0, 1, 0,
+//      0, 0, 0, 1,
+//   };
+//
+// It also makes indexing elements through the `_` member similar to the mathematical notation:
+//    M._[row][column]
+//
+// When using row-major matrices, it's best to do matrix-vector multiplication
+// in the order of (row_vector * matrix) as it's more cache-efficient compared to (matrix * column_vector).
+// Had we chosen to use column-major matrices, it would be the other way around.
+// 
 union mat4 {
 	float coef[16];
 	float _[4][4];
@@ -249,5 +267,54 @@ static inline vec4 operator*(const vec4& a, const mat4& b) {
 	
 	vec4 result;
 	result.SSE = r0;
+	return result;
+}
+
+// ---------------------------------------------------------
+
+// Assumes row-vectors and right-handed rotation
+static mat4 M_MatRotateX(float angle) {
+	__debugbreak();
+	return {};
+}
+
+// Assumes row-vectors and right-handed rotation
+static mat4 M_MatRotateY(float angle) {
+	__debugbreak();
+	return {};
+}
+
+// Assumes row-vectors and right-handed rotation
+static mat4 M_MatRotateZ(float angle) {
+	float cos_a = cosf(angle);
+	float sin_a = sinf(angle);
+	mat4 result = {
+		 cos_a, sin_a,  0.f,  0.f,
+		-sin_a, cos_a,  0.f,  0.f,
+		   0.f,   0.f,  1.f,  0.f,
+		   0.f,   0.f,  0.f,  1.f,
+	};
+	return result;
+}
+
+// Assumes row-vectors
+static mat4 M_MatTranslate(vec3 v) {
+	mat4 result = {
+		1.f,  0.f,  0.f,  0.f,
+		0.f,  1.f,  0.f,  0.f,
+		0.f,  0.f,  1.f,  0.f,
+		v.x,  v.y,  v.z,  1.f,
+	};
+	return result;
+}
+
+// Assumes row-vectors
+static mat4 M_MatScale(vec3 s) {
+	mat4 result = {
+		s.x,  0.f,  0.f,  0.f,
+		0.f,  s.y,  0.f,  0.f,
+		0.f,  0.f,  s.z,  0.f,
+		0.f,  0.f,  0.f,  1.f,
+	};
 	return result;
 }

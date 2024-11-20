@@ -577,14 +577,16 @@ GIZMOS_API void DrawLine3D(const GizmosViewport* vp, vec3 a, vec3 b, float thick
 	vec4 a_ss = vec4{a, 1.f} * vp->camera.ws_to_ss;
 	vec4 b_ss = vec4{b, 1.f} * vp->camera.ws_to_ss;
 
+	// NOTE: we don't clip against the far plane, only the near plane
+
 	bool in_front = true;
 	if (a_ss.z > 0.f && b_ss.z < 0.f) { // a is in view, b is behind view plane
 		// z = 0 at the view plane, so just solve t from lerp(a_ss.z, b_ss.z, t) = 0
-		float t = -a_ss.z / (b_ss.z - a_ss.z);
+		float t = -(a_ss.z) / (b_ss.z - a_ss.z);
 		b_ss = M_Lerp4(a_ss, b_ss, t);
 	}
 	else if (a_ss.z < 0.f && b_ss.z > 0.f) { // b is in view, a is behind view plane
-		float t = -a_ss.z / (b_ss.z - a_ss.z);
+		float t = -(a_ss.z) / (b_ss.z - a_ss.z);
 		a_ss = M_Lerp4(a_ss, b_ss, t);
 	}
 	else if (b_ss.z < 0.f && a_ss.z < 0.f) {
@@ -598,7 +600,7 @@ GIZMOS_API void DrawLine3D(const GizmosViewport* vp, vec3 a, vec3 b, float thick
 
 GIZMOS_API void DrawPoint3D(const GizmosViewport* vp, vec3 p, float thickness, UI_Color color) {
 	vec4 p_ss = vec4{p, 1.f} * vp->camera.ws_to_ss;
-	if (p_ss.z > 0.f) {
+	if (p_ss.z > 0.f && p_ss.z < p_ss.w) {
 		UI_DrawPoint(p_ss.xy / p_ss.w, thickness, color);
 	}
 }

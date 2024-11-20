@@ -27,13 +27,10 @@ typedef vec4 M_Plane;
 // except that the Z is not flipped.
 // static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect_w_to_y, float near, float far);
 
-// `aspect` is width over height
-static mat4 M_MakePerspectiveMatrixSimple(float aspect, float d);
-
-// To be used with row-vectors
-static mat4 M_MakeTranslationMatrix(vec3 v);
-static mat4 M_MakeScaleMatrix(vec3 s);
-
+// Assumes row-vectors, clip-space Z origin = 0 (DirectX/Vulkan style) and no flips between the view-space and clip-space coordinates in any axis.
+// `aspect` is width/height
+static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect, float near, float far);
+	
 static M_Plane M_PlaneFromPointAndNormal(vec3 plane_p, vec3 plane_n);
 static M_Plane M_FlipPlane(M_Plane plane);
 
@@ -59,51 +56,17 @@ static float M_SignedDistanceToPlane(vec3 p, M_Plane plane);
 
 // ---------------------------------------------
 
-static mat4 M_MakePerspectiveMatrixSimple(float aspect, float d) {
+static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect, float near, float far) {
+	// See equation 15.5 - DirectX-style clip matrix (F.Dunn, I.Parberry: 3D Math Primer for Graphics and Game Development)
+	float f = 1.0f / tanf(fov_y * 0.5f);
 	mat4 result = {
-		1.f,    0.f,   0.f,     0.f,
-		0.f, aspect,   0.f,     0.f,
-		0.f,    0.f,   1.f, 1.f / d,
-		0.f,    0.f,   0.f,     0.f,
+		f/aspect,  0.f,                   0.f,  0.f,
+		     0.f,    f,                   0.f,  0.f,
+		     0.f,  0.f,        far/(far-near),  1.f,
+		     0.f,  0.f, (near*far)/(near-far),  0.f,
 	};
 	return result;
 }
-
-static mat4 M_MakeTranslationMatrix(vec3 v) {
-	mat4 result = {
-		1.f,  0.f,  0.f,  0.f,
-		0.f,  1.f,  0.f,  0.f,
-		0.f,  0.f,  1.f,  0.f,
-		v.x,  v.y,  v.z,  1.f,
-	};
-	return result;
-}
-
-static mat4 M_MakeScaleMatrix(vec3 s) {
-	mat4 result = {
-		s.x,  0.f,  0.f,  0.f,
-		0.f,  s.y,  0.f,  0.f,
-		0.f,  0.f,  s.z,  0.f,
-		0.f,  0.f,  0.f,  1.f,
-	};
-	return result;
-}
-
-/*static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect_w_to_y, float near, float far) {
-	ASSERT_COVERED(M_Perspective_RH_ZO);
-	
-	mat4 result = {0};
-
-	float f = 1.0f / M_TanF(fov_y * 0.5f);
-	result._[0][0] = f / aspect_w_to_y;
-	result._[1][1] = f;
-	result._[2][3] = 1.0f;
-	
-	result._[2][2] = (far) / (far - near);
-	result._[3][2] = (near * far) / (far - near);
-
-	return result;
-}*/
 
 static bool M_GetPointScreenSpaceScale(const M_PerspectiveCamera* camera, vec3 p, float* out_scale) {
 	vec4 p_w1 = {p, 1.f};
