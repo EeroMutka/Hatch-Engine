@@ -120,24 +120,24 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		vec2 middle = (rect_min + rect_max) * 0.5f;
 		
 		float aspect = rect_size.x / rect_size.y;
-		mat4 vs_to_cs = M_MakePerspectiveMatrix(M_DegToRad*90.f, aspect, 0.1f, 100.f);
+		mat4 vs_to_cs = M_MakePerspectiveMatrix(M_DegToRad*70.f, aspect, 0.1f, 100.f);
 		
 		// ok. Now we want to represent world space as +Z up and have camera facing +X forward by default.
 		// NOTE: view-space has +Y down, and is right-handed (+X right, +Z forward)!!
 		// +x -> +z
 		// +y -> -x
 		// +z -> -y
-		mat4 ws_to_vs =
-			// M_MatRotateZ(0.5f*sinf(time)) *
-			M_MatTranslate(-1.f*camera.pos) *
-			mat4{
-				 0.f,  0.f,  1.f, 0.f,
-				-1.f,  0.f,  0.f, 0.f,
-				 0.f, -1.f,  0.f, 0.f,
-				 0.f,  0.f,  0.f, 1.f,
-			};
+		// mat4 ws_to_vs =
+		// 	// M_MatRotateZ(0.5f*sinf(time)) *
+		// 	M_MatTranslate(-1.f*camera.pos) *
+		// 	mat4{
+		// 		 0.f,  0.f,  1.f, 0.f,
+		// 		-1.f,  0.f,  0.f, 0.f,
+		// 		 0.f, -1.f,  0.f, 0.f,
+		// 		 0.f,  0.f,  0.f, 1.f,
+		// 	};
 		
-		mat4 ws_to_cs = ws_to_vs * vs_to_cs;
+		mat4 ws_to_cs = camera.ws_to_vs * vs_to_cs;
 		
 		GizmosViewport vp;
 		vp.camera.position = {0, 0, 0};

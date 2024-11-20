@@ -29,34 +29,28 @@ static inline float M_Lerp(float a, float b, float t) {
 
 // -- vec2 -------------------------------------------------
 
-static inline vec2 operator+(vec2 a, vec2 b) {
-	return {a.x + b.x, a.y + b.y};
-}
+static inline void operator+=(vec2& a, vec2 b) { a = {a.x + b.x, a.y + b.y}; }
+static inline vec2 operator+(vec2 a, vec2 b) { return {a.x + b.x, a.y + b.y}; }
 
-static inline vec2 operator-(vec2 a, vec2 b) {
-	return {a.x - b.x, a.y - b.y};
-}
+static inline void operator-=(vec2& a, vec2 b) { a = {a.x - b.x, a.y - b.y}; }
+static inline vec2 operator-(vec2 a, vec2 b) { return {a.x - b.x, a.y - b.y}; }
 
-static inline vec2 operator*(vec2 a, vec2 b) {
-	return {a.x * b.x, a.y * b.y};
-}
+static inline void operator*=(vec2& a, vec2 b) { a = {a.x * b.x, a.y * b.y}; }
+static inline vec2 operator*(vec2 a, vec2 b) { return {a.x * b.x, a.y * b.y}; }
 
-static inline vec2 operator/(vec2 a, vec2 b) {
-	return {a.x / b.x, a.y / b.y};
-}
+static inline void operator/=(vec2& a, vec2 b) { a = {a.x / b.x, a.y / b.y}; }
+static inline vec2 operator/(vec2 a, vec2 b) { return {a.x / b.x, a.y / b.y}; }
 
-static inline vec2 operator*(float a, vec2 b) {
-	return {a * b.x, a * b.y};
-}
+static inline vec2 operator*(float a, vec2 b) { return {a * b.x, a * b.y}; }
 
-static inline vec2 operator*(vec2 a, float b) {
-	return {a.x * b, a.y * b};
-}
+static inline void operator*=(vec2& a, float b) { a = {a.x * b, a.y * b}; }
+static inline vec2 operator*(vec2 a, float b) { return {a.x * b, a.y * b}; }
 
 static inline vec2 operator/(vec2 a, float b) {
 	float b_inv = 1.f / b;
 	return {a.x * b_inv, a.y * b_inv};
 }
+static inline void operator/=(vec2& a, float b) { a = a / b; }
 
 static inline float M_Dot2(vec2 a, vec2 b) {
 	return a.x * b.x + a.y * b.y;
@@ -86,34 +80,28 @@ static inline vec2 M_Lerp2(vec2 a, vec2 b, float t) {
 
 // -- vec3 -------------------------------------------------
 
-static inline vec3 operator+(vec3 a, vec3 b) {
-	return {a.x + b.x, a.y + b.y, a.z + b.z};
-}
+static inline void operator+=(vec3& a, vec3 b) { a = {a.x + b.x, a.y + b.y, a.z + b.z}; }
+static inline vec3 operator+(vec3 a, vec3 b) { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
 
-static inline vec3 operator-(vec3 a, vec3 b) {
-	return {a.x - b.x, a.y - b.y, a.z - b.z};
-}
+static inline void operator-=(vec3& a, vec3 b) { a = {a.x - b.x, a.y - b.y, a.z - b.z}; }
+static inline vec3 operator-(vec3 a, vec3 b) { return {a.x - b.x, a.y - b.y, a.z - b.z}; }
 
-static inline vec3 operator*(vec3 a, vec3 b) {
-	return {a.x * b.x, a.y * b.y, a.z * b.z};
-}
+static inline void operator*=(vec3& a, vec3 b) { a = {a.x * b.x, a.y * b.y, a.z * b.z}; }
+static inline vec3 operator*(vec3 a, vec3 b) { return {a.x * b.x, a.y * b.y, a.z * b.z}; }
 
-static inline vec3 operator/(vec3 a, vec3 b) {
-	return {a.x / b.x, a.y / b.y, a.z / b.z};
-}
+static inline void operator/=(vec3& a, vec3 b) { a = {a.x / b.x, a.y / b.y, a.z / b.z}; }
+static inline vec3 operator/(vec3 a, vec3 b) { return {a.x / b.x, a.y / b.y, a.z / b.z}; }
 
-static inline vec3 operator*(float a, vec3 b) {
-	return {a * b.x, a * b.y, a * b.z};
-}
+static inline vec3 operator*(float a, vec3 b) { return {a * b.x, a * b.y, a * b.z}; }
 
-static inline vec3 operator*(vec3 a, float b) {
-	return {a.x * b, a.y * b, a.z * b};
-}
+static inline void operator*=(vec3& a, float b) { a = {a.x * b, a.y * b, a.z * b}; }
+static inline vec3 operator*(vec3 a, float b) { return {a.x * b, a.y * b, a.z * b}; }
 
 static inline vec3 operator/(vec3 a, float b) {
 	float b_inv = 1.f / b;
 	return {a.x * b_inv, a.y * b_inv, a.z * b_inv};
 }
+static inline void operator/=(vec3 a, float b) { a = a / b; }
 
 static inline float M_Dot3(vec3 a, vec3 b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
@@ -147,34 +135,28 @@ static inline vec3 M_Lerp3(vec3 a, vec3 b, float t) {
 
 // -- vec4 -------------------------------------------------
 
-static inline vec4 operator+(vec4 a, vec4 b) {
-	return {a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w};
-}
+static inline void operator+=(vec4& a, vec4 b) { a = {a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
+static inline vec4 operator+(vec4 a, vec4 b) { return {a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
 
-static inline vec4 operator-(vec4 a, vec4 b) {
-	return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w};
-}
+static inline void operator-=(vec4& a, vec4 b) { a = {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
+static inline vec4 operator-(vec4 a, vec4 b) { return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
 
-static inline vec4 operator*(vec4 a, vec4 b) {
-	return {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w};
-}
+static inline void operator*=(vec4& a, vec4 b) { a = {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
+static inline vec4 operator*(vec4 a, vec4 b) { return {a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
 
-static inline vec4 operator/(vec4 a, vec4 b) {
-	return {a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w};
-}
+static inline void operator/=(vec4& a, vec4 b) { a = {a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w}; }
+static inline vec4 operator/(vec4 a, vec4 b) { return {a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w}; }
 
-static inline vec4 operator*(float a, vec4 b) {
-	return {a * b.x, a * b.y, a * b.z, a * b.w};
-}
+static inline vec4 operator*(float a, vec4 b) { return {a * b.x, a * b.y, a * b.z, a * b.w}; }
 
-static inline vec4 operator*(vec4 a, float b) {
-	return {a.x * b, a.y * b, a.z * b, a.w * b};
-}
+static inline void operator*=(vec4& a, float b) { a = {a.x * b, a.y * b, a.z * b, a.w * b}; }
+static inline vec4 operator*(vec4 a, float b) { return {a.x * b, a.y * b, a.z * b, a.w * b}; }
 
 static inline vec4 operator/(vec4 a, float b) {
 	float b_inv = 1.f / b;
 	return {a.x * b_inv, a.y * b_inv, a.z * b_inv, a.w * b_inv};
 }
+static inline void operator/=(vec4& a, float b) { a = a / b; }
 
 static inline float M_Dot4(vec4 a, vec4 b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
@@ -219,6 +201,7 @@ static inline vec4 M_Lerp4(vec4 a, vec4 b, float t) {
 union mat4 {
 	float coef[16];
 	float _[4][4];
+	vec4 row[4];
 	__m128 SSE_row[4];
 };
 
@@ -256,6 +239,7 @@ static inline mat4 operator*(const mat4& a, const mat4& b) {
 	result.SSE_row[3] = r3;
 	return result;
 }
+static inline void operator*=(mat4& a, const mat4& b) { a = a * b; }
 
 // `a` is interpreted as a row vector
 static inline vec4 operator*(const vec4& a, const mat4& b) {
@@ -269,19 +253,34 @@ static inline vec4 operator*(const vec4& a, const mat4& b) {
 	result.SSE = r0;
 	return result;
 }
+static inline void operator*=(vec4& a, const mat4& b) { a = a * b; }
 
 // ---------------------------------------------------------
 
 // Assumes row-vectors and right-handed rotation
 static mat4 M_MatRotateX(float angle) {
-	__debugbreak();
-	return {};
+		float cos_a = cosf(angle);
+		float sin_a = sinf(angle);
+		mat4 result = {
+			1.f,    0.f,    0.f,  0.f,
+			0.f,  cos_a,  sin_a,  0.f,
+			0.f, -sin_a,  cos_a,  0.f,
+			0.f,    0.f,    0.f,  1.f,
+		};
+		return result;
 }
 
 // Assumes row-vectors and right-handed rotation
 static mat4 M_MatRotateY(float angle) {
-	__debugbreak();
-	return {};
+	float cos_a = cosf(angle);
+	float sin_a = sinf(angle);
+	mat4 result = {
+		cos_a,  0.f, -sin_a,  0.f,
+		  0.f,  1.f,    0.f,  0.f,
+		sin_a,  0.f,  cos_a,  0.f,
+		  0.f,  0.f,    0.f,  1.f,
+	};
+	return result;
 }
 
 // Assumes row-vectors and right-handed rotation
