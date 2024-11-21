@@ -120,7 +120,7 @@ static void AppInit(EditorState* s) {
 		s->asset_tree.plugin_options_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 
 		StructMember member_source_files = {0};
-		UI_TextInit(DS_HEAP, &member_source_files.name.text, "Source Files");
+		UI_TextInit(DS_HEAP, &member_source_files.name.text, "Code Files");
 		member_source_files.type.kind = HT_TypeKind_Array;
 		member_source_files.type.subkind = HT_TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_source_files);
@@ -142,7 +142,6 @@ static void AppInit(EditorState* s) {
 static void UpdateAndDraw(EditorState* s) {
 	UI_BeginFrame(&s->ui_inputs, s->default_font, s->icons_font);
 
-
 	s->frame = {};
 	DS_ArrInit(&s->frame.queued_custom_tab_updates, TEMP);
 	// DS_ArrInit(&s->frame.queued_asset_viewer_tab_updates, TEMP);
@@ -151,7 +150,7 @@ static void UpdateAndDraw(EditorState* s) {
 	
 	//if (UI_InputIsDown(UI_Input_Shift)) __debugbreak();
 
-	HotreloadPackages(&s->asset_tree);
+	HotreloadPackages(s);
 
 	UI_Rect panel_area_rect = {0};
 	panel_area_rect.min.y = TOP_BAR_HEIGHT;

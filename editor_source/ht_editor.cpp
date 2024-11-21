@@ -671,7 +671,6 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 			UI_Box* run_button = UI_KBOX(key);
 			UI_AddButton(run_button, UI_SizeFit(), UI_SizeFit(), 0, "Run");
 			if (UI_Clicked(run_button)) {
-				
 				// maybe instead of a recompile button, we can compile in the background. And instead of a run button, show errors underneath if it fails to compile.
 				RunPlugin(s, selected_asset);
 			}
@@ -808,7 +807,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				STR_View load_package_path;
 				if (OS_FolderPicker(MEM_SCOPE(TEMP), &load_package_path)) {
 					//s->assets_tree_ui_state.selection = (UI_Key)...->handle
-					LoadPackages(&s->asset_tree, { &load_package_path, 1 });
+					LoadPackages(s, { &load_package_path, 1 });
 				}
 				s->rmb_menu_open = false;
 			}

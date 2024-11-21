@@ -277,15 +277,21 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 
 	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", s->hatch_install_directory));
 
-	for (int i = 0; i < plugin_opts->source_files.count; i++) {
-		HT_Asset source_file = *((HT_Asset*)plugin_opts->source_files.data + i);
-		Asset* source_file_asset = GetAsset(&s->asset_tree, source_file);
-		if (source_file_asset) {
-			const char* file_name = STR_ToC(TEMP, AssetGetPackageRelativePath(TEMP, source_file_asset));
-			BUILD_AddSourceFile(&project, file_name);
+	for (int i = 0; i < plugin_opts->code_files.count; i++) {
+		HT_Asset code_file = *((HT_Asset*)plugin_opts->code_files.data + i);
+		Asset* code_file_asset = GetAsset(&s->asset_tree, code_file);
+		if (code_file_asset) {
+			STR_View file_name = AssetGetPackageRelativePath(TEMP, code_file_asset);
+			STR_View file_extension = STR_AfterLast(file_name, '.');
+			
+			// Only add .c and .cpp files as translation units and not header files for example
+			if (STR_Match(file_extension, "c") || STR_Match(file_extension, "cpp")) {
+				const char* file_name_c = STR_ToC(TEMP, file_name);
+				BUILD_AddSourceFile(&project, file_name_c);
+			}
 		}
 	}
-	if (project.source_files.count == 0) TODO();
+	if (project.code_files.count == 0) TODO();
 
 	BuildLog build_log = {0};
 	build_log.base.print = BuildLogFn;

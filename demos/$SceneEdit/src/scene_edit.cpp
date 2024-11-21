@@ -24,7 +24,6 @@
 
 struct Globals {
 	HT_TabClass* my_tab_class;
-	Camera camera;
 };
 
 struct Allocator {
@@ -107,8 +106,16 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	vec2 rect_middle = (rect_min + rect_max) * 0.5f;
 	mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
 	
-	UpdateCamera(&GLOBALS.camera, ht->input_frame);
-	mat4 ws_to_cs = GLOBALS.camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
+	Camera camera;
+	{
+		camera = {params->camera_position, params->camera_pitch, params->camera_yaw};
+		UpdateCamera(&camera, ht->input_frame);
+		params->camera_position = camera.pos;
+		params->camera_pitch = camera.pitch;
+		params->camera_yaw = camera.yaw;
+	}
+	
+	mat4 ws_to_cs = camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
 	mat4 ws_to_ss = ws_to_cs * cs_to_ss;
 	
 	// transform some

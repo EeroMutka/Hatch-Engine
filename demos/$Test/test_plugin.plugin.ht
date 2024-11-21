@@ -1,4 +1,4 @@
 data_asset: ""
-source_files: {
+code_files: {
 	"test_main.cpp"
 }

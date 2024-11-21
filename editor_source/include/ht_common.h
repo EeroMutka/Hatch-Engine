@@ -137,7 +137,7 @@ struct Asset_Package {
 };
 
 struct PluginOptions {
-	HT_Array source_files; // Array<AssetRef>
+	HT_Array code_files; // Array<AssetRef>
 	HT_Asset data;
 };
 
@@ -467,14 +467,14 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
 EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
 
-EXPORT void HotreloadPackages(AssetTree* tree);
+EXPORT void HotreloadPackages(EditorState* s);
 
 EXPORT STR_View GetAssetFileExtension(Asset* asset);
 
 EXPORT void SavePackageToDisk(Asset* package);
 
 EXPORT void LoadProject(EditorState* s, STR_View project_file);
-EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
+EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
 

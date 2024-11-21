@@ -1,4 +1,9 @@
 struct: {
 	scene_type: Asset
 	box_component_type: Asset
+	
+	// only works with one scene preview for now. We could do an array or a map.
+	camera_position: Vec3
+	camera_pitch: Float
+	camera_yaw: Float
 }
