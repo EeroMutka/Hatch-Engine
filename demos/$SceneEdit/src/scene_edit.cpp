@@ -106,13 +106,24 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	vec2 rect_middle = (rect_min + rect_max) * 0.5f;
 	mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
 	
-	Camera camera;
+	Camera camera = {};
 	{
-		camera = {params->camera_position, params->camera_pitch, params->camera_yaw};
+		// find or add "EditorCamera" to the scene extended data
+		EditorCamera* editor_camera = NULL;
+		for (int i = 0; i < scene->extended_data.count; i++) {
+			HT_Any any = ((HT_Any*)scene->extended_data.data)[i];
+			if (any.type._struct == params->editor_camera_type) {
+				editor_camera = (EditorCamera*)any.data;
+				break;
+			}
+		}
+		HT_ASSERT(editor_camera); // TODO: add an empty editor camera automatically to the scene if not found!!
+		
+		camera = {editor_camera->position, editor_camera->pitch, editor_camera->yaw};
 		UpdateCamera(&camera, ht->input_frame);
-		params->camera_position = camera.pos;
-		params->camera_pitch = camera.pitch;
-		params->camera_yaw = camera.yaw;
+		editor_camera->position = camera.pos;
+		editor_camera->pitch = camera.pitch;
+		editor_camera->yaw = camera.yaw;
 	}
 	
 	mat4 ws_to_cs = camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);

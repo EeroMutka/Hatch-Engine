@@ -315,46 +315,53 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 	}
 }
 
-static bool ParseMetadeskInt(MD_Node *node, int *out_value) {
+struct MDParser {
+	MD_Node* node;
+};
+
+static bool ParseMetadeskInt(MDParser* p, int *out_value) {
 	int sign = 1;
-	if (node->flags & MD_NodeFlag_Symbol && MD_S8Match(node->string, MD_S8Lit("-"), 0)) {
-		node = node->next;
+	if (p->node->flags & MD_NodeFlag_Symbol && MD_S8Match(p->node->string, MD_S8Lit("-"), 0)) {
+		p->node = p->node->next;
 		sign = -1;
 	}
-	if (MD_NodeIsNil(node)) return false;
-	if (!(node->flags & MD_NodeFlag_Numeric)) return false;
-	if (!MD_StringIsCStyleInt(node->string)) return false;
+	if (MD_NodeIsNil(p->node)) return false;
+	if (!(p->node->flags & MD_NodeFlag_Numeric)) return false;
+	if (!MD_StringIsCStyleInt(p->node->string)) return false;
 	
-	*out_value = sign * (int)MD_CStyleIntFromString(node->string);
+	*out_value = sign * (int)MD_CStyleIntFromString(p->node->string);
+	
+	p->node = p->node->next;
 	return true;
 }
 
-static bool ParseMetadeskFloat(MD_Node* node, float *out_value) {
+static bool ParseMetadeskFloat(MDParser* p, float *out_value) {
 	float sign = 1.f;
-	if (node->flags & MD_NodeFlag_Symbol && MD_S8Match(node->string, MD_S8Lit("-"), 0)) {
-		node = node->next;
+	if (p->node->flags & MD_NodeFlag_Symbol && MD_S8Match(p->node->string, MD_S8Lit("-"), 0)) {
+		p->node = p->node->next;
 		sign = -1.f;
 	}
-	if (MD_NodeIsNil(node)) return false;
-	if (!(node->flags & MD_NodeFlag_Numeric)) return false;
+	if (MD_NodeIsNil(p->node)) return false;
+	if (!(p->node->flags & MD_NodeFlag_Numeric)) return false;
 	
-	if (MD_StringIsCStyleInt(node->string)) {
-		*out_value = sign * (float)MD_CStyleIntFromString(node->string);
-		return true;
+	if (MD_StringIsCStyleInt(p->node->string)) {
+		*out_value = sign * (float)MD_CStyleIntFromString(p->node->string);
 	}
-
-	double value;
-	if (!STR_ParseFloat(StrFromMD(node->string), &value)) return false;
-
-	*out_value = sign * (float)value;
+	else {
+		double value;
+		if (!STR_ParseFloat(StrFromMD(p->node->string), &value)) return false;
+		*out_value = sign * (float)value;
+	}
+	
+	p->node = p->node->next;
 	return true;
 }
 
-static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MD_Node* node) {
-	ASSERT(!MD_NodeIsNil(node));
+static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MDParser* p) {
+	ASSERT(!MD_NodeIsNil(p->node));
 
 	HT_Type result;
-	STR_View type_name = StrFromMD(node->string);
+	STR_View type_name = StrFromMD(p->node->string);
 
 	HT_TypeKind builtin_type = StringToTypeKind(type_name);
 	if (builtin_type != HT_TypeKind_INVALID) {
@@ -368,15 +375,17 @@ static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MD_Node* node)
 		result._struct = struct_type->handle;
 	}
 
-	if (MD_NodeHasTag(node, MD_S8Lit("Array"), 0)) {
+	if (MD_NodeHasTag(p->node, MD_S8Lit("Array"), 0)) {
 		result.subkind = result.kind;
 		result.kind = HT_TypeKind_Array;
 	}
 
-	if (MD_NodeHasTag(node, MD_S8Lit("ItemGroup"), 0)) {
+	if (MD_NodeHasTag(p->node, MD_S8Lit("ItemGroup"), 0)) {
 		result.subkind = result.kind;
 		result.kind = HT_TypeKind_ItemGroup;
 	}
+	
+	p->node = p->node->next;
 	return result;
 }
 
@@ -410,7 +419,8 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* package, Asset* p
 					STR_View name = StrFromMD(it->string);
 					UI_TextSet(&member.name.text, name);
 					
-					member.type = ParseMetadeskType(ctx->tree, package, it->first_child);
+					MDParser child_p = {it->first_child};
+					member.type = ParseMetadeskType(ctx->tree, package, &child_p);
 
 					DS_ArrPush(&asset->struct_type.members, member);
 				}
@@ -424,23 +434,23 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* package, Asset* p
 }
 
 // `dst` is expected to be zero-initialized.
-static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MD_Node* node) {
+static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Type* type, MDParser* p) {
 	// if the child is an array, struct or ItemGroup, then `node` is actually the first child in that container. Otherwise it's the value node itself.
 
 	switch (type->kind) {
 	case HT_TypeKind_Struct: {
 		Asset* struct_asset = GetAsset(tree, type->_struct);
-
-		MD_Node* child = node;
+		
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember member = struct_asset->struct_type.members[i];
 			STR_View member_name = UI_TextToStr(member.name.text);
 
-			ASSERT(!MD_NodeIsNil(child));
-			ASSERT(MD_S8Match(child->string, StrToMD(member_name), 0));
+			ASSERT(!MD_NodeIsNil(p->node));
+			ASSERT(MD_S8Match(p->node->string, StrToMD(member_name), 0));
 
-			ParseMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, child->first_child);
-			child = child->next;
+			MDParser child_p = {p->node->first_child};
+			ParseMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, &child_p);
+			p->node = p->node->next;
 		}
 	}break;
 	case HT_TypeKind_ItemGroup: {
@@ -455,18 +465,20 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		i32 item_offset, item_full_size;
 		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
 
-		for (MD_Node* child = node; !MD_NodeIsNil(child); child = child->next) {
+		for (; !MD_NodeIsNil(p->node); p->node = p->node->next) {
 			HT_ItemIndex item_i = ItemGroupAdd(val, item_full_size);
 			
 			HT_ItemHeader* item = GetItemFromIndex(val, item_i, item_full_size);
-			STR_View name = STR_Clone(DS_HEAP, StrFromMD(child->string));
+			STR_View name = STR_Clone(DS_HEAP, StrFromMD(p->node->string));
 			item->name = {name.data, name.size};
 			
 			MoveItemToAfter(val, item_i, val->last, item_full_size);
 
 			void* item_data = (char*)GetItemFromIndex(val, item_i, item_full_size) + item_offset;
 			Construct(tree, item_data, &item_type);
-			ParseMetadeskValue(tree, package, item_data, &item_type, child->first_child);
+			
+			MDParser child_p = {p->node->first_child};
+			ParseMetadeskValue(tree, package, item_data, &item_type, &child_p);
 		}
 	}break;
 	case HT_TypeKind_Array: {
@@ -479,32 +491,30 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		GetTypeSizeAndAlignment(tree, &elem_type, &elem_size, &elem_align);
 
 		int i = 0;
-		for (MD_Node* child = node; !MD_NodeIsNil(child); child = child->next) {
+		while (!MD_NodeIsNil(p->node)) {
 			ArrayPush(val, elem_size);
 			char* elem_data = (char*)val->data + elem_size*i;
 			Construct(tree, elem_data, &elem_type);
-			ParseMetadeskValue(tree, package, elem_data, &elem_type, child);
+			ParseMetadeskValue(tree, package, elem_data, &elem_type, p);
 			i++;
 		}
 	}break;
 	case HT_TypeKind_Int: {
 		int* val = (int*)dst;
-		bool ok = ParseMetadeskInt(node, val);
+		bool ok = ParseMetadeskInt(p, val);
 		ASSERT(ok);
 	}break;
 	case HT_TypeKind_Float: {
 		float* val = (float*)dst;
-		bool ok = ParseMetadeskFloat(node, val);
+		bool ok = ParseMetadeskFloat(p, val);
 		ASSERT(ok);
 	}break;
 	case HT_TypeKind_Vec2: TODO(); break;
 	case HT_TypeKind_Vec3: {
-		MD_Node* child = node;
 		for (int i = 0; i < 3; i++) {
-			ASSERT(!MD_NodeIsNil(child));
-			bool ok = ParseMetadeskFloat(child, &((float*)dst)[i]);
+			ASSERT(!MD_NodeIsNil(p->node));
+			bool ok = ParseMetadeskFloat(p, &((float*)dst)[i]);
 			ASSERT(ok);
-			child = child->next;
 		}
 	}break;
 	case HT_TypeKind_Vec4: TODO(); break;
@@ -513,9 +523,10 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 	case HT_TypeKind_IVec4: TODO(); break;
 	case HT_TypeKind_Bool: {
 		bool* val = (bool*)dst;
-		/**/ if (MD_S8Match(node->string, MD_S8Lit("true"), 0)) *val = true;
-		else if (MD_S8Match(node->string, MD_S8Lit("false"), 0)) *val = false;
+		/**/ if (MD_S8Match(p->node->string, MD_S8Lit("true"), 0)) *val = true;
+		else if (MD_S8Match(p->node->string, MD_S8Lit("false"), 0)) *val = false;
 		else ASSERT(0);
+		p->node = p->node->next;
 	}break;
 	case HT_TypeKind_String: {
 		TODO();
@@ -525,17 +536,22 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 	}break;
 	case HT_TypeKind_Any: {
 		HT_Any* val = (HT_Any*)dst;
-		MD_Node* type_tag = MD_TagFromString(node, MD_S8Lit("Type"), 0);
+		MD_Node* type_tag = MD_TagFromString(p->node, MD_S8Lit("Type"), 0);
 		ASSERT(!MD_NodeIsNil(type_tag));
 		
-		HT_Type type = ParseMetadeskType(tree, package, type_tag->first_child);
+		MDParser type_tag_child_p = {type_tag->first_child};
+		HT_Type type = ParseMetadeskType(tree, package, &type_tag_child_p);
 		AnyChangeType(tree, val, &type);
-		ParseMetadeskValue(tree, package, val->data, &type, node->first_child);
+		
+		MDParser child_p = {p->node->first_child};
+		ParseMetadeskValue(tree, package, val->data, &type, &child_p);
+		p->node = p->node->next;
 	}break;
 	case HT_TypeKind_AssetRef: {
 		HT_Asset* val = (HT_Asset*)dst;
-		Asset* found_asset = FindAssetFromPath(tree, package, StrFromMD(node->string));
+		Asset* found_asset = FindAssetFromPath(tree, package, StrFromMD(p->node->string));
 		*val = found_asset ? found_asset->handle : NULL;
+		p->node = p->node->next;
 	}break;
 	case HT_TypeKind_COUNT: ASSERT(0); break;
 	case HT_TypeKind_INVALID: ASSERT(0); break;
@@ -593,7 +609,8 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 
 				HT_Type type = { HT_TypeKind_Struct };
 				type._struct = type_asset->handle;
-				ParseMetadeskValue(ctx->tree, package, asset->struct_data.data, &type, data_node->first_child);
+				MDParser child_p = {data_node->first_child};
+				ParseMetadeskValue(ctx->tree, package, asset->struct_data.data, &type, &child_p);
 			}
 		}
 		

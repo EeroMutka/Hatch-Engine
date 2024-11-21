@@ -6,6 +6,7 @@ typedef struct BoxComponent {
 } BoxComponent;
 typedef struct Scene {
 	HT_ItemGroup entities;
+	HT_Array extended_data;
 } Scene;
 typedef struct SceneEntity {
 	vec3 position;
@@ -13,12 +14,15 @@ typedef struct SceneEntity {
 	vec3 scale;
 	HT_Array components;
 } SceneEntity;
+typedef struct EditorCamera {
+	vec3 position;
+	float pitch;
+	float yaw;
+} EditorCamera;
 typedef struct SceneEditParams {
 	HT_Asset scene_type;
 	HT_Asset box_component_type;
-	vec3 camera_position;
-	float camera_pitch;
-	float camera_yaw;
+	HT_Asset editor_camera_type;
 } SceneEditParams;
 typedef struct FollowerComponent {
 	long long target;

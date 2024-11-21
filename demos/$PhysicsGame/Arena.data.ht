@@ -28,37 +28,12 @@ data: {
 				}
 			}
 		}
-		
-		/*
-		"My box 1": {
-			components: { // array of "any"
-				@any("PBRRender:Components/MeshComponent") {
-					mesh: "Meshes/Box.fbx"
-				}
-			}
-			x: 10
-			y: 0
-			z: 0
+	}
+	extended_data: {
+		@Type("$SceneEdit/EditorCamera") {
+			position: { -10, 0, 5 }
+			pitch: 0
+			yaw: 0
 		}
-		"My box 2": {
-			components: {
-				@any("PBRRender:Components/MeshComponent") {
-					mesh: "Meshes/Box.fbx"
-				}
-			}
-			x: 0
-			y: 0
-			z: 50
-		}
-		"Follower": {
-			components: { // array of "any"
-				@any("Components/FollowerComponent") {
-					target: "My box 1/My parented box"
-				}
-			}
-			x: 0
-			y: 0
-			z: 50
-		}*/
 	}
 }

@@ -1,9 +1,7 @@
 struct: {
+	// TODO: I think access to types should be generated into the .inc.ht file so that
+	// this wouldn't be necessary!!
 	scene_type: Asset
 	box_component_type: Asset
-	
-	// only works with one scene preview for now. We could do an array or a map.
-	camera_position: Vec3
-	camera_pitch: Float
-	camera_yaw: Float
+	editor_camera_type: Asset
 }
