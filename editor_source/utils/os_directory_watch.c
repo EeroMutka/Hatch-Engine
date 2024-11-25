@@ -1,5 +1,5 @@
-#include <fire_ds.h>
-#include <fire_string.h>
+#include <ht_utils/fire/fire_ds.h>
+#include <ht_utils/fire/fire_string.h>
 
 #include "os_misc.h"
 #include "os_directory_watch.h"
@@ -7,7 +7,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-OS_API bool OS_InitDirectoryWatch(DS_MemTemp* m, OS_DirectoryWatch* watch, STR_View directory) {
+OS_API bool OS_InitDirectoryWatch(DS_MemScopeNone* m, OS_DirectoryWatch* watch, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* directory_wide = OS_UTF8ToWide(&temp, directory, 1);
 

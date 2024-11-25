@@ -43,25 +43,41 @@ typedef vec2 UI_Vec2;
 
 // -- Utility macros --------------------------------------------------
 
-// Allocate a slot from a bucket array with a freelist
-#define NEW_SLOT(OUT_SLOT, BUCKET_ARRAY, FIRST_FREE_SLOT, NEXT) \
+// Allocate a slot from a bucket array with an index-based freelist.
+// Zero-initializes new elements, but keeps old data on reuse.
+#define NEW_SLOT(OUT_INDEX, BUCKET_ARRAY, FIRST_FREE_SLOT, NEXT) \
+	if (*FIRST_FREE_SLOT) { \
+		*OUT_INDEX = *FIRST_FREE_SLOT; \
+		*FIRST_FREE_SLOT = DS_BkArrGet(BUCKET_ARRAY, *FIRST_FREE_SLOT)->NEXT; \
+	} else { \
+		DS_BkArrPushZero(BUCKET_ARRAY); \
+		*OUT_INDEX = DS_BkArrLast(BUCKET_ARRAY); \
+	}
+
+// Allocate a slot from a bucket array with a pointer-based freelist
+// Zero-initializes new elements, but keeps old data on reuse.
+#define NEW_SLOT_PTR(OUT_SLOT, BUCKET_ARRAY, FIRST_FREE_SLOT, NEXT) \
 	if (*FIRST_FREE_SLOT) { \
 		*OUT_SLOT = *FIRST_FREE_SLOT; \
 		*FIRST_FREE_SLOT = (*FIRST_FREE_SLOT)->NEXT; \
 	} else { \
-		*(void**)OUT_SLOT = DS_BucketArrayPushUndef(BUCKET_ARRAY); \
+		*(void**)OUT_SLOT = DS_BkArrPushZero(BUCKET_ARRAY); \
 	}
 
-// Free a slot from a bucket array with a freelist
-#define FREE_SLOT(SLOT, FIRST_FREE_SLOT, NEXT) \
-	SLOT->NEXT = *FIRST_FREE_SLOT; \
-	*FIRST_FREE_SLOT = SLOT;
+// Free a slot from a bucket array with an index-based or pointer-based freelist
+#define FREE_SLOT(SLOT, FIRST_FREE_INDEX, NEXT) \
+	SLOT->NEXT = *FIRST_FREE_INDEX; \
+	*FIRST_FREE_INDEX = SLOT;
 
 // -- Globals ---------------------------------------------------------
 
 extern DS_Arena* TEMP;
-#define MEM_SCOPE(ARENA) &DS_MemScope{ ARENA, TEMP }
-#define MEM_TEMP()       &DS_MemTemp{ TEMP }
+extern DS_MemScope MEM_SCOPE_TEMP_;
+extern DS_MemScopeNone MEM_SCOPE_NONE_;
+
+#define MEM_SCOPE_NONE   (DS_MemScopeNone*)&MEM_SCOPE_NONE_
+#define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
+#define MEM_SCOPE(ARENA) DS_MemScope{ ARENA, TEMP }
 
 // -- Constants -------------------------------------------------------
 
@@ -85,9 +101,7 @@ struct ActivePluginData {
 
 struct Asset;
 
-#define ASSET_FREELIST_END 0xFFFFFFFFFFFFFFFF
-
-union AssetHandleDecoded {
+union DecodedHandle {
 	struct {
 		u16 bucket_index;
 		u16 elem_index;
@@ -96,8 +110,8 @@ union AssetHandleDecoded {
 	u64 val;
 };
 
-static inline HT_Asset EncodeAssetHandle(AssetHandleDecoded handle) { return *(HT_Asset*)&handle; }
-static inline AssetHandleDecoded DecodeAssetHandle(HT_Asset handle) { return *(AssetHandleDecoded*)&handle; }
+static inline void* EncodeHandle(DecodedHandle handle) { return *(void**)&handle; }
+static inline DecodedHandle DecodeHandle(void* handle) { return *(DecodedHandle*)&handle; }
 
 #define AssetKind_FreeSlot (AssetKind)0
 enum AssetKind {
@@ -126,7 +140,7 @@ struct Asset_StructType {
 	DS_DynArray(StructMember) members;
 	i32 size;
 	i32 alignment;
-	HT_Asset asset_viewer_registered_by_plugin;
+	HT_PluginInstance asset_viewer_registered_by_plugin;
 	TabUpdateProc asset_viewer_update_proc;
 	//DS_Set(Asset*) uses_struct_types; // recursively contains all struct types this contains
 };
@@ -148,14 +162,7 @@ struct PluginAllocationHeader {
 
 struct Asset_Plugin {
 	PluginOptions options; // a value of type g_plugin_options_struct_type
-	
-	OS_DLL* dll_handle;
-	
-	void (*UpdatePlugin)(HT_API* HT);
-	void (*LoadPlugin)(HT_API* HT);
-	void (*UnloadPlugin)(HT_API* HT);
-
-	DS_DynArray(PluginAllocationHeader*) allocations;
+	HT_PluginInstance active_instance;
 };
 
 struct Asset_StructData {
@@ -181,7 +188,7 @@ struct Asset {
 	Asset* last_child;
 
 	union {
-		AssetHandleDecoded freelist_next; // end of the list is marked with ASSET_FREELIST_END
+		DS_BucketArrayIndex freelist_next;
 		Asset_StructType struct_type;
 		Asset_StructData struct_data;
 		Asset_Plugin plugin;
@@ -194,18 +201,27 @@ struct Asset {
 	bool ui_state_is_open; // for the Assets panel
 };
 
-#define ASSETS_PER_BUCKET 32
+struct PluginInstance {
+	HT_PluginInstance handle;
+	Asset* plugin_asset;
+	
+	union {
+		DS_BucketArrayIndex freelist_next;
+		OS_DLL* dll_handle;
+	};
 
-struct AssetBucket {
-	Asset assets[ASSETS_PER_BUCKET];
+	void (*UpdatePlugin)(HT_API* HT);
+	void (*LoadPlugin)(HT_API* HT);
+	void (*UnloadPlugin)(HT_API* HT);
+
+	DS_DynArray(PluginAllocationHeader*) allocations;
 };
 
 struct AssetTree {
 	DS_Map(u64, Asset*) package_from_name; // key is the DS_MurmurHash64A(0) of the package name (excluding the $)
 
-	DS_DynArray(AssetBucket*) asset_buckets;
-	int assets_num_allocated;
-	AssetHandleDecoded first_free_asset; // ASSET_FREELIST_END
+	DS_BucketArray(Asset) assets;
+	DS_BucketArrayIndex first_free_asset;
 
 	Asset* root;
 
@@ -220,7 +236,6 @@ struct AssetTree {
 EXPORT STR_View HT_TypeKindToString(HT_TypeKind type);
 EXPORT HT_TypeKind StringToTypeKind(STR_View str); // may return HT_TypeKind_INVALID
 
-EXPORT bool AssetIsValid(AssetTree* tree, HT_Asset handle);
 EXPORT Asset* GetAsset(AssetTree* tree, HT_Asset handle); // returns NULL if the handle is invalid
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind);
@@ -403,6 +418,9 @@ struct EditorState {
 	UI_Text dummy_text;
 	UI_Text dummy_text_2;
 
+	DS_BucketArray(PluginInstance) plugin_instances;
+	DS_BucketArrayIndex first_free_plugin_instance;
+
 	DS_Arena log_arena;
 	DS_DynArray(LogMessage) log_messages;
 
@@ -461,6 +479,8 @@ EXPORT void UpdatePlugins(EditorState* s);
 EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
+
+EXPORT PluginInstance* GetPluginInstance(EditorState* s, HT_PluginInstance handle); // returns NULL if the handle is invalid
 
 // -- ht_serialize.cpp ------------------------------------------------
 

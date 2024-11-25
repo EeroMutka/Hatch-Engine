@@ -55,14 +55,14 @@ OS_API void OS_WideToUTF8(DS_MemScope* m, const wchar_t* wstr, STR_View* out_str
 	*out_string = result;
 }
 
-OS_API bool OS_DeleteFile(DS_MemTemp* m, STR_View file_path) {
+OS_API bool OS_DeleteFile(DS_MemScopeNone* m, STR_View file_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	bool ok = DeleteFileW(OS_UTF8ToWide(&temp, file_path, 1)) == 1;
 	DS_ScopeEnd(&temp);
 	return ok;
 }
 
-OS_API bool OS_FileGetModtime(DS_MemTemp* m, STR_View file_path, uint64_t* out_modtime) {
+OS_API bool OS_FileGetModtime(DS_MemScopeNone* m, STR_View file_path, uint64_t* out_modtime) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* file_path_wide = OS_UTF8ToWide(&temp, file_path, 1);
 
@@ -77,7 +77,7 @@ OS_API bool OS_FileGetModtime(DS_MemTemp* m, STR_View file_path, uint64_t* out_m
 	return h != INVALID_HANDLE_VALUE;
 }
 
-OS_API void OS_DeleteDirectory(DS_MemTemp* m, STR_View directory_path) {
+OS_API void OS_DeleteDirectory(DS_MemScopeNone* m, STR_View directory_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 
 	SHFILEOPSTRUCTW file_op = {0};
@@ -125,7 +125,7 @@ OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path
 	return ok;
 }
 
-OS_API bool OS_MakeDirectory(DS_MemTemp* m, STR_View directory) {
+OS_API bool OS_MakeDirectory(DS_MemScopeNone* m, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* dir_wide = OS_UTF8ToWide(&temp, directory, 1);
 	bool created = CreateDirectoryW(dir_wide, NULL);
@@ -133,7 +133,7 @@ OS_API bool OS_MakeDirectory(DS_MemTemp* m, STR_View directory) {
 	return created || GetLastError() == ERROR_ALREADY_EXISTS;
 }
 
-OS_API bool OS_SetWorkingDir(DS_MemTemp* m, STR_View directory) {
+OS_API bool OS_SetWorkingDir(DS_MemScopeNone* m, STR_View directory) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* dir_wide = OS_UTF8ToWide(&temp, directory, 1);
 	bool ok = SetCurrentDirectoryW(dir_wide) != 0;
@@ -141,7 +141,7 @@ OS_API bool OS_SetWorkingDir(DS_MemTemp* m, STR_View directory) {
 	return ok;
 }
 
-OS_API bool OS_FileLastModificationTime(DS_MemTemp* m, STR_View filepath, uint64_t* out_modtime) {
+OS_API bool OS_FileLastModificationTime(DS_MemScopeNone* m, STR_View filepath, uint64_t* out_modtime) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* filepath_wide = OS_UTF8ToWide(&temp, filepath, 1);
 
@@ -273,7 +273,7 @@ OS_API void OS_UnloadDLL(OS_DLL* dll) {
 	assert(ok);
 }
 
-OS_API OS_DLL* OS_LoadDLL(DS_MemTemp* m, STR_View dll_path) {
+OS_API OS_DLL* OS_LoadDLL(DS_MemScopeNone* m, STR_View dll_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	
 	wchar_t* dll_path_wide = OS_UTF8ToWide(&temp, dll_path, 1);

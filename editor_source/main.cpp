@@ -8,6 +8,8 @@
 // -- Globals -----------------------------
 
 EXPORT DS_Arena* TEMP;
+EXPORT DS_MemScopeNone MEM_SCOPE_NONE_;
+EXPORT DS_MemScope MEM_SCOPE_TEMP_;
 
 extern "C" {
 	EXPORT UI_State UI_STATE;
@@ -41,8 +43,10 @@ static void AppInit(EditorState* s) {
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
-	OS_ReadEntireFile(MEM_SCOPE(persist), "../plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
-	OS_ReadEntireFile(MEM_SCOPE(persist), "../plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
+	
+	DS_MemScope mem_scope_persist = MEM_SCOPE(persist);
+	OS_ReadEntireFile(&mem_scope_persist, "../plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
+	OS_ReadEntireFile(&mem_scope_persist, "../plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
 	s->default_font = { UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f), 18 };
 	s->icons_font = { UI_STBTT_FontInit(icons_ttf.data, -2.f), 18 };
@@ -53,7 +57,7 @@ static void AppInit(EditorState* s) {
 	DS_ArrInit(&s->log_messages, &s->log_arena);
 
 	STR_View exe_path;
-	OS_GetThisExecutablePath(MEM_SCOPE(persist), &exe_path);
+	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
 	s->hatch_install_directory = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
 	
 	UI_PanelTreeInit(&s->panel_tree, DS_HEAP);
@@ -61,16 +65,18 @@ static void AppInit(EditorState* s) {
 	s->panel_tree.update_and_draw_tab = UpdateAndDrawTab;
 	s->panel_tree.user_data = s;
 	
-	DS_BucketArrayInit(&s->tab_classes, persist, 16);
+	DS_BkArrInit(&s->plugin_instances, DS_HEAP, 32);
+
+	DS_BkArrInit(&s->tab_classes, persist, 16);
 	s->assets_tab_class = CreateTabClass(s, "Assets");
 	s->log_tab_class = CreateTabClass(s, "Log");
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
-	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
-	DS_ArrInit(&s->asset_tree.asset_buckets, DS_HEAP);
-	s->asset_tree.first_free_asset.val = ASSET_FREELIST_END;
+	DS_BkArrInit(&s->asset_tree.assets, DS_HEAP, 32);
 	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
+
+	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
 	UI_Panel* root_left_panel = NewUIPanel(&s->panel_tree);
@@ -249,14 +255,16 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main() {
-
 	EditorState editor_state = {};
 	RenderState render_state = {};
 	
 	editor_state.cpu_frequency = OS_GetCPUFrequency();
 
 	editor_state.render_state = &render_state;
+	
 	TEMP = &editor_state.temporary_arena;
+	MEM_SCOPE_NONE_ = {TEMP};
+	MEM_SCOPE_TEMP_ = {TEMP, TEMP};
 
 	AppInit(&editor_state);
 

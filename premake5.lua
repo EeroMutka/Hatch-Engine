@@ -23,12 +23,30 @@ project "Hatch"
 	
 	files "editor_source/**"
 	files "plugin_include/ht_utils/fire/**"
+	removefiles "editor_source/test_main.cpp"
 	
 	-- for CloseVisualStudioPDBHandle
 	links "Rstrtmgr.lib"
 	
 	-- static libs for D3D12
 	links { "d3d12.lib", "dxgi.lib", "d3dcompiler.lib"}
+	
+	filter "configurations:Debug"
+		symbols "On"
+
+	filter "configurations:Release"
+		optimize "On"
+
+project "Test"
+	kind "ConsoleApp"
+	language "C++"
+	targetdir "build"
+	
+	SpecifyWarnings()
+	
+	includedirs "plugin_include"
+	
+	files "editor_source/test_main.cpp"
 	
 	filter "configurations:Debug"
 		symbols "On"

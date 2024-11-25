@@ -45,7 +45,7 @@ EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags 
 
 EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator) {
 	*tree = {};
-	DS_BucketArrayInit(&tree->panels, allocator, 8);
+	DS_BkArrInit(&tree->panels, allocator, 8);
 }
 
 EXPORT void UIDropdownStateBeginFrame(UIDropdownState* s) {
@@ -73,7 +73,7 @@ EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree) {
 		tree->first_free_panel = tree->first_free_panel->freelist_next;
 	}
 	else {
-		panel = (UI_Panel*)DS_BucketArrayPushUndef(&tree->panels);
+		panel = (UI_Panel*)DS_BkArrPushUndef(&tree->panels);
 	}
 	*panel = UI_Panel{0};
 	DS_ArrInit(&panel->tabs, DS_HEAP);

@@ -45,8 +45,8 @@ EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 	DWORD dwError = RmStartSession(&dwSession, 0, szSessionKey);
 
 	STR_View pdb_filename = STR_AfterLast(pdb_filepath, '/');
-	const wchar_t* pdb_filename_w = OS_UTF8ToWide(MEM_SCOPE(TEMP), pdb_filename, 1);
-	const wchar_t* pdb_filepath_w = OS_UTF8ToWide(MEM_SCOPE(TEMP), pdb_filepath, 1);
+	const wchar_t* pdb_filename_w = OS_UTF8ToWide(MEM_SCOPE_TEMP, pdb_filename, 1);
+	const wchar_t* pdb_filepath_w = OS_UTF8ToWide(MEM_SCOPE_TEMP, pdb_filepath, 1);
 
 	if (dwError == ERROR_SUCCESS) {
 		dwError = RmRegisterResources(dwSession, 1, &pdb_filepath_w, 0, NULL, 0, NULL);
@@ -183,11 +183,11 @@ static void BuildLogFn(BUILD_Log* self, const char* message) {
 }
 
 EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
-	ASSERT(plugin->plugin.dll_handle == NULL); // plugin must not be running
+	ASSERT(plugin->plugin.active_instance == NULL); // plugin must not be running
 	
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	bool ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 	ASSERT(ok);
 
 	STR_View plugin_name = UI_TextToStr(plugin->name);
@@ -210,51 +210,49 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	Asset* plugin_data = GetAsset(&s->asset_tree, plugin_opts->data);
 	if (plugin_data) {
 		ASSERT(plugin_data->kind == AssetKind_StructData);
-		ASSERT(AssetIsValid(&s->asset_tree, plugin_data->struct_data.struct_type));
+		ASSERT(GetAsset(&s->asset_tree, plugin_data->struct_data.struct_type) != NULL);
 		//Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
 	}
 
 	// for now, do the simple way that doesn't work in many cases.
 	// This is totally wrong.
-	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
-		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
-			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
-	
-			if (asset->kind == AssetKind_StructType) {
-				STR_View name = UI_TextToStr(asset->name);
-				if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
+	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 
-				fprintf(header, "typedef struct %.*s {\n", StrArg(name));
+		if (asset->kind == AssetKind_StructType) {
+			STR_View name = UI_TextToStr(asset->name);
+			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
 
-				for (int i = 0; i < asset->struct_type.members.count; i++) {
-					StructMember member = asset->struct_type.members[i];
-					fprintf(header, "\t");
-					switch (member.type.kind) {
-					case HT_TypeKind_Float: { fprintf(header, "float"); }break;
-					case HT_TypeKind_Int: { fprintf(header, "int"); }break;
-					case HT_TypeKind_Bool: { fprintf(header, "bool"); }break;
-					case HT_TypeKind_String: { fprintf(header, "string"); }break;
-					case HT_TypeKind_Type: { fprintf(header, "HT_Type"); }break;
-					case HT_TypeKind_Array: { fprintf(header, "HT_Array"); }break;
-					case HT_TypeKind_ItemGroup: { fprintf(header, "HT_ItemGroup"); }break;
-					case HT_TypeKind_Struct: {
-						fprintf(header, "long long");
-					}break;
-					case HT_TypeKind_AssetRef: { fprintf(header, "HT_Asset"); }break;
-					case HT_TypeKind_Vec2: { fprintf(header, "vec2"); }break;
-					case HT_TypeKind_Vec3: { fprintf(header, "vec3"); }break;
-					case HT_TypeKind_Vec4: { fprintf(header, "vec4"); }break;
-					case HT_TypeKind_IVec2: { fprintf(header, "ivec2"); }break;
-					case HT_TypeKind_IVec3: { fprintf(header, "ivec3"); }break;
-					case HT_TypeKind_IVec4: { fprintf(header, "ivec4"); }break;
-					default: ASSERT(0); break;
-					}
-					STR_View member_name = UI_TextToStr(member.name.text);
-					fprintf(header, " %.*s;\n", StrArg(member_name));
+			fprintf(header, "typedef struct %.*s {\n", StrArg(name));
+
+			for (int i = 0; i < asset->struct_type.members.count; i++) {
+				StructMember member = asset->struct_type.members[i];
+				fprintf(header, "\t");
+				switch (member.type.kind) {
+				case HT_TypeKind_Float: { fprintf(header, "float"); }break;
+				case HT_TypeKind_Int: { fprintf(header, "int"); }break;
+				case HT_TypeKind_Bool: { fprintf(header, "bool"); }break;
+				case HT_TypeKind_String: { fprintf(header, "string"); }break;
+				case HT_TypeKind_Type: { fprintf(header, "HT_Type"); }break;
+				case HT_TypeKind_Array: { fprintf(header, "HT_Array"); }break;
+				case HT_TypeKind_ItemGroup: { fprintf(header, "HT_ItemGroup"); }break;
+				case HT_TypeKind_Struct: {
+					fprintf(header, "long long");
+				}break;
+				case HT_TypeKind_AssetRef: { fprintf(header, "HT_Asset"); }break;
+				case HT_TypeKind_Vec2: { fprintf(header, "vec2"); }break;
+				case HT_TypeKind_Vec3: { fprintf(header, "vec3"); }break;
+				case HT_TypeKind_Vec4: { fprintf(header, "vec4"); }break;
+				case HT_TypeKind_IVec2: { fprintf(header, "ivec2"); }break;
+				case HT_TypeKind_IVec3: { fprintf(header, "ivec3"); }break;
+				case HT_TypeKind_IVec4: { fprintf(header, "ivec4"); }break;
+				default: ASSERT(0); break;
 				}
-
-				fprintf(header, "} %.*s;\n", StrArg(name));
+				STR_View member_name = UI_TextToStr(member.name.text);
+				fprintf(header, " %.*s;\n", StrArg(member_name));
 			}
+
+			fprintf(header, "} %.*s;\n", StrArg(name));
 		}
 	}
 

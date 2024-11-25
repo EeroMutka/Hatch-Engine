@@ -90,15 +90,11 @@ EXPORT void MoveAssetToInside(AssetTree* tree, Asset* asset, Asset* move_inside_
 	parent->last_child = asset;
 }
 
-EXPORT bool AssetIsValid(AssetTree* tree, HT_Asset handle) {
-	return GetAsset(tree, handle) != NULL;
-}
-
 EXPORT Asset* GetAsset(AssetTree* tree, HT_Asset handle) {
-	AssetHandleDecoded decoded = *(AssetHandleDecoded*)&handle;
-	if (decoded.bucket_index < tree->asset_buckets.count) {
-		AssetBucket* bucket = tree->asset_buckets.data[decoded.bucket_index];
-		Asset* asset = &bucket->assets[decoded.elem_index];
+	DecodedHandle decoded = *(DecodedHandle*)&handle;
+	if (decoded.bucket_index < tree->assets.buckets_count) {
+		Asset* elems = tree->assets.buckets[decoded.bucket_index].elems;
+		Asset* asset = &elems[decoded.elem_index];
 		if (asset->handle == handle) {
 			return asset;
 		}
@@ -107,30 +103,19 @@ EXPORT Asset* GetAsset(AssetTree* tree, HT_Asset handle) {
 }
 
 EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
-	AssetHandleDecoded handle;
-	if (tree->first_free_asset.val != ASSET_FREELIST_END) {
-		// Take from the freelist
-		handle = tree->first_free_asset;
-		tree->first_free_asset = tree->asset_buckets[handle.bucket_index]->assets[handle.elem_index].freelist_next;
-	}
-	else {
-		// Allocate a new element
-		handle.elem_index = tree->assets_num_allocated % ASSETS_PER_BUCKET;
-		if (handle.elem_index == 0) {
-			AssetBucket* new_bucket = (AssetBucket*)DS_MemAlloc(DS_HEAP, sizeof(AssetBucket));
-			memset(new_bucket, 0, sizeof(AssetBucket));
-			DS_ArrPush(&tree->asset_buckets, new_bucket);
-		}
-		handle.bucket_index = tree->asset_buckets.count - 1;
-		tree->assets_num_allocated++;
-	}
+	DS_BucketArrayIndex index;
+	NEW_SLOT(&index, &tree->assets, &tree->first_free_asset, freelist_next);
 
-	Asset* asset = &tree->asset_buckets[handle.bucket_index]->assets[handle.elem_index];
-	handle.generation = DecodeAssetHandle(asset->handle).generation + 1; // first valid asset generation is always 1
+	Asset* asset = DS_BkArrGet(&tree->assets, index);
 
-	*asset = {};
+	DecodedHandle asset_handle;
+	asset_handle.bucket_index = DS_BucketFromIndex(index);
+	asset_handle.elem_index = DS_SlotFromIndex(index);
+	asset_handle.generation = DecodeHandle(asset->handle).generation + 1; // first valid asset generation is always 1
+
+	memset(asset, 0, sizeof(*asset));
 	asset->kind = kind;
-	asset->handle = EncodeAssetHandle(handle);
+	asset->handle = (HT_Asset)EncodeHandle(asset_handle);
 	
 	STR_View name = "";
 	switch (kind) {
@@ -141,7 +126,7 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 		//asset->plugin.options_data = DS_MemAlloc(DS_HEAP, tree->plugin_options_struct_type->struct_type.size);
 		//memset(asset->plugin.options_data, 0, tree->plugin_options_struct_type->struct_type.size);
 		name = "Untitled Plugin";
-		DS_ArrInit(&asset->plugin.allocations, DS_HEAP);
+		//DS_ArrInit(&asset->plugin.allocations, DS_HEAP);
 	}break;
 	case AssetKind_StructType: {
 		DS_ArrInit(&asset->struct_type.members, DS_HEAP);
@@ -178,13 +163,11 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 	ComputeStructLayout(tree, struct_type);
 
 	// Sync all struct assets data to the new type layout
-	for (int bucket_i = 0; bucket_i < tree->asset_buckets.count; bucket_i++) {
-		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
-			Asset* asset = &tree->asset_buckets[bucket_i]->assets[elem_i];
-			if (asset->kind != AssetKind_StructData || asset->struct_data.struct_type != struct_type->handle) continue;
-			
-			TODO();
-		}
+	
+	for (DS_BkArrEach(&tree->assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&tree->assets, asset_i);
+		if (asset->kind != AssetKind_StructData || asset->struct_data.struct_type != struct_type->handle) continue;
+		TODO();
 	}
 
 	//DS_ForBucketArrayEach(Asset, &tree->assets, IT) {
@@ -456,8 +439,9 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	//case AssetKind_CPP: {}break;
 	case AssetKind_File: {}break;
 	case AssetKind_Plugin: {
+		ASSERT(asset->plugin.active_instance == NULL);
 		//DS_MemFree(DS_HEAP, asset->plugin.options_data);
-		DS_ArrDeinit(&asset->plugin.allocations);
+		//DS_ArrDeinit(&asset->plugin.allocations);
 	}break;
 	case AssetKind_StructType: {
 		DS_ArrDeinit(&asset->struct_type.members);
@@ -468,10 +452,10 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}
 
 	asset->kind = AssetKind_FreeSlot;
-	
-	TODO();
 	asset->freelist_next = tree->first_free_asset;
-	tree->first_free_asset = DecodeAssetHandle(asset->handle);
+	
+	DecodedHandle asset_handle = DecodeHandle(asset->handle);
+	tree->first_free_asset = DS_EncodeBucketArrayIndex(asset_handle.bucket_index, asset_handle.elem_index);
 }
 
 EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) {

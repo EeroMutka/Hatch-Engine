@@ -15,7 +15,7 @@
 
 struct PluginCallContext {
 	EditorState* s;
-	Asset* plugin;
+	PluginInstance* plugin;
 };
 
 // -- GLOBALS ------------------------------------------------------
@@ -117,17 +117,16 @@ EXPORT void AddTopBar(EditorState* s) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
 		UI_PushBox(s->frame.window_dropdown);
 		
-		int i = 0;
-		DS_ForBucketArrayEach(UI_Tab, &s->tab_classes, IT) {
-			if (IT.elem->name.size == 0) continue; // free slot
+		for (DS_BkArrEach(&s->tab_classes, i)) {
+			UI_Tab* tab = DS_BkArrGet(&s->tab_classes, i);
+			if (tab->name.size == 0) continue; // free slot
 
-			UI_Box* button = UI_KBOX(UI_HashInt(UI_KEY(), i));
-			UI_AddLabel(button, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, IT.elem->name);
+			UI_Box* button = UI_KBOX(UI_HashInt(UI_KEY(), (int)i));
+			UI_AddLabel(button, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, tab->name);
 			if (UI_Clicked(button)) {
-				AddNewTabToActivePanel(&s->panel_tree, IT.elem);
+				AddNewTabToActivePanel(&s->panel_tree, tab);
 				s->window_dropdown_open = false;
 			}
-			i++;
 		}
 
 		UI_PopBox(s->frame.window_dropdown);
@@ -659,8 +658,8 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 
 		UIAddStructValueEditTree(s, UI_KKEY(key), &selected_asset->plugin.options, s->asset_tree.plugin_options_struct_type);
 
-		// is plugin running?
-		if (selected_asset->plugin.dll_handle) {
+		PluginInstance* plugin_instance = GetPluginInstance(s, selected_asset->plugin.active_instance);
+		if (plugin_instance) {
 			UI_Box* stop_button = UI_KBOX(key);
 			UI_AddButton(stop_button, UI_SizeFit(), UI_SizeFit(), 0, "Stop");
 			if (UI_Clicked(stop_button)) {
@@ -805,7 +804,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			UI_AddLabel(load_package_box, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Load Package");
 			if (UI_Clicked(load_package_box)) {
 				STR_View load_package_path;
-				if (OS_FolderPicker(MEM_SCOPE(TEMP), &load_package_path)) {
+				if (OS_FolderPicker(MEM_SCOPE_TEMP, &load_package_path)) {
 					//s->assets_tree_ui_state.selection = (UI_Key)...->handle
 					LoadPackages(s, { &load_package_path, 1 });
 				}
@@ -918,6 +917,18 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	}
 }
 
+EXPORT PluginInstance* GetPluginInstance(EditorState* s, HT_PluginInstance handle) {
+	DecodedHandle decoded = *(DecodedHandle*)&handle;
+	if (decoded.bucket_index < s->plugin_instances.buckets_count) {
+		PluginInstance* elems = s->plugin_instances.buckets[decoded.bucket_index].elems;
+		PluginInstance* instance = &elems[decoded.elem_index];
+		if (instance->handle == handle) {
+			return instance;
+		}
+	}
+	return NULL;
+}
+
 EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	UpdateAndDrawRMBMenu(s);
 
@@ -960,7 +971,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 static void* HT_AllocatorProc(void* ptr, size_t size) {
 	// We track all plugin allocations so that we can free them at once when the plugin is unloaded.
 
-	Asset_Plugin* plugin = &g_plugin_call_ctx->plugin->plugin;
+	PluginInstance* plugin = g_plugin_call_ctx->plugin;
 	if (size == 0) {
 		// Move last allocation to the place of the allocation we want to free in the allocations array
 		PluginAllocationHeader* header = (PluginAllocationHeader*)((char*)ptr - 16);
@@ -1000,7 +1011,7 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
 	EditorState* s = g_plugin_call_ctx->s;
-	HT_Asset data = g_plugin_call_ctx->plugin->plugin.options.data;
+	HT_Asset data = g_plugin_call_ctx->plugin->plugin_asset->plugin.options.data;
 
 	Asset* data_asset = GetAsset(&s->asset_tree, data);
 	return data_asset ? data_asset->struct_data.data : NULL;
@@ -1008,7 +1019,7 @@ static void* HT_GetPluginData_(/*AssetRef type_id*/) {
 
 EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
 	UI_Tab* tab;
-	NEW_SLOT(&tab, &s->tab_classes, &s->first_free_tab_class, freelist_next);
+	NEW_SLOT_PTR(&tab, &s->tab_classes, &s->first_free_tab_class, freelist_next);
 	*tab = {};
 	tab->name = STR_Clone(DS_HEAP, name);
 	return tab;
@@ -1022,13 +1033,13 @@ EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
 
 static HT_TabClass* HT_CreateTabClass(STR_View name) {
 	UI_Tab* tab_class = CreateTabClass(g_plugin_call_ctx->s, name);
-	tab_class->owner_plugin = g_plugin_call_ctx->plugin->handle;
+	tab_class->owner_plugin = g_plugin_call_ctx->plugin->plugin_asset->handle;
 	return (HT_TabClass*)tab_class;
 }
 
 static void HT_DestroyTabClass(HT_TabClass* tab) {
 	UI_Tab* tab_class = (UI_Tab*)tab;
-	ASSERT(tab_class->owner_plugin == g_plugin_call_ctx->plugin->handle); // a plugin may only destroy its own tab classes.
+	ASSERT(tab_class->owner_plugin == g_plugin_call_ctx->plugin->plugin_asset->handle); // a plugin may only destroy its own tab classes.
 	DestroyTabClass(g_plugin_call_ctx->s, tab_class);
 }
 
@@ -1038,7 +1049,7 @@ static bool HT_PollNextCustomTabUpdate(HT_CustomTabUpdate* tab_update) {
 	for (int i = 0; i < s->frame.queued_custom_tab_updates.count; i++) {
 		HT_CustomTabUpdate* update = &s->frame.queued_custom_tab_updates[i];
 		UI_Tab* tab = (UI_Tab*)update->tab_class;
-		if (tab->owner_plugin == g_plugin_call_ctx->plugin->handle) {
+		if (tab->owner_plugin == g_plugin_call_ctx->plugin->plugin_asset->handle) {
 			// Remove from the queue
 			*tab_update = *update;
 			s->frame.queued_custom_tab_updates[i] = DS_ArrPop(&s->frame.queued_custom_tab_updates);
@@ -1085,8 +1096,8 @@ static bool HT_RegisterAssetViewerForType(HT_Asset struct_type_asset, TabUpdateP
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
 	if (asset && asset->kind == AssetKind_StructType) {
-		Asset* already_registered_by = GetAsset(&s->asset_tree, asset->struct_type.asset_viewer_registered_by_plugin);
-		if (already_registered_by == NULL || already_registered_by == g_plugin_call_ctx->plugin) {
+		PluginInstance* registered_by = GetPluginInstance(s, asset->struct_type.asset_viewer_registered_by_plugin);
+		if (registered_by == NULL || registered_by == g_plugin_call_ctx->plugin) {
 			asset->struct_type.asset_viewer_registered_by_plugin = g_plugin_call_ctx->plugin->handle;
 			asset->struct_type.asset_viewer_update_proc = update_proc;
 			return true;
@@ -1099,7 +1110,8 @@ static void HT_DeregisterAssetViewerForType(HT_Asset struct_type_asset) {
 	EditorState* s = g_plugin_call_ctx->s;
 	Asset* asset = GetAsset(&s->asset_tree, struct_type_asset);
 	if (asset && asset->kind == AssetKind_StructType) {
-		if (struct_type_asset == asset->struct_type.asset_viewer_registered_by_plugin) {
+		PluginInstance* registered_by = GetPluginInstance(s, asset->struct_type.asset_viewer_registered_by_plugin);
+		if (registered_by == g_plugin_call_ctx->plugin) {
 			asset->struct_type.asset_viewer_registered_by_plugin = NULL;
 		}
 	}
@@ -1122,7 +1134,7 @@ EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rec
 		Asset* data_asset = GetAsset(&s->asset_tree, selected_asset);
 		if (data_asset && data_asset->kind == AssetKind_StructData) {
 			Asset* type_asset = GetAsset(&s->asset_tree, data_asset->struct_data.struct_type);
-			Asset* plugin = type_asset ? GetAsset(&s->asset_tree, type_asset->struct_type.asset_viewer_registered_by_plugin) : NULL;
+			PluginInstance* plugin = type_asset ? GetPluginInstance(s, type_asset->struct_type.asset_viewer_registered_by_plugin) : NULL;
 			if (plugin) {
 				HT_AssetViewerTabUpdate update = {};
 				update.data_asset = selected_asset;
@@ -1154,7 +1166,7 @@ static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* 
 	ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
 	u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs)
 {
-	wchar_t* pFileName = OS_UTF8ToWide(MEM_SCOPE(TEMP), FileName, 1);
+	wchar_t* pFileName = OS_UTF8ToWide(MEM_SCOPE_TEMP, FileName, 1);
 	return D3DCompileFromFile(pFileName, pDefines, pInclude, pEntrypoint, pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
 }
 
@@ -1243,100 +1255,111 @@ EXPORT void InitAPI(EditorState* s) {
 	s->api = &api;
 }
 
-EXPORT void RunPlugin(EditorState* s, Asset* plugin) {
+EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	// TODO: only recompile if needs recompiling
-	bool ok = RecompilePlugin(s, plugin);
+	bool ok = RecompilePlugin(s, plugin_asset);
 	if (!ok) return;
 	
-	ASSERT(plugin->plugin.dll_handle == NULL);
+	ASSERT(plugin_asset->plugin.active_instance == NULL);
 
-	Asset* package = plugin;
+	Asset* package = plugin_asset;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	ok = OS_SetWorkingDir(MEM_TEMP(), package->package.filesys_path);
+	ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 	ASSERT(ok);
 
-	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", UI_TextToStr(plugin->name));
-	OS_DLL* dll = OS_LoadDLL(MEM_TEMP(), dll_path);
+	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", UI_TextToStr(plugin_asset->name));
+	OS_DLL* dll = OS_LoadDLL(MEM_SCOPE_NONE, dll_path);
 	ok = dll != NULL;
 	ASSERT(ok);
 
-	plugin->plugin.dll_handle = dll;
+	// Allocate a plugin instance
+	DS_BucketArrayIndex plugin_instance_i;
+	NEW_SLOT(&plugin_instance_i, &s->plugin_instances, &s->first_free_plugin_instance, freelist_next);
+	PluginInstance* plugin_instance = DS_BkArrGet(&s->plugin_instances, plugin_instance_i);
 
-	*(void**)&plugin->plugin.LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
-	*(void**)&plugin->plugin.UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
-	*(void**)&plugin->plugin.UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
+	DecodedHandle plugin_handle;
+	plugin_handle.bucket_index = DS_BucketFromIndex(plugin_instance_i);
+	plugin_handle.elem_index = DS_SlotFromIndex(plugin_instance_i);
+	plugin_handle.generation = DecodeHandle(plugin_instance->handle).generation + 1;
+	
+	*plugin_instance = {};
+	plugin_instance->plugin_asset = plugin_asset;
+	plugin_instance->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
+	plugin_instance->dll_handle = dll;
 
-	if (plugin->plugin.LoadPlugin) {
-		PluginCallContext ctx = {s, plugin};
+	*(void**)&plugin_instance->LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
+	*(void**)&plugin_instance->UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
+	*(void**)&plugin_instance->UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
+
+	if (plugin_instance->LoadPlugin) {
+		PluginCallContext ctx = {s, plugin_instance};
 		g_plugin_call_ctx = &ctx;
-		plugin->plugin.LoadPlugin(s->api);
+		plugin_instance->LoadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
 	}
 }
 
-EXPORT void UnloadPlugin(EditorState* s, Asset* plugin) {
-	ASSERT(plugin->plugin.dll_handle);
+EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
+	PluginInstance* plugin = GetPluginInstance(s, plugin_asset->plugin.active_instance);
+	ASSERT(plugin != NULL);
 
-	if (plugin->plugin.UnloadPlugin) {
+	if (plugin->UnloadPlugin) {
 		PluginCallContext ctx = {s, plugin};
 		g_plugin_call_ctx = &ctx;
-		plugin->plugin.UnloadPlugin(s->api);
+		plugin->UnloadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
 	}
 
-	OS_UnloadDLL(plugin->plugin.dll_handle);
+	OS_UnloadDLL(plugin->dll_handle);
 
-	plugin->plugin.dll_handle = NULL;
-	plugin->plugin.LoadPlugin = NULL;
-	plugin->plugin.UnloadPlugin = NULL;
-	plugin->plugin.UpdatePlugin = NULL;
+	plugin->dll_handle = NULL;
+	plugin->LoadPlugin = NULL;
+	plugin->UnloadPlugin = NULL;
+	plugin->UpdatePlugin = NULL;
 
-	for (int i = 0; i < plugin->plugin.allocations.count; i++) {
-		PluginAllocationHeader* allocation = plugin->plugin.allocations[i];
+	for (int i = 0; i < plugin->allocations.count; i++) {
+		PluginAllocationHeader* allocation = plugin->allocations[i];
 		DS_MemFree(DS_HEAP, allocation);
 	}
-	DS_ArrClear(&plugin->plugin.allocations);
+	DS_ArrClear(&plugin->allocations);
 
-	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin->name));
+	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
 	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 }
 
 EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 	// Then populate the command list for plugin defined things
-	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
-		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
-			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
+	
+	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+		if (asset->kind != AssetKind_Plugin) continue;
 
-			if (asset->kind != AssetKind_Plugin) continue;
-			if (asset->plugin.dll_handle) {
-				void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
-				*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(asset->plugin.dll_handle, "HT_BuildPluginD3DCommandList");
-				if (BuildPluginD3DCommandList) {
+		PluginInstance* plugin_instance = GetPluginInstance(s, asset->plugin.active_instance);
+		if (plugin_instance) {
+			void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
+			*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(plugin_instance->dll_handle, "HT_BuildPluginD3DCommandList");
+			if (BuildPluginD3DCommandList) {
 
-					PluginCallContext ctx = {s, asset};
-					g_plugin_call_ctx = &ctx;
-					BuildPluginD3DCommandList(s->api, s->render_state->command_list);
-					g_plugin_call_ctx = NULL;
-				}
+				PluginCallContext ctx = {s, plugin_instance};
+				g_plugin_call_ctx = &ctx;
+				BuildPluginD3DCommandList(s->api, s->render_state->command_list);
+				g_plugin_call_ctx = NULL;
 			}
 		}
 	}
 }
 
 EXPORT void UpdatePlugins(EditorState* s) {
-	for (int bucket_i = 0; bucket_i < s->asset_tree.asset_buckets.count; bucket_i++) {
-		for (int elem_i = 0; elem_i < ASSETS_PER_BUCKET; elem_i++) {
-			Asset* asset = &s->asset_tree.asset_buckets[bucket_i]->assets[elem_i];
-			if (asset->kind != AssetKind_Plugin) continue;
-			
-			if (asset->plugin.dll_handle && asset->plugin.UpdatePlugin != NULL) {
-				// UI_SetActiveScissorRect({{50.f, 50.f}, {400.f, 900.f}});
-
-				PluginCallContext ctx = {s, asset};
-				g_plugin_call_ctx = &ctx;
-				asset->plugin.UpdatePlugin(s->api);
-				g_plugin_call_ctx = NULL;
-			}
+	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+		if (asset->kind != AssetKind_Plugin) continue;
+		
+		PluginInstance* plugin_instance = GetPluginInstance(s, asset->plugin.active_instance);
+		if (plugin_instance && plugin_instance->UpdatePlugin != NULL) {
+			PluginCallContext ctx = {s, plugin_instance};
+			g_plugin_call_ctx = &ctx;
+			plugin_instance->UpdatePlugin(s->api);
+			g_plugin_call_ctx = NULL;
 		}
 	}
 }
