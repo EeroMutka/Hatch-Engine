@@ -451,6 +451,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}break;
 	}
 
+	__debugbreak(); // TODO: use FREE_SLOT
 	asset->kind = AssetKind_FreeSlot;
 	asset->freelist_next = tree->first_free_asset;
 	

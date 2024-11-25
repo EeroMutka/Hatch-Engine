@@ -54,6 +54,11 @@ typedef vec2 UI_Vec2;
 		*OUT_INDEX = DS_BkArrLast(BUCKET_ARRAY); \
 	}
 
+// Free a slot from a bucket array with an index-based freelist
+#define FREE_SLOT(INDEX, BUCKET_ARRAY, FIRST_FREE_INDEX, NEXT) \
+	DS_BkArrGet(BUCKET_ARRAY, INDEX)->NEXT = *FIRST_FREE_INDEX; \
+	*FIRST_FREE_INDEX = INDEX;
+
 // Allocate a slot from a bucket array with a pointer-based freelist
 // Zero-initializes new elements, but keeps old data on reuse.
 #define NEW_SLOT_PTR(OUT_SLOT, BUCKET_ARRAY, FIRST_FREE_SLOT, NEXT) \
@@ -64,8 +69,8 @@ typedef vec2 UI_Vec2;
 		*(void**)OUT_SLOT = DS_BkArrPushZero(BUCKET_ARRAY); \
 	}
 
-// Free a slot from a bucket array with an index-based or pointer-based freelist
-#define FREE_SLOT(SLOT, FIRST_FREE_INDEX, NEXT) \
+// Free a slot from a bucket array with a pointer-based freelist
+#define FREE_SLOT_PTR(SLOT, FIRST_FREE_INDEX, NEXT) \
 	SLOT->NEXT = *FIRST_FREE_INDEX; \
 	*FIRST_FREE_INDEX = SLOT;
 

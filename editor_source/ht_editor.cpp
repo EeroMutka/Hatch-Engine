@@ -1028,7 +1028,7 @@ EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
 	STR_Free(DS_HEAP, tab->name);
 	tab->name = {}; // mark free slot with this
-	FREE_SLOT(tab, &s->first_free_tab_class, freelist_next);
+	FREE_SLOT_PTR(tab, &s->first_free_tab_class, freelist_next);
 }
 
 static HT_TabClass* HT_CreateTabClass(STR_View name) {
@@ -1297,6 +1297,8 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 		plugin_instance->LoadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
 	}
+
+	plugin_asset->plugin.active_instance = plugin_instance->handle;
 }
 
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
@@ -1325,6 +1327,12 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 
 	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
 	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
+
+	DecodedHandle plugin_handle = DecodeHandle(plugin->handle);
+	DS_BucketArrayIndex plugin_instance_i = DS_EncodeBucketArrayIndex(plugin_handle.bucket_index, plugin_handle.elem_index);
+	FREE_SLOT(plugin_instance_i, &s->plugin_instances, &s->first_free_plugin_instance, freelist_next);
+
+	plugin_asset->plugin.active_instance = NULL;
 }
 
 EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
