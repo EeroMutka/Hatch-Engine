@@ -117,16 +117,18 @@ EXPORT void AddTopBar(EditorState* s) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
 		UI_PushBox(s->frame.window_dropdown);
 		
-		for (DS_BkArrEach(&s->tab_classes, i)) {
-			UI_Tab* tab = DS_BkArrGet(&s->tab_classes, i);
+		int i = 0;
+		for (DS_BkArrEach(&s->tab_classes, tab_i)) {
+			UI_Tab* tab = DS_BkArrGet(&s->tab_classes, tab_i);
 			if (tab->name.size == 0) continue; // free slot
 
-			UI_Box* button = UI_KBOX(UI_HashInt(UI_KEY(), (int)i));
+			UI_Box* button = UI_KBOX(UI_HashInt(UI_KEY(), i));
 			UI_AddLabel(button, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, tab->name);
 			if (UI_Clicked(button)) {
 				AddNewTabToActivePanel(&s->panel_tree, tab);
 				s->window_dropdown_open = false;
 			}
+			i++;
 		}
 
 		UI_PopBox(s->frame.window_dropdown);

@@ -22,6 +22,37 @@ EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
 	return result;
 }
 
+static void LoadEditorPanel(EditorState* s, MD_Node* node, UI_Panel* panel) {
+	UI_Axis split_along = -1;
+	if (MD_S8Match(node->string, MD_S8Lit("split_h"), 0)) split_along = UI_Axis_X;
+	if (MD_S8Match(node->string, MD_S8Lit("split_v"), 0)) split_along = UI_Axis_Y;
+	
+	if (split_along != -1) {
+		panel->split_along = split_along;
+
+		for (MD_Node* child = node->first_child; !MD_NodeIsNil(child); child = child->next) {
+			UI_Panel* new_panel = NewUIPanel(&s->panel_tree);
+			
+			LoadEditorPanel(s, child, new_panel);
+
+			UI_Panel* prev = panel->end_child[1];
+
+			// push a new panel
+			new_panel->parent = panel;
+			new_panel->link[0] = panel->end_child[1];
+			new_panel->link[1] = NULL;
+			if (prev) prev->link[1] = new_panel;
+			else panel->end_child[0] = new_panel;
+			panel->end_child[1] = new_panel;
+		}
+	}
+	else if (MD_S8Match(node->string, MD_S8Lit("log"), 0))            DS_ArrPush(&panel->tabs, s->log_tab_class);
+	else if (MD_S8Match(node->string, MD_S8Lit("errors"), 0))         DS_ArrPush(&panel->tabs, s->errors_tab_class);
+	else if (MD_S8Match(node->string, MD_S8Lit("assets"), 0))         DS_ArrPush(&panel->tabs, s->assets_tab_class);
+	else if (MD_S8Match(node->string, MD_S8Lit("properties"), 0))     DS_ArrPush(&panel->tabs, s->properties_tab_class);
+	else if (MD_S8Match(node->string, MD_S8Lit("asset_viewer"), 0))   DS_ArrPush(&panel->tabs, s->asset_viewer_tab_class);
+}
+
 EXPORT void LoadProject(EditorState* s, STR_View project_file) {
 	ASSERT(OS_PathIsAbsolute(project_file));
 
@@ -61,6 +92,12 @@ EXPORT void LoadProject(EditorState* s, STR_View project_file) {
 		}
 	}
 
+	MD_Node* editor_layout = MD_ChildFromString(parse.node, MD_S8Lit("editor_layout"), 0);
+	if (!MD_NodeIsNil(editor_layout)) {
+		ASSERT(editor_layout->first_child == editor_layout->last_child && !MD_NodeIsNil(editor_layout->first_child));
+		LoadEditorPanel(s, editor_layout->first_child, s->panel_tree.root);
+	}
+	
 	MD_ArenaRelease(md_arena);
 }
 

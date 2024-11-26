@@ -87,32 +87,33 @@ static void AppInit(EditorState* s) {
 	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
-	UI_Panel* root_left_panel = NewUIPanel(&s->panel_tree);
-	UI_Panel* log_panel = NewUIPanel(&s->panel_tree);
-	UI_Panel* asset_browser_panel = NewUIPanel(&s->panel_tree);
-	UI_Panel* properties_panel = NewUIPanel(&s->panel_tree);
-
-	DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
-	DS_ArrPush(&log_panel->tabs, s->asset_viewer_tab_class);
-	DS_ArrPush(&log_panel->tabs, s->log_tab_class);
-	DS_ArrPush(&log_panel->tabs, s->errors_tab_class);
-	DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
 	
-	s->panel_tree.root->split_along = UI_Axis_Y;
-	s->panel_tree.root->end_child[0] = root_left_panel;
-	s->panel_tree.root->end_child[1] = properties_panel;
-	root_left_panel->parent = s->panel_tree.root;
-	properties_panel->parent = s->panel_tree.root;
-	root_left_panel->link[1] = properties_panel;
-	properties_panel->link[0] = root_left_panel;
+		/*UI_Panel* root_left_panel = NewUIPanel(&s->panel_tree);
+		UI_Panel* log_panel = NewUIPanel(&s->panel_tree);
+		UI_Panel* asset_browser_panel = NewUIPanel(&s->panel_tree);
+		UI_Panel* properties_panel = NewUIPanel(&s->panel_tree);
 
-	root_left_panel->split_along = UI_Axis_X;
-	root_left_panel->end_child[0] = asset_browser_panel;
-	root_left_panel->end_child[1] = log_panel;
-	asset_browser_panel->parent = root_left_panel;
-	log_panel->parent = root_left_panel;
-	asset_browser_panel->link[1] = log_panel;
-	log_panel->link[0] = asset_browser_panel;
+		DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
+		DS_ArrPush(&log_panel->tabs, s->asset_viewer_tab_class);
+		DS_ArrPush(&log_panel->tabs, s->log_tab_class);
+		DS_ArrPush(&log_panel->tabs, s->errors_tab_class);
+		DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
+	
+		s->panel_tree.root->split_along = UI_Axis_Y;
+		s->panel_tree.root->end_child[0] = root_left_panel;
+		s->panel_tree.root->end_child[1] = properties_panel;
+		root_left_panel->parent = s->panel_tree.root;
+		properties_panel->parent = s->panel_tree.root;
+		root_left_panel->link[1] = properties_panel;
+		properties_panel->link[0] = root_left_panel;
+
+		root_left_panel->split_along = UI_Axis_X;
+		root_left_panel->end_child[0] = asset_browser_panel;
+		root_left_panel->end_child[1] = log_panel;
+		asset_browser_panel->parent = root_left_panel;
+		log_panel->parent = root_left_panel;
+		asset_browser_panel->link[1] = log_panel;
+		log_panel->link[0] = asset_browser_panel;*/
 
 	UI_TextInit(DS_HEAP, &s->dummy_text, "");
 	UI_TextInit(DS_HEAP, &s->dummy_text_2, "");

@@ -14,6 +14,20 @@ run_plugins: {
 	"$SceneEdit/SceneEdit",
 }
 
+editor_layout: {
+	split_h: {
+		split_v: {
+			assets
+			asset_viewer
+			properties
+		}
+		split_v: {
+			errors
+			log
+		}
+	}
+}
+
 // If in the future we want to allow i.e. making blank text documents in an empty hatch instance,
 // we can save those files in the directory of the .htproject file.
 // Or as an alternative future, we can rename this to .htpackage and allow packages to symlink to other packages.
