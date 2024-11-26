@@ -301,19 +301,25 @@ EXPORT void ArrayPush(HT_Array* array, int32_t elem_size) {
 	array->count++;
 }
 
-EXPORT void ItemGroupInit(HT_ItemGroup* group) {
+EXPORT void ItemGroupInit(AssetTree* tree, HT_ItemGroup* group, HT_Type* item_type) {
 	*group = {};
-	group->first._u32 = HT_ITEM_INDEX_INVALID;
-	group->last._u32 = HT_ITEM_INDEX_INVALID;
-	group->freelist_first._u32 = HT_ITEM_INDEX_INVALID;
 	group->elems_per_bucket = 16;
 	group->last_bucket_end = group->elems_per_bucket;
+	
+	i32 item_size, item_align;
+	GetTypeSizeAndAlignment(tree, item_type, &item_size, &item_align);
+	
+	group->item_offset = DS_AlignUpPow2(sizeof(HT_ItemHeader), item_align);
+	group->item_full_size = DS_AlignUpPow2(group->item_offset + item_size, item_align);
+	
+	// i32 item_offset, item_full_size;
+	// CalculateItemOffsets(sizeof(SceneEntity), alignof(SceneEntity), &item_offset, &item_full_size);
 }
 
-EXPORT void ItemGroupDeinit(HT_ItemGroup* group, i32 item_full_size) {
+EXPORT void ItemGroupDeinit(HT_ItemGroup* group) {
 	HT_ItemIndex item_i = group->first;
-	while (item_i._u32 != HT_ITEM_INDEX_INVALID) {
-		HT_ItemHeader* item = GetItemFromIndex(group, item_i, item_full_size);
+	while (item_i) {
+		HT_ItemHeader* item = GetItemFromIndex(group, item_i);
 		STR_Free(DS_HEAP, {item->name.data, item->name.size});
 		item_i = item->next;
 	}
@@ -326,12 +332,12 @@ EXPORT void ItemGroupDeinit(HT_ItemGroup* group, i32 item_full_size) {
 	DS_DebugFillGarbage(group, sizeof(*group));
 }
 
-EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this, i32 item_full_size) {
+EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this) {
 	HT_ItemIndex prev = move_after_this;
-	HT_ItemHeader* prev_p = GetItemFromIndex(group, prev, item_full_size);
+	HT_ItemHeader* prev_p = GetItemFromIndex(group, prev);
 	HT_ItemIndex next = prev_p ? prev_p->next : group->first;
-	HT_ItemHeader* next_p = GetItemFromIndex(group, next, item_full_size);
-	HT_ItemHeader* item_p = GetItemFromIndex(group, item, item_full_size);
+	HT_ItemHeader* next_p = GetItemFromIndex(group, next);
+	HT_ItemHeader* item_p = GetItemFromIndex(group, item);
 	
 	item_p->prev = prev;
 	item_p->next = next;
@@ -341,15 +347,15 @@ EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex
 	else group->last = item;
 }
 
-EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group, i32 item_full_size) {
+EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group) {
 	// We could default to a bucket size of say, 16 elements, and provide an option in the UI in the future for tweaking it.
 	ASSERT(group->elems_per_bucket > 0); // must be initialized
 	
 	HT_ItemIndex index;
 	HT_ItemHeader* item;
-	if (group->freelist_first._u32 != HT_ITEM_INDEX_INVALID) {
+	if (group->freelist_first) {
 		index = group->freelist_first;
-		item = GetItemFromIndex(group, index, item_full_size);
+		item = GetItemFromIndex(group, index);
 		group->freelist_first = item->next;
 	}
 	else {
@@ -357,37 +363,32 @@ EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group, i32 item_full_size) {
 			// Begin a new bucket
 			ArrayPush(&group->buckets, sizeof(void*));
 			
-			i32 bucket_size = item_full_size * group->elems_per_bucket;
+			i32 bucket_size = group->item_full_size * group->elems_per_bucket;
 			void* bucket = DS_MemAlloc(DS_HEAP, bucket_size);
 
 			((void**)group->buckets.data)[group->buckets.count - 1] = bucket;
 			group->last_bucket_end = 0;
 		}
-		index.bucket = group->buckets.count - 1;
-		index.slot = group->last_bucket_end;
-		item = GetItemFromIndex(group, index, item_full_size);
+		index = HT_MakeItemIndex(group->buckets.count - 1, group->last_bucket_end);
+		item = GetItemFromIndex(group, index);
 		group->last_bucket_end += 1;
 	}
 	item->name = {};
-	item->prev._u32 = HT_ITEM_INDEX_INVALID;
-	item->next._u32 = HT_ITEM_INDEX_INVALID;
+	item->prev = 0;
+	item->next = 0;
 	return index;
 }
 
-EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item, i32 item_full_size) {
-	if (item._u32 == HT_ITEM_INDEX_INVALID) return NULL;
+EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item) {
+	if (item == 0) return NULL;
 	
-	ASSERT(item.bucket < group->buckets.count);
-	return (HT_ItemHeader*)((char*)((void**)group->buckets.data)[item.bucket] + item_full_size*item.slot);
+	ASSERT(HT_ItemIndexBucket(item) < group->buckets.count);
+	char* bucket = (char*)((void**)group->buckets.data)[HT_ItemIndexBucket(item)];
+	return (HT_ItemHeader*)(bucket + group->item_full_size * HT_ItemIndexElem(item));
 }
 
 EXPORT void ItemGroupRemove(HT_ItemGroup* group, void* elem, i32 item_client_size) {
 	TODO();
-}
-
-EXPORT void CalculateItemOffsets(i32 item_size, i32 item_align, i32* out_item_offset, i32* out_item_full_size) {
-	*out_item_offset = DS_AlignUpPow2(sizeof(HT_ItemHeader), item_align);
-	*out_item_full_size = DS_AlignUpPow2(*out_item_offset + item_size, item_align);
 }
 
 EXPORT void StructMemberInit(StructMember* x) {
@@ -440,6 +441,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	case AssetKind_File: {}break;
 	case AssetKind_Plugin: {
 		ASSERT(asset->plugin.active_instance == NULL);
+		//DS_ArenaDeinit(&asset->plugin.error_log.arena);
 		//DS_MemFree(DS_HEAP, asset->plugin.options_data);
 		//DS_ArrDeinit(&asset->plugin.allocations);
 	}break;
@@ -502,7 +504,9 @@ EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type) {
 	if (type->kind == HT_TypeKind_Array) {
 	}
 	else if (type->kind == HT_TypeKind_ItemGroup) {
-		ItemGroupInit((HT_ItemGroup*)data);
+		HT_Type item_type = *type;
+		item_type.kind = item_type.subkind;
+		ItemGroupInit(tree, (HT_ItemGroup*)data, &item_type);
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
 		Asset* struct_asset = GetAsset(tree, type->_struct);
@@ -520,14 +524,7 @@ EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type) {
 	else if (type->kind == HT_TypeKind_ItemGroup) {
 		HT_Type item_type = *type;
 		item_type.kind = item_type.subkind;
-		
-		i32 item_size, item_align;
-		GetTypeSizeAndAlignment(tree, &item_type, &item_size, &item_align);
-		
-		i32 item_offset, item_full_size;
-		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
-		
-		ItemGroupDeinit((HT_ItemGroup*)data, item_full_size);
+		ItemGroupDeinit((HT_ItemGroup*)data);
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
 		Asset* struct_asset = GetAsset(tree, type->_struct);

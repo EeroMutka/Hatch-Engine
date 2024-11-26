@@ -10,6 +10,7 @@
 EXPORT DS_Arena* TEMP;
 EXPORT DS_MemScopeNone MEM_SCOPE_NONE_;
 EXPORT DS_MemScope MEM_SCOPE_TEMP_;
+EXPORT uint64_t CPU_FREQUENCY;
 
 extern "C" {
 	EXPORT UI_State UI_STATE;
@@ -53,8 +54,14 @@ static void AppInit(EditorState* s) {
 
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
-	DS_ArenaInit(&s->log_arena, 4096, DS_HEAP);
-	DS_ArrInit(&s->log_messages, &s->log_arena);
+	{
+		DS_ArenaInit(&s->log.arena, 4096, DS_HEAP);
+		DS_ArrInit(&s->log.messages, &s->log.arena);
+	}
+
+	{
+		DS_ArrInit(&s->error_list.errors, DS_HEAP);
+	}
 
 	STR_View exe_path;
 	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
@@ -70,6 +77,7 @@ static void AppInit(EditorState* s) {
 	DS_BkArrInit(&s->tab_classes, persist, 16);
 	s->assets_tab_class = CreateTabClass(s, "Assets");
 	s->log_tab_class = CreateTabClass(s, "Log");
+	s->errors_tab_class = CreateTabClass(s, "Errors");
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
@@ -87,6 +95,7 @@ static void AppInit(EditorState* s) {
 	DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
 	DS_ArrPush(&log_panel->tabs, s->asset_viewer_tab_class);
 	DS_ArrPush(&log_panel->tabs, s->log_tab_class);
+	DS_ArrPush(&log_panel->tabs, s->errors_tab_class);
 	DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
 	
 	s->panel_tree.root->split_along = UI_Axis_Y;
@@ -258,13 +267,12 @@ int main() {
 	EditorState editor_state = {};
 	RenderState render_state = {};
 	
-	editor_state.cpu_frequency = OS_GetCPUFrequency();
-
 	editor_state.render_state = &render_state;
 	
 	TEMP = &editor_state.temporary_arena;
 	MEM_SCOPE_NONE_ = {TEMP};
 	MEM_SCOPE_TEMP_ = {TEMP, TEMP};
+	CPU_FREQUENCY = OS_GetCPUFrequency();
 
 	AppInit(&editor_state);
 

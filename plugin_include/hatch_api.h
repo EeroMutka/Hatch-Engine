@@ -117,12 +117,18 @@ typedef struct HT_Array {
 	i32 capacity;
 } HT_Array;
 
-#define HT_ITEM_INDEX_INVALID 0xFFFFFFFF
+// HT_ItemIndex encodes the following struct: { u16 bucket_index_plus_one; slot_index; }
+// 0 is always invalid.
+typedef u32 HT_ItemIndex;
 
-typedef union HT_ItemIndex {
-	struct { u16 bucket, slot; };
-	u32 _u32; // may be HT_ITEM_INDEX_INVALID
-} HT_ItemIndex;
+#define HT_MakeItemIndex(BUCKET, ELEM)  (u32)(((u32)(BUCKET) + 1) | ((ELEM) << 16))
+#define HT_ItemIndexBucket(INDEX)       ((u16)(INDEX) - 1)
+#define HT_ItemIndexElem(INDEX)         (u16)((INDEX) >> 16)
+
+#define HT_GetItemHeader(ITEM_GROUP, INDEX) ((HT_ItemHeader*)(((char**)(ITEM_GROUP)->buckets.data)[HT_ItemIndexBucket(INDEX)] + HT_ItemIndexElem(INDEX)*(ITEM_GROUP)->item_full_size))
+#define HT_GetItem(T, ITEM_GROUP, INDEX) (T*)((char*)HT_GetItemHeader(ITEM_GROUP, INDEX) + (ITEM_GROUP)->item_offset)
+#define HT_NextItem(ITEM_GROUP, INDEX) HT_GetItemHeader(ITEM_GROUP, INDEX)->next
+#define HT_ItemGroupEach(ITEM_GROUP, IT) HT_ItemIndex IT = (ITEM_GROUP)->first; IT; IT = HT_NextItem(ITEM_GROUP, IT)
 
 // Each item is part of a doubly linked list, so everything is always ordered.
 typedef struct HT_ItemGroup {
@@ -130,6 +136,8 @@ typedef struct HT_ItemGroup {
 	//i32 count;
 	i32 last_bucket_end;
 	i32 elems_per_bucket;
+	i32 item_offset;
+	i32 item_full_size;
 	HT_ItemIndex first;
 	HT_ItemIndex last;
 	HT_ItemIndex freelist_first;

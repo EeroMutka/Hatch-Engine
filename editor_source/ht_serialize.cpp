@@ -459,22 +459,16 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		HT_Type item_type = *type;
 		item_type.kind = type->subkind;
 
-		i32 item_size, item_align;
-		GetTypeSizeAndAlignment(tree, &item_type, &item_size, &item_align);
-
-		i32 item_offset, item_full_size;
-		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
-
 		for (; !MD_NodeIsNil(p->node); p->node = p->node->next) {
-			HT_ItemIndex item_i = ItemGroupAdd(val, item_full_size);
+			HT_ItemIndex item_i = ItemGroupAdd(val);
 
-			HT_ItemHeader* item = GetItemFromIndex(val, item_i, item_full_size);
+			HT_ItemHeader* item = GetItemFromIndex(val, item_i);
 			STR_View name = STR_Clone(DS_HEAP, StrFromMD(p->node->string));
 			item->name = {name.data, name.size};
 
-			MoveItemToAfter(val, item_i, val->last, item_full_size);
+			MoveItemToAfter(val, item_i, val->last);
 
-			void* item_data = (char*)GetItemFromIndex(val, item_i, item_full_size) + item_offset;
+			void* item_data = (char*)GetItemFromIndex(val, item_i) + val->item_offset;
 			Construct(tree, item_data, &item_type);
 
 			MDParser child_p = {p->node->first_child};

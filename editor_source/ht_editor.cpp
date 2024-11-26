@@ -143,7 +143,7 @@ EXPORT void AddTopBar(EditorState* s) {
 	UI_DrawBox(top_bar_box);
 }
 
-EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
+EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect area) {
 	
 	/*if (UI_InputWasPressedOrRepeated(UI_Input_A) && UI_InputIsDown(UI_Input_Control)) {
 		if (UI_InputIsDown(UI_Input_Shift)) {
@@ -165,9 +165,9 @@ EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect co
 	//if (UI_InputWasPressedOrRepeated(UI_Input_Delete)) {
 	//}
 	
-	vec2 content_rect_size = UI_RectSize(content_rect);
+	vec2 area_size = UI_RectSize(area);
 	UI_Box* root = UI_KBOX(key);
-	UI_InitRootBox(root, content_rect_size.x, content_rect_size.y, 0);
+	UI_InitRootBox(root, area_size.x, area_size.y, 0);
 	UIRegisterOrderedRoot(&s->dropdown_state, root);
 	UI_PushBox(root);
 	
@@ -188,7 +188,7 @@ EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect co
 	UI_PopScrollArea(scroll_area);
 	
 	UI_PopBox(root);
-	UI_BoxComputeRects(root, content_rect.min);
+	UI_BoxComputeRects(root, area.min);
 	UI_DrawBox(root);
 }
 
@@ -520,21 +520,15 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		HT_Type item_type = *type;
 		item_type.kind = item_type.subkind;
 		
-		i32 item_size, item_align;
-		GetTypeSizeAndAlignment(&s->asset_tree, &item_type, &item_size, &item_align);
-		
-		i32 item_offset, item_full_size;
-		CalculateItemOffsets(item_size, item_align, &item_offset, &item_full_size);
-		
 		HT_ItemIndex i = group->first;
-		while (i._u32 != HT_ITEM_INDEX_INVALID) {
-			HT_ItemHeader* item = GetItemFromIndex(group, i, item_full_size);
+		while (i) {
+			HT_ItemHeader* item = GetItemFromIndex(group, i);
 			
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
 			node->name = {item->name.data, item->name.size};
 			node->type = item_type;
-			node->data = (char*)item + item_offset;
-			node->base.key = UI_HashInt(parent->base.key, i._u32);
+			node->data = (char*)item + group->item_offset;
+			node->base.key = UI_HashInt(parent->base.key, i);
 			
 			bool* is_open = NULL;
 			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
@@ -566,10 +560,10 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	UI_AddDataTree(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &members_tree, &s->properties_tree_data_ui_state);
 }
 
-EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect) {
-	vec2 content_rect_size = UI_RectSize(content_rect);
+EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect area) {
+	vec2 area_size = UI_RectSize(area);
 	UI_Box* root_box = UI_KBOX(key);
-	UI_InitRootBox(root_box, content_rect_size.x, content_rect_size.y, 0);
+	UI_InitRootBox(root_box, area_size.x, area_size.y, 0);
 	UIRegisterOrderedRoot(&s->dropdown_state, root_box);
 	UI_PushBox(root_box);
 
@@ -677,7 +671,7 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect conte
 	}
 
 	UI_PopBox(root_box);
-	UI_BoxComputeRects(root_box, content_rect.min);
+	UI_BoxComputeRects(root_box, area.min);
 	UI_DrawBox(root_box);
 }
 
@@ -898,11 +892,11 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		UI_Box* clear_log = UI_BOX();
 		UI_AddLabel(clear_log, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Clear");
 		
-		UI_AddFmt(UI_BOX(), "(mem usage:%fMB)", (float)s->log_arena.total_mem_reserved / (1024.f*1024.f));
+		UI_AddFmt(UI_BOX(), "(mem usage:%fMB)", (float)s->log.arena.total_mem_reserved / (1024.f*1024.f));
 		
 		if (UI_Clicked(clear_log)) {
-			DS_ArenaReset(&s->log_arena);
-			DS_ArrInit(&s->log_messages, &s->log_arena);
+			DS_ArenaReset(&s->log.arena);
+			DS_ArrInit(&s->log.messages, &s->log.arena);
 			s->rmb_menu_open = false;
 		}
 
@@ -914,6 +908,16 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 	}
 	else {
 		s->rmb_menu_open = false;
+	}
+}
+
+EXPORT void RemoveErrorsByAsset(ErrorList* error_list, HT_Asset asset) {
+	for (int i = 0; i < error_list->errors.count; i++) {
+		Error* error = &error_list->errors[i];
+		if (error->owner_asset == asset) {
+			DS_ArrRemove(&error_list->errors, i);
+			i--;
+		}
 	}
 }
 
@@ -1128,6 +1132,9 @@ EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rec
 	else if (tab == s->log_tab_class) {
 		UpdateAndDrawLogTab(s, key, area_rect);
 	}
+	else if (tab == s->errors_tab_class) {
+		UpdateAndDrawErrorsTab(s, key, area_rect);
+	}
 	else if (tab == s->asset_viewer_tab_class) {
 		HT_Asset selected_asset = (HT_Asset)s->assets_tree_ui_state.selection;
 		
@@ -1205,19 +1212,19 @@ static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
 
 EXPORT void HT_LogInfo(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Info, fmt, args);
+	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Info, fmt, args);
 	va_end(args);
 }
 
 EXPORT void HT_LogWarning(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Warning, fmt, args);
+	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Warning, fmt, args);
 	va_end(args);
 }
 
 EXPORT void HT_LogError(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
-	LogVArgs(g_plugin_call_ctx->s, LogMessageKind_Error, fmt, args);
+	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Error, fmt, args);
 	va_end(args);
 }
 	

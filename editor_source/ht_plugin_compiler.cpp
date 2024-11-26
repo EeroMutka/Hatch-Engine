@@ -148,38 +148,46 @@ EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 
 struct BuildLog {
 	BUILD_Log base;
-	EditorState* s;
+	ErrorList* error_list;
+	HT_Asset plugin;
 	STR_Builder b;
 	size_t flushed_to;
 };
 
-static void FlushBuildLog(BuildLog* log) {
-	EditorState* s = log->s;
-
+static void FlushBuildLog(BuildLog* build_log) {
 	for (;;) {
-		STR_View remaining = STR_SliceAfter(log->b.str, log->flushed_to);
+		STR_View remaining = STR_SliceAfter(build_log->b.str, build_log->flushed_to);
 
 		size_t at;
 		if (!STR_Find(remaining, "\n", &at)) break;
 
 		STR_View line = STR_SliceBefore(remaining, at);
-		log->flushed_to += at + 1;
+		build_log->flushed_to += at + 1;
 
 		size_t _;
 		bool is_error = STR_Find(line, ": error ", &_);
 		
-		LogMessage msg;
-		msg.kind = is_error ? LogMessageKind_Error : LogMessageKind_Info;
-		msg.string = STR_Clone(&s->log_arena, line);
-		msg.added_tick = OS_GetCPUTick();
-		DS_ArrPush(&s->log_messages, msg);
+		if (is_error) {
+			Error error = {};
+			error.owner_asset = build_log->plugin;
+			error.string = STR_Clone(DS_HEAP, line);
+			error.added_tick = OS_GetCPUTick();
+			DS_ArrPush(&build_log->error_list->errors, error);
+		}
+
+		//Log* log = build_log->log;
+		//LogMessage msg;
+		//msg.kind = is_error ? LogMessageKind_Error : LogMessageKind_Info;
+		//msg.string = STR_Clone(&log->arena, line);
+		//msg.added_tick = OS_GetCPUTick();
+		//DS_ArrPush(&log->messages, msg);
 	}
 }
 
 static void BuildLogFn(BUILD_Log* self, const char* message) {
-	BuildLog* log = (BuildLog*)self;
-	STR_Print(&log->b, STR_ToV(message));
-	FlushBuildLog(log);
+	BuildLog* build_log = (BuildLog*)self;
+	STR_Print(&build_log->b, STR_ToV(message));
+	FlushBuildLog(build_log);
 }
 
 EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
@@ -291,9 +299,12 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	}
 	if (project.code_files.count == 0) TODO();
 
+	RemoveErrorsByAsset(&s->error_list, plugin->handle);
+
 	BuildLog build_log = {0};
 	build_log.base.print = BuildLogFn;
-	build_log.s = s;
+	build_log.plugin = plugin->handle;
+	build_log.error_list = &s->error_list;
 	build_log.b = {TEMP};
 	ok = BUILD_CompileProject(&project, ".plugin_binaries", ".", &build_log.base);
 	

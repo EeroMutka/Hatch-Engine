@@ -79,6 +79,7 @@ typedef vec2 UI_Vec2;
 extern DS_Arena* TEMP;
 extern DS_MemScope MEM_SCOPE_TEMP_;
 extern DS_MemScopeNone MEM_SCOPE_NONE_;
+extern uint64_t CPU_FREQUENCY;
 
 #define MEM_SCOPE_NONE   (DS_MemScopeNone*)&MEM_SCOPE_NONE_
 #define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
@@ -206,22 +207,6 @@ struct Asset {
 	bool ui_state_is_open; // for the Assets panel
 };
 
-struct PluginInstance {
-	HT_PluginInstance handle;
-	Asset* plugin_asset;
-	
-	union {
-		DS_BucketArrayIndex freelist_next;
-		OS_DLL* dll_handle;
-	};
-
-	void (*UpdatePlugin)(HT_API* HT);
-	void (*LoadPlugin)(HT_API* HT);
-	void (*UnloadPlugin)(HT_API* HT);
-
-	DS_DynArray(PluginAllocationHeader*) allocations;
-};
-
 struct AssetTree {
 	DS_Map(u64, Asset*) package_from_name; // key is the DS_MurmurHash64A(0) of the package name (excluding the $)
 
@@ -277,18 +262,16 @@ EXPORT void ArrayPush(HT_Array* array, i32 elem_size);
 EXPORT void ArrayClear(HT_Array* array, i32 elem_size);
 EXPORT void ArrayDeinit(HT_Array* array);
 
-EXPORT void ItemGroupInit(HT_ItemGroup* group);
-EXPORT void ItemGroupDeinit(HT_ItemGroup* group, i32 item_full_size);
-EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group, i32 item_full_size); // does not insert the asset into the list yet, you must call MoveItemToAfter
-EXPORT void ItemGroupRemove(HT_ItemGroup* group, HT_ItemIndex item, i32 item_full_size);
-
-EXPORT void CalculateItemOffsets(i32 item_size, i32 item_align, i32* out_item_offset, i32* out_item_full_size);
+EXPORT void ItemGroupInit(AssetTree* tree, HT_ItemGroup* group, HT_Type* item_type);
+EXPORT void ItemGroupDeinit(HT_ItemGroup* group);
+EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group); // does not insert the asset into the list yet, you must call MoveItemToAfter
+EXPORT void ItemGroupRemove(HT_ItemGroup* group, HT_ItemIndex item);
 
 // `item` may be HT_ITEM_INDEX_INVALID, in which case NULL is returned. Otherwise the index must be valid.
-EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item, i32 item_full_size);
+EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item);
 
 // if `move_after_this` is HT_ITEM_INDEX_INVALID, the item is moved to the beginning of the list.
-EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this, i32 item_full_size);
+EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this);
 
 EXPORT void StructMemberInit(StructMember* x);
 EXPORT void StructMemberDeinit(StructMember* x);
@@ -382,6 +365,40 @@ struct LogMessage {
 	uint64_t added_tick;
 };
 
+struct Log {
+	DS_Arena arena;
+	DS_DynArray(LogMessage) messages;
+};
+
+struct Error {
+	// for now, theres just compile errors
+	HT_Asset owner_asset;
+	STR_View string;
+	uint64_t added_tick;
+};
+
+// Tracks errors in real time. A single plugin that fails to compile should probably be just one error in the error list,
+// or possibly a collapsible item that can then show more errors when opened.
+struct ErrorList {
+	DS_DynArray(Error) errors;
+};
+
+struct PluginInstance {
+	HT_PluginInstance handle;
+	Asset* plugin_asset;
+
+	union {
+		DS_BucketArrayIndex freelist_next;
+		OS_DLL* dll_handle;
+	};
+
+	void (*UpdatePlugin)(HT_API* HT);
+	void (*LoadPlugin)(HT_API* HT);
+	void (*UnloadPlugin)(HT_API* HT);
+
+	DS_DynArray(PluginAllocationHeader*) allocations;
+};
+
 struct UI_Tab {
 	STR_View name; // empty string means free slot
 	HT_Asset owner_plugin;
@@ -406,8 +423,6 @@ struct PerFrameState {
 struct EditorState {
 	HT_API* api;
 
-	uint64_t cpu_frequency;
-
 	DS_Arena persistent_arena;
 	DS_Arena temporary_arena;
 
@@ -426,8 +441,9 @@ struct EditorState {
 	DS_BucketArray(PluginInstance) plugin_instances;
 	DS_BucketArrayIndex first_free_plugin_instance;
 
-	DS_Arena log_arena;
-	DS_DynArray(LogMessage) log_messages;
+	Log log;
+
+	ErrorList error_list;
 
 	AssetTree asset_tree;
 	UI_DataTreeState assets_tree_ui_state;
@@ -444,7 +460,8 @@ struct EditorState {
 	UI_Tab* assets_tab_class;
 	UI_Tab* asset_viewer_tab_class;
 	UI_Tab* log_tab_class;
-
+	UI_Tab* errors_tab_class;
+	
 	UI_PanelTree panel_tree;
 
 	// ------------------
@@ -474,9 +491,10 @@ EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab);
 EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect);
 
 EXPORT void AddTopBar(EditorState* s);
-EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect content_rect);
-EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect content_rect);
-EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect content_rect);
+EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect area);
+EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect area);
+EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
+EXPORT void UpdateAndDrawErrorsTab(EditorState* s, UI_Key key, UI_Rect area);
 
 EXPORT void InitAPI(EditorState* s);
 
@@ -486,6 +504,8 @@ EXPORT void BuildPluginD3DCommandLists(EditorState* s);
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 
 EXPORT PluginInstance* GetPluginInstance(EditorState* s, HT_PluginInstance handle); // returns NULL if the handle is invalid
+
+EXPORT void RemoveErrorsByAsset(ErrorList* error_list, HT_Asset asset);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
@@ -503,8 +523,8 @@ EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
 
-EXPORT void LogF(EditorState* s, LogMessageKind kind, const char* fmt, ...);
-EXPORT void LogVArgs(EditorState* s, LogMessageKind kind, const char* fmt, va_list args);
+EXPORT void LogF(Log* log, LogMessageKind kind, const char* fmt, ...);
+EXPORT void LogVArgs(Log* log, LogMessageKind kind, const char* fmt, va_list args);
 
 EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 

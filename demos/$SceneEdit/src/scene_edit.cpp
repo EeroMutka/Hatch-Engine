@@ -67,11 +67,6 @@ static u32* UIResizeAndMapIndexBuffer(int num_indices) {
 
 // -----------------------------------------------------
 
-static void CalculateItemOffsets(i32 item_size, i32 item_align, i32* out_item_offset, i32* out_item_full_size) {
-	*out_item_offset = DS_AlignUpPow2(sizeof(HT_ItemHeader), item_align);
-	*out_item_full_size = DS_AlignUpPow2(*out_item_offset + item_size, item_align);
-}
-
 static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
@@ -139,14 +134,8 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	DrawArrow3D(&vp, {}, vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
 	DrawArrow3D(&vp, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
 	
-	i32 item_offset, item_full_size;
-	CalculateItemOffsets(sizeof(SceneEntity), alignof(SceneEntity), &item_offset, &item_full_size);
-	
-	HT_ItemIndex item_idx = {};
-	while (item_idx._u32 != HT_ITEM_INDEX_INVALID) {
-		char* bucket = ((char**)scene->entities.buckets.data)[item_idx.bucket];
-		HT_ItemHeader* item = (HT_ItemHeader*)(bucket + item_idx.slot*item_full_size);
-		SceneEntity* entity = (SceneEntity*)((char*)item + item_offset);
+	for (HT_ItemGroupEach(&scene->entities, i)) {
+		SceneEntity* entity = HT_GetItem(SceneEntity, &scene->entities, i);
 		
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
@@ -170,8 +159,6 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 				vp.camera.ws_to_ss = ws_to_ss;
 			}
 		}
-		
-		item_idx = item->next;
 	}
 	
 	// -----------------------------------------------
