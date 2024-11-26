@@ -658,14 +658,15 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect area)
 			UI_AddButton(stop_button, UI_SizeFit(), UI_SizeFit(), 0, "Stop");
 			if (UI_Clicked(stop_button)) {
 				UnloadPlugin(s, selected_asset);
+				selected_asset->plugin.active_by_request = false;
 			}
 		}
 		else {
 			UI_Box* run_button = UI_KBOX(key);
 			UI_AddButton(run_button, UI_SizeFit(), UI_SizeFit(), 0, "Run");
 			if (UI_Clicked(run_button)) {
-				// maybe instead of a recompile button, we can compile in the background. And instead of a run button, show errors underneath if it fails to compile.
 				RunPlugin(s, selected_asset);
+				selected_asset->plugin.active_by_request = true;
 			}
 		}
 	}
@@ -1287,7 +1288,10 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	DecodedHandle plugin_handle;
 	plugin_handle.bucket_index = DS_BucketFromIndex(plugin_instance_i);
 	plugin_handle.elem_index = DS_SlotFromIndex(plugin_instance_i);
-	plugin_handle.generation = DecodeHandle(plugin_instance->handle).generation + 1;
+	
+	// keep the existing generation, except start from 1
+	plugin_handle.generation = DecodeHandle(plugin_instance->handle).generation;
+	if (plugin_handle.generation == 0) plugin_handle.generation = 1;
 	
 	*plugin_instance = {};
 	plugin_instance->plugin_asset = plugin_asset;
@@ -1335,7 +1339,11 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
 	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 
+	// increment the handle generation to invalidate any handles
 	DecodedHandle plugin_handle = DecodeHandle(plugin->handle);
+	plugin_handle.generation += 1;
+	plugin->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
+	
 	DS_BucketArrayIndex plugin_instance_i = DS_EncodeBucketArrayIndex(plugin_handle.bucket_index, plugin_handle.elem_index);
 	FREE_SLOT(plugin_instance_i, &s->plugin_instances, &s->first_free_plugin_instance, freelist_next);
 

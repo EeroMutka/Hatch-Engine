@@ -453,9 +453,14 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	}break;
 	}
 
+	// TODO: the handle generation must be incremented, because otherwise handles to this asset will remain "valid" even though the asset is destroyed.
+	__debugbreak();
+	//asset->handle
+
 	__debugbreak(); // TODO: use FREE_SLOT
 	asset->kind = AssetKind_FreeSlot;
 	asset->freelist_next = tree->first_free_asset;
+
 	
 	DecodedHandle asset_handle = DecodeHandle(asset->handle);
 	tree->first_free_asset = DS_EncodeBucketArrayIndex(asset_handle.bucket_index, asset_handle.elem_index);

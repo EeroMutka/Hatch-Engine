@@ -666,10 +666,15 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 	for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
 		Asset* plugin_asset = ctx.queue_recompile_plugins[i];
 
-		bool is_running = plugin_asset->plugin.active_instance != NULL;
-		if (is_running) UnloadPlugin(s, plugin_asset);
+		if (plugin_asset->plugin.active_instance != NULL) {
+			UnloadPlugin(s, plugin_asset);
+		}
+		
 		RecompilePlugin(s, plugin_asset);
-		if (is_running) RunPlugin(s, plugin_asset);
+		
+		if (plugin_asset->plugin.active_by_request) {
+			RunPlugin(s, plugin_asset);
+		}
 
 		printf("Recompiling plugin!\n");
 	}

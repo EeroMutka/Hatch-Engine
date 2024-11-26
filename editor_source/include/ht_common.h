@@ -168,6 +168,8 @@ struct PluginAllocationHeader {
 
 struct Asset_Plugin {
 	PluginOptions options; // a value of type g_plugin_options_struct_type
+	
+	bool active_by_request;
 	HT_PluginInstance active_instance;
 };
 

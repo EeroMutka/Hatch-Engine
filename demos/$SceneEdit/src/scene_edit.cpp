@@ -124,7 +124,6 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	mat4 ws_to_cs = camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
 	mat4 ws_to_ss = ws_to_cs * cs_to_ss;
 	
-	// transform some
 	GizmosViewport vp;
 	vp.camera.position = {0, 0, 0};
 	vp.camera.ws_to_ss = ws_to_ss;
