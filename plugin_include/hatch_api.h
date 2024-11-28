@@ -470,7 +470,9 @@ struct HT_API {
 	
 	bool (*RegisterAssetViewerForType)(HT_Asset struct_type_asset, TabUpdateProc update_proc);
 	void (*UnregisterAssetViewerForType)(HT_Asset struct_type_asset);
-	// bool (*PollNextAssetViewerTabUpdate)(HT_AssetViewerTabUpdate* tab_update);
+	
+	// Returns a temporary array (i.e. TempArenaPush)
+	HT_Asset* (*GetAllOpenAssetsOfType)(HT_Asset struct_type_asset, int* out_count);
 	
 	// -- Input --------------------------------------
 	

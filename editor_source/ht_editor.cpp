@@ -1124,6 +1124,37 @@ static void HT_DeregisterAssetViewerForType(HT_Asset struct_type_asset) {
 	}
 }
 
+static HT_Asset* HT_GetAllOpenAssetsOfType(HT_Asset struct_type_asset, int* out_count) {
+	EditorState* s = g_plugin_call_ctx->s;
+	
+	HT_Asset* result = NULL;
+	*out_count = 0;
+
+	HT_Asset selected_asset = (HT_Asset)s->assets_tree_ui_state.selection;
+	Asset* data_asset = GetAsset(&s->asset_tree, selected_asset);
+	if (data_asset && data_asset->kind == AssetKind_StructData && data_asset->struct_data.struct_type == struct_type_asset) {
+		result = DS_Clone(HT_Asset, TEMP, selected_asset);
+		*out_count = 1;
+	}
+
+	return result;
+
+	// TODO: loop through all tabs
+	/*for (DS_BkArrEach(&s->panel_tree.panels, panel_i)) {
+		UI_Panel* panel = DS_BkArrGet(&s->panel_tree.panels, panel_i);
+		if (!panel->is_alive) continue;
+
+		for (int tab_i = 0; tab_i < panel->tabs.count; tab_i++) {
+			UI_Tab* tab = panel->tabs[tab_i];
+			
+			__debugbreak();
+			//is_alive
+		}
+	}*/
+	// loop through all open tabs
+	//return 0;
+}
+
 EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rect area_rect) {
 	EditorState* s = (EditorState*)tree->user_data;
 	if (tab == s->assets_tab_class) {
@@ -1241,6 +1272,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.GetPluginData = HT_GetPluginData_;
 	api.RegisterAssetViewerForType = HT_RegisterAssetViewerForType;
 	api.UnregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
+	api.GetAllOpenAssetsOfType = HT_GetAllOpenAssetsOfType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
 	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 	api.D3DCompile = D3DCompile;

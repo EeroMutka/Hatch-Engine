@@ -1,0 +1,4 @@
+type: "Source/fg_params_type"
+data: {
+	scene_type: "$Scene/types/Scene"
+}

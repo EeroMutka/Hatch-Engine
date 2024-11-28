@@ -288,6 +288,7 @@ EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path);
 struct UI_Tab; // Placeholder for the user
 
 struct UI_Panel {
+	bool is_alive; // todo: cleanup
 	union {
 		UI_Panel* parent;
 		UI_Panel* freelist_next;
@@ -401,6 +402,7 @@ struct PluginInstance {
 	DS_DynArray(PluginAllocationHeader*) allocations;
 };
 
+// TODO: special tab data for per-tab data like which asset an asset viewer is looking at
 struct UI_Tab {
 	STR_View name; // empty string means free slot
 	HT_Asset owner_plugin;

@@ -1,0 +1,4 @@
+data_asset: "Source/fg_params"
+code_files: {
+	"Source/fg.cpp"
+}

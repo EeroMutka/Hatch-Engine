@@ -1,0 +1,4 @@
+data_asset: "Source/physics_game_params"
+code_files: {
+	"Source/physics_game.cpp"
+}

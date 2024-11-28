@@ -165,7 +165,7 @@ static void FlushBuildLog(BuildLog* build_log) {
 		build_log->flushed_to += at + 1;
 
 		size_t _;
-		bool is_error = STR_Find(line, ": error ", &_);
+		bool is_error = STR_Find(line, " error ", &_) || STR_Find(line, " warning ", &_); // can be `: error ` or `: fatal error `
 		
 		if (is_error) {
 			Error error = {};
@@ -231,7 +231,17 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 			STR_View name = UI_TextToStr(asset->name);
 			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
 
-			fprintf(header, "typedef struct %.*s {\n", StrArg(name));
+			Asset* asset_package = asset;
+			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
+
+			STR_View asset_package_name = "";
+			if (package != asset_package) { // add asset package as prefix if from external package
+				asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
+				STR_CutStart(&asset_package_name, "$");
+			}
+
+
+			fprintf(header, "typedef struct %.*s__%.*s {\n", StrArg(asset_package_name), StrArg(name));
 
 			for (int i = 0; i < asset->struct_type.members.count; i++) {
 				StructMember member = asset->struct_type.members[i];
@@ -260,7 +270,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 				fprintf(header, " %.*s;\n", StrArg(member_name));
 			}
 
-			fprintf(header, "} %.*s;\n", StrArg(name));
+			fprintf(header, "} %.*s__%.*s;\n", StrArg(asset_package_name), StrArg(name));
 		}
 	}
 

@@ -91,10 +91,10 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	vec2 rect_min = {(float)update_info->rect_min.x, (float)update_info->rect_min.y}; // TODO: it would be nice to support implicit conversion!
 	vec2 rect_max = {(float)update_info->rect_max.x, (float)update_info->rect_max.y};
 	
-	Scene* scene = HT_GetAssetData(Scene, ht, update_info->data_asset);
+	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
 	HT_ASSERT(scene);
 	
-	SceneEditParams* params = HT_GetPluginData(SceneEditParams, ht);
+	__SceneEditParams* params = HT_GetPluginData(__SceneEditParams, ht);
 	HT_ASSERT(params);
 	
 	vec2 rect_size = rect_max - rect_min;
@@ -103,12 +103,12 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	
 	Camera camera = {};
 	{
-		// find or add "EditorCamera" to the scene extended data
-		EditorCamera* editor_camera = NULL;
+		// find or add "__EditorCamera" to the scene extended data
+		__EditorCamera* editor_camera = NULL;
 		for (int i = 0; i < scene->extended_data.count; i++) {
 			HT_Any any = ((HT_Any*)scene->extended_data.data)[i];
 			if (any.type._struct == params->editor_camera_type) {
-				editor_camera = (EditorCamera*)any.data;
+				editor_camera = (__EditorCamera*)any.data;
 				break;
 			}
 		}
@@ -134,13 +134,13 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	DrawArrow3D(&vp, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
 	
 	for (HT_ItemGroupEach(&scene->entities, i)) {
-		SceneEntity* entity = HT_GetItem(SceneEntity, &scene->entities, i);
+		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
 		
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
 			
 			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type._struct == params->box_component_type) {
-				BoxComponent* box_component = (BoxComponent*)comp_any->data;
+				Scene__BoxComponent* box_component = (Scene__BoxComponent*)comp_any->data;
 				
 				vp.camera.ws_to_ss =
 					M_MatScale(entity->scale) *
@@ -180,7 +180,7 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	SceneEditParams* params = HT_GetPluginData(SceneEditParams, ht);
+	__SceneEditParams* params = HT_GetPluginData(__SceneEditParams, ht);
 	HT_ASSERT(params);
 
 	// hmm... so maybe SceneEdit can provide an API for unlocking the asset viewer registration.
@@ -196,7 +196,4 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// OR: maybe the scene edit plugin can act more like a library for the renderer plugin.
 	// The renderer plugin can then call functions from the scene edit plugin, like "UpdateScene" and "GenerateGizmos".
 	// This sounds good, because it lets us use our current simplistic hatch setup. Let's do it.
-	// THOUGH... if we do it library-style, then the code will be duplicated. Maybe we need a way to expose DLL calls in the future!
-	
-	
 }

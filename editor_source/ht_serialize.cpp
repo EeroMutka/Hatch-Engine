@@ -88,6 +88,8 @@ EXPORT void LoadProject(EditorState* s, STR_View project_file) {
 			STR_View path = StrFromMD(child->string);
 			Asset* plugin_asset = FindAssetFromPath(&s->asset_tree, NULL, path);
 			ASSERT(plugin_asset->kind == AssetKind_Plugin);
+			
+			plugin_asset->plugin.active_by_request = true;
 			RunPlugin(s, plugin_asset);
 		}
 	}
