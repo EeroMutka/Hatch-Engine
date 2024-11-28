@@ -398,7 +398,6 @@ struct HT_API {
 	// HT_EXPORT void HT_LoadPlugin(HT_API* ht)
 	// HT_EXPORT void HT_UnloadPlugin(HT_API* ht)
 	// HT_EXPORT void HT_UpdatePlugin(HT_API* ht) 
-	// HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list)
 	
 	// So, maybe we want to keep the plugin API minimal. Because that is *required* for everyone to use. If we had e.g. string utilities separately, then the user could copy
 	// the string utility header into their own plugin folder and keep using an older version if they wanted to.
@@ -497,12 +496,35 @@ struct HT_API {
 	
 	HT_CachedGlyph (*GetCachedGlyph)(u32 codepoint);
 	
+	// -- D3D11 API -----------------------------------
+	
+#ifdef HT_INCLUDE_D3D11_API
+	ID3D11Device* D3D11_device;
+	ID3D11DeviceContext* D3D11_device_context;
+	
+	// When using D3D11, you may define the function:
+	// HT_EXPORT void HT_D3D11_Render(HT_API* ht)
+	
+	HRESULT (*D3D11_Compile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
+		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
+		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
+	
+	// NOTE: The filename parameter is wchar_t* in the official D3DCompiler API, but Hatch does a conversion here.
+	HRESULT (*D3D11_CompileFromFile)(string FileName, const D3D_SHADER_MACRO* pDefines,
+		ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
+		u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
+	
+	ID3D11RenderTargetView* (*D3D11_GetHatchRenderTargetView)();
+#endif
+	
 	// -- D3D12 API -----------------------------------
 	
 #ifdef HT_INCLUDE_D3D12_API
-
 	ID3D12Device* D3D_device;
 	ID3D12CommandQueue* D3D_queue;
+	
+	// When using D3D12, you may define the function:
+	// HT_EXPORT void HT_D3D12_BuildPluginCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list)
 	
 	HRESULT (*D3DCompile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
 		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,

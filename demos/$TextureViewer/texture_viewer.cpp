@@ -177,7 +177,7 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 }
 
-HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
+HT_EXPORT void HT_D3D12_BuildPluginCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
 	// we should dynamically load/unload to memory. Load when opening, unload when unopening.
 	// Hmm... maybe we should just do the big thing right away.
 	

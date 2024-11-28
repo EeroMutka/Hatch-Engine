@@ -388,13 +388,13 @@ struct ErrorList {
 
 struct PluginInstance {
 	HT_PluginInstance handle;
-	Asset* plugin_asset;
-
+	
 	union {
+		Asset* plugin_asset;
 		DS_BucketArrayIndex freelist_next;
-		OS_DLL* dll_handle;
 	};
 
+	OS_DLL* dll_handle; // NULL if unloaded
 	void (*UpdatePlugin)(HT_API* HT);
 	void (*LoadPlugin)(HT_API* HT);
 	void (*UnloadPlugin)(HT_API* HT);
@@ -505,7 +505,11 @@ EXPORT void InitAPI(EditorState* s);
 EXPORT void UpdatePlugins(EditorState* s);
 
 #ifdef HT_EDITOR_DX12
-EXPORT void BuildPluginD3DCommandLists(EditorState* s);
+EXPORT void D3D12_BuildPluginCommandLists(EditorState* s);
+#endif
+
+#ifdef HT_EDITOR_DX11
+EXPORT void D3D11_RenderPlugins(EditorState* s);
 #endif
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);

@@ -186,6 +186,8 @@ static void UI_DX11_Init(ID3D11Device* device, ID3D11DeviceContext* dc) {
 
 	ok = device->CreateInputLayout(inputelementdesc, ARRAYSIZE(inputelementdesc), vertexshaderCSO->GetBufferPointer(), vertexshaderCSO->GetBufferSize(), &UI_DX11_STATE.input_layout) == S_OK;
 	UI_ASSERT(ok);
+	
+	vertexshaderCSO->Release();
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -195,6 +197,8 @@ static void UI_DX11_Init(ID3D11Device* device, ID3D11DeviceContext* dc) {
 
 	ok = device->CreatePixelShader(pixelshaderCSO->GetBufferPointer(), pixelshaderCSO->GetBufferSize(), NULL, &UI_DX11_STATE.pixel_shader) == S_OK;
 	UI_ASSERT(ok);
+	
+	pixelshaderCSO->Release();
 
 	///////////////////////////////////////////////////////////////////////////////////////////////
 

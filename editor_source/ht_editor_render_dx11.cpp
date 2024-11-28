@@ -23,9 +23,9 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 	swapchain_desc.SwapEffect        = DXGI_SWAP_EFFECT_DISCARD;
 
 	uint32_t create_device_flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
-#ifdef UI_DX11_DEBUG_MODE
-	create_device_flags |= D3D11_CREATE_DEVICE_DEBUG;
-#endif
+//#ifdef UI_DX11_DEBUG_MODE
+		create_device_flags |= D3D11_CREATE_DEVICE_DEBUG;
+//#endif
 
 	HRESULT res = D3D11CreateDeviceAndSwapChain(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL,
 		create_device_flags, dx_feature_levels, ARRAYSIZE(dx_feature_levels), D3D11_SDK_VERSION,
@@ -47,12 +47,20 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 	framebuffer->Release(); // We don't need this handle anymore
 }
 
-// for now we need to pass editor state to call HT_BuildPluginD3DCommandList on all plugins. TODO: cleanup this!
+// for now we need to pass editor state to call HT_D3D12_BuildPluginCommandList on all plugins. TODO: cleanup this!
 EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs) {
 	FLOAT clear_color[4] = { 0.15f, 0.15f, 0.15f, 1.f };
 	s->dc->ClearRenderTargetView(s->framebuffer_rtv, clear_color);
 
 	UI_DX11_Draw(ui_outputs, UI_VEC2{(float)s->window_size.x, (float)s->window_size.y}, s->framebuffer_rtv);
+	
+	// Reset scissor state after fire-UI might have messed with it
+	D3D11_RECT scissor_rect = {};
+	scissor_rect.right = s->window_size.x;
+	scissor_rect.bottom = s->window_size.y;
+	s->dc->RSSetScissorRects(1, &scissor_rect);
+	
+	D3D11_RenderPlugins(editor_state);
 	
 	s->swapchain->Present(1, 0);
 }

@@ -1,4 +1,5 @@
 
+#ifdef HT_EDITOR_DX12
 // Currently with the way this is structured, we have to include d3d12 here to fill the HT_INCLUDE_D3D12_API fields of the hatch API struct.
 // I think this could be cleaned up!
 #define HT_INCLUDE_D3D12_API
@@ -6,7 +7,14 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <d3dcompiler.h>
-#include <dxgidebug.h>
+#endif
+
+#ifdef HT_EDITOR_DX11
+#define HT_INCLUDE_D3D11_API
+#define WIN32_LEAN_AND_MEAN
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#endif
 
 #include "include/ht_common.h"
 #include "include/ht_editor_render.h" // this should also be cleaned up!
@@ -1238,11 +1246,18 @@ static void HT_D3DDestroyEvent(HANDLE event) { CloseHandle(event); }
 static void HT_D3DWaitForEvent(HANDLE event) { WaitForSingleObjectEx(event, INFINITE, FALSE); }
 
 #ifdef HT_EDITOR_DX12
-static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
+static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3D12_GetHatchRenderTargetView() {
 	EditorState* s = g_plugin_call_ctx->s;
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = s->render_state->rtv_heap->GetCPUDescriptorHandleForHeapStart();
 	rtv_handle.ptr += s->render_state->frame_index * s->render_state->rtv_descriptor_size;
 	return rtv_handle;
+}
+#endif
+
+#ifdef HT_EDITOR_DX11
+static ID3D11RenderTargetView* HT_D3D11_GetHatchRenderTargetView() {
+	EditorState* s = g_plugin_call_ctx->s;
+	return s->render_state->framebuffer_rtv;
 }
 #endif
 
@@ -1277,19 +1292,27 @@ EXPORT void InitAPI(EditorState* s) {
 	api.GetAllOpenAssetsOfType = HT_GetAllOpenAssetsOfType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
 	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
-	api.D3DCompile = D3DCompile;
 	
 #ifdef HT_EDITOR_DX12
+	api.D3DCompile = D3DCompile;
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
 	api.D3D_queue = s->render_state->command_queue;
-	api.D3DGetHatchRenderTargetView = HT_D3DGetHatchRenderTargetView;
-#endif
-
+	api.D3DGetHatchRenderTargetView = HT_D3D12_GetHatchRenderTargetView;
 	api.D3DCreateEvent = HT_D3DCreateEvent;
 	api.D3DDestroyEvent = HT_D3DDestroyEvent;
 	api.D3DWaitForEvent = HT_D3DWaitForEvent;
+#endif
+
+#ifdef HT_EDITOR_DX11
+	api.D3D11_Compile = D3DCompile;
+	*(void**)&api.D3D11_CompileFromFile = HT_D3DCompileFromFile;
+	api.D3D11_device = s->render_state->device;
+	api.D3D11_device_context = s->render_state->dc;
+	api.D3D11_GetHatchRenderTargetView = HT_D3D11_GetHatchRenderTargetView;
+#endif
+
 	api.LogInfo = HT_LogInfo;
 	api.LogWarning = HT_LogWarning;
 	api.LogError = HT_LogError;
@@ -1391,7 +1414,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 }
 
 #ifdef HT_EDITOR_DX12
-EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
+EXPORT void D3D12_BuildPluginCommandLists(EditorState* s) {
 	// Then populate the command list for plugin defined things
 	
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
@@ -1401,7 +1424,7 @@ EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 		PluginInstance* plugin_instance = GetPluginInstance(s, asset->plugin.active_instance);
 		if (plugin_instance) {
 			void (*BuildPluginD3DCommandList)(HT_API* ht, ID3D12GraphicsCommandList* command_list);
-			*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(plugin_instance->dll_handle, "HT_BuildPluginD3DCommandList");
+			*(void**)&BuildPluginD3DCommandList = OS_GetProcAddress(plugin_instance->dll_handle, "HT_D3D12_BuildPluginCommandList");
 			if (BuildPluginD3DCommandList) {
 
 				PluginCallContext ctx = {s, plugin_instance};
@@ -1409,6 +1432,24 @@ EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 				BuildPluginD3DCommandList(s->api, s->render_state->command_list);
 				g_plugin_call_ctx = NULL;
 			}
+		}
+	}
+}
+#endif
+
+#ifdef HT_EDITOR_DX11
+EXPORT void D3D11_RenderPlugins(EditorState* s) {
+	for (DS_BkArrEach(&s->plugin_instances, i)) {
+		PluginInstance* plugin = DS_BkArrGet(&s->plugin_instances, i);
+		if (plugin->dll_handle == NULL) continue; // empty slot
+
+		void (*HT_D3D11_Render)(HT_API* ht);
+		*(void**)&HT_D3D11_Render = OS_GetProcAddress(plugin->dll_handle, "HT_D3D11_Render");
+		if (HT_D3D11_Render) {
+			PluginCallContext ctx = {s, plugin};
+			g_plugin_call_ctx = &ctx;
+			HT_D3D11_Render(s->api);
+			g_plugin_call_ctx = NULL;
 		}
 	}
 }

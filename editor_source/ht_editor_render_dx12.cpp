@@ -203,7 +203,7 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
         scissor_rect.bottom = s->window_size.y;
         s->command_list->RSSetScissorRects(1, &scissor_rect);
 		
-        BuildPluginD3DCommandLists(editor_state);
+        D3D12_BuildPluginCommandLists(editor_state);
 
         D3D12_RESOURCE_BARRIER rt_to_present = DX12Transition(s->back_buffers[s->frame_index], D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
         s->command_list->ResourceBarrier(1, &rt_to_present);

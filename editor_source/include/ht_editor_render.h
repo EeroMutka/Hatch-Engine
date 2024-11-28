@@ -33,6 +33,7 @@ struct RenderState {
 
 #ifdef HT_EDITOR_DX11
 
+#define WIN32_LEAN_AND_MEAN
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #ifdef UI_DX11_DEBUG_MODE
@@ -52,7 +53,7 @@ struct RenderState {
 
 EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window);
 
-// for now we need to pass editor state to call HT_BuildPluginD3DCommandList on all plugins. TODO: cleanup this!
+// for now we need to pass editor state to call HT_D3D12_BuildPluginCommandList on all plugins. TODO: cleanup this!
 EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs);
 
 EXPORT void ResizeSwapchain(RenderState* s, ivec2 size);

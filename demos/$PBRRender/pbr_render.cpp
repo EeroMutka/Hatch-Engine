@@ -649,7 +649,7 @@ static void LoadScene(HT_API* ht, LoadedScene* scene, HT_Asset scene_asset) {
 	DestroyTempGPUCmdContext(&ctx);
 }
 
-HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
+HT_EXPORT void HT_D3D12_BuildPluginCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
 	DS_Arena temp_arena;

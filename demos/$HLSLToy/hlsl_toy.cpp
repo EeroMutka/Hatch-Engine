@@ -167,7 +167,7 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	MaybeHotreloadShader(ht);
 }
 
-HT_EXPORT void HT_BuildPluginD3DCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
+HT_EXPORT void HT_D3D12_BuildPluginCommandList(HT_API* ht, ID3D12GraphicsCommandList* command_list) {
 	if (GLOBALS.pipeline_state == NULL) return;
 	
 	// build draw commands.
