@@ -1,4 +1,6 @@
 
+#ifdef HT_EDITOR_DX12
+
 #define WIN32_LEAN_AND_MEAN
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -26,9 +28,32 @@ struct RenderState {
     uint64_t render_finished_fence_value;
 };
 
+
+#endif
+
+#ifdef HT_EDITOR_DX11
+
+#include <d3d11.h>
+#include <d3dcompiler.h>
+#ifdef UI_DX11_DEBUG_MODE
+#include <dxgidebug.h>
+#endif
+
+struct RenderState {
+    ivec2 window_size;
+    ID3D11Device* device;
+    ID3D11DeviceContext* dc;
+    IDXGISwapChain* swapchain;
+    ID3D11RenderTargetView* framebuffer_rtv;
+};
+
+#endif
+
+
 EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window);
 
 // for now we need to pass editor state to call HT_BuildPluginD3DCommandList on all plugins. TODO: cleanup this!
 EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs);
 
 EXPORT void ResizeSwapchain(RenderState* s, ivec2 size);
+

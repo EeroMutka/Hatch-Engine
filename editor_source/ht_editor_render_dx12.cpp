@@ -1,3 +1,5 @@
+#ifdef HT_EDITOR_DX12
+
 #include "include/ht_common.h"
 #include "include/ht_editor_render.h"
 
@@ -240,3 +242,5 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
 		s->frame_index = s->swapchain->GetCurrentBackBufferIndex();
 	}
 }
+
+#endif

@@ -25,7 +25,7 @@ typedef struct UI_DX11_State {
 	UI_DX11_Buffer index_buffer;
 } UI_DX11_State;
 
-static UI_DX11_State UI_DX11_STATE;
+UI_API UI_DX11_State UI_DX11_STATE;
 
 static UI_Texture* UI_DX11_CreateAtlas(uint32_t width, uint32_t height) {
 	UI_ASSERT(UI_DX11_STATE.atlas == NULL); // TODO

@@ -2,7 +2,14 @@
 #include "include/ht_editor_render.h"
 
 #include <ht_utils/fire/fire_ui/fire_ui_backend_fire_os.h>
+
+#ifdef HT_EDITOR_DX12
 #include <ht_utils/fire/fire_ui/fire_ui_backend_dx12.h>
+#endif
+#ifdef HT_EDITOR_DX11
+#include <ht_utils/fire/fire_ui/fire_ui_backend_dx11.h>
+#endif
+
 #include <ht_utils/fire/fire_ui/fire_ui_backend_stb_truetype.h>
 
 // -- Globals -----------------------------
@@ -15,7 +22,12 @@ EXPORT uint64_t CPU_FREQUENCY;
 extern "C" {
 	EXPORT UI_State UI_STATE;
 	EXPORT DS_Arena* UI_TEMP;
+#ifdef HT_EDITOR_DX12
 	EXPORT UI_DX12_State UI_DX12_STATE;
+#endif
+#ifdef HT_EDITOR_DX11
+	EXPORT UI_DX11_State UI_DX11_STATE;
+#endif
 	EXPORT UI_STBTT_State UI_STBTT_STATE;
 }
 
@@ -35,12 +47,18 @@ static void AppInit(EditorState* s) {
 	
 	RenderInit(s->render_state, s->window_size, s->window);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor = s->render_state->srv_heap->GetCPUDescriptorHandleForHeapStart();
-	D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor = s->render_state->srv_heap->GetGPUDescriptorHandleForHeapStart();
 
 	UI_Init(DS_HEAP);
+#ifdef HT_EDITOR_DX12
+	D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor = s->render_state->srv_heap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor = s->render_state->srv_heap->GetGPUDescriptorHandleForHeapStart();
 	UI_DX12_Init(s->render_state->device, atlas_cpu_descriptor, atlas_gpu_descriptor);
 	UI_STBTT_Init(UI_DX12_CreateAtlas, UI_DX12_MapAtlas);
+#endif
+#ifdef HT_EDITOR_DX11
+	UI_DX11_Init(s->render_state->device, s->render_state->dc);
+	UI_STBTT_Init(UI_DX11_CreateAtlas, UI_DX11_MapAtlas);
+#endif
 
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;

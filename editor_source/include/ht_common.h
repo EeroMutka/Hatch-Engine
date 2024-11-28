@@ -503,7 +503,10 @@ EXPORT void UpdateAndDrawErrorsTab(EditorState* s, UI_Key key, UI_Rect area);
 EXPORT void InitAPI(EditorState* s);
 
 EXPORT void UpdatePlugins(EditorState* s);
+
+#ifdef HT_EDITOR_DX12
 EXPORT void BuildPluginD3DCommandLists(EditorState* s);
+#endif
 
 EXPORT void UpdateAndDrawDropdowns(EditorState* s);
 

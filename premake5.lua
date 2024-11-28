@@ -25,11 +25,16 @@ project "Hatch"
 	files "plugin_include/ht_utils/fire/**"
 	removefiles "editor_source/test_main.cpp"
 	
+	defines "HT_EDITOR_DX11"
+	
 	-- for CloseVisualStudioPDBHandle
 	links "Rstrtmgr.lib"
 	
 	-- static libs for D3D12
-	links { "d3d12.lib", "dxgi.lib", "d3dcompiler.lib"}
+	-- links { "d3d12.lib", "dxgi.lib", "d3dcompiler.lib"}
+	
+	-- static libs for D3D11
+	links { "d3d11", "d3dcompiler.lib"}
 	
 	filter "configurations:Debug"
 		symbols "On"

@@ -1237,12 +1237,14 @@ static HANDLE HT_D3DCreateEvent() { return CreateEventW(NULL, FALSE, FALSE, NULL
 static void HT_D3DDestroyEvent(HANDLE event) { CloseHandle(event); }
 static void HT_D3DWaitForEvent(HANDLE event) { WaitForSingleObjectEx(event, INFINITE, FALSE); }
 
+#ifdef HT_EDITOR_DX12
 static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3DGetHatchRenderTargetView() {
 	EditorState* s = g_plugin_call_ctx->s;
 	D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = s->render_state->rtv_heap->GetCPUDescriptorHandleForHeapStart();
 	rtv_handle.ptr += s->render_state->frame_index * s->render_state->rtv_descriptor_size;
 	return rtv_handle;
 }
+#endif
 
 EXPORT void HT_LogInfo(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
@@ -1276,11 +1278,15 @@ EXPORT void InitAPI(EditorState* s) {
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
 	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 	api.D3DCompile = D3DCompile;
+	
+#ifdef HT_EDITOR_DX12
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
 	api.D3D12SerializeRootSignature = D3D12SerializeRootSignature;
 	api.D3D_device = s->render_state->device;
 	api.D3D_queue = s->render_state->command_queue;
 	api.D3DGetHatchRenderTargetView = HT_D3DGetHatchRenderTargetView;
+#endif
+
 	api.D3DCreateEvent = HT_D3DCreateEvent;
 	api.D3DDestroyEvent = HT_D3DDestroyEvent;
 	api.D3DWaitForEvent = HT_D3DWaitForEvent;
@@ -1384,6 +1390,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	plugin_asset->plugin.active_instance = NULL;
 }
 
+#ifdef HT_EDITOR_DX12
 EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 	// Then populate the command list for plugin defined things
 	
@@ -1405,6 +1412,7 @@ EXPORT void BuildPluginD3DCommandLists(EditorState* s) {
 		}
 	}
 }
+#endif
 
 EXPORT void UpdatePlugins(EditorState* s) {
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {

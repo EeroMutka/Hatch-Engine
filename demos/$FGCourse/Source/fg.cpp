@@ -46,7 +46,6 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 				entity->position.x -= 0.1f;
 			}
 			
-			// ht->LogInfo("entity %f %f %f", entity->position.x, entity->position.y, entity->position.z);
 		}
 	}
 }
