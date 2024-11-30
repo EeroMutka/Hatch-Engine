@@ -80,6 +80,7 @@ extern DS_Arena* TEMP;
 extern DS_MemScope MEM_SCOPE_TEMP_;
 extern DS_MemScopeNone MEM_SCOPE_NONE_;
 extern uint64_t CPU_FREQUENCY;
+extern STR_View DEFAULT_WORKING_DIRECTORY;
 
 #define MEM_SCOPE_NONE   (DS_MemScopeNone*)&MEM_SCOPE_NONE_
 #define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
@@ -414,6 +415,9 @@ struct PerFrameState {
 	bool file_dropdown_open;
 	bool edit_dropdown_open;
 
+	UI_Box* file_dropdown;
+	UI_Box* file_dropdown_button;
+
 	UI_Box* window_dropdown;
 	UI_Box* window_dropdown_button;
 	
@@ -441,6 +445,8 @@ struct EditorState {
 
 	UI_Text dummy_text;
 	UI_Text dummy_text_2;
+
+	STR_View project_directory;
 
 	DS_BucketArray(PluginInstance) plugin_instances;
 	DS_BucketArrayIndex first_free_plugin_instance;
@@ -474,12 +480,11 @@ struct EditorState {
 	UI_Tab* rmb_menu_tab_class;
 	bool rmb_menu_open;
 
+	bool file_dropdown_open;
 	bool window_dropdown_open;
 	UI_Key type_dropdown_open = UI_INVALID_KEY;
 	
 	// ------------------
-
-	STR_View hatch_install_directory;
 
 	RenderState* render_state;
 
@@ -541,6 +546,8 @@ EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
 
+#ifdef HT_DYNAMIC
 EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath);
 
 EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin);
+#endif

@@ -53,16 +53,12 @@ static void LoadEditorPanel(EditorState* s, MD_Node* node, UI_Panel* panel) {
 	else if (MD_S8Match(node->string, MD_S8Lit("asset_viewer"), 0))   DS_ArrPush(&panel->tabs, s->asset_viewer_tab_class);
 }
 
-EXPORT void LoadProject(EditorState* s, STR_View project_file) {
-	ASSERT(OS_PathIsAbsolute(project_file));
-
-	STR_View exe_path;
-	OS_GetThisExecutablePath(MEM_SCOPE_TEMP, &exe_path);
-	STR_View hatch_dir = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
+EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
+	ASSERT(OS_PathIsAbsolute(project_directory));
 
 	MD_Arena* md_arena = MD_ArenaAlloc();
 	
-	MD_String8 md_filepath = StrToMD(project_file);
+	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
 	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
 	ASSERT(!MD_NodeIsNil(parse.node));
 	ASSERT(parse.errors.node_count == 0);
@@ -74,7 +70,7 @@ EXPORT void LoadProject(EditorState* s, STR_View project_file) {
 		for (MD_Node* child = packages->first_child; !MD_NodeIsNil(child); child = child->next) {
 			STR_View path = StrFromMD(child->string);
 			if (STR_CutStart(&path, "$HATCH_DIR")) {
-				path = STR_Form(TEMP, "%v%v", hatch_dir, path);
+				path = STR_Form(TEMP, "%s%v", HATCH_DIR, path);
 			}
 			DS_ArrPush(&package_paths, path);
 		}
@@ -267,6 +263,8 @@ EXPORT void SavePackageToDisk(Asset* package) {
 	OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 
 	SaveAsset(package, package->package.filesys_path);
+
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }
 
 static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path) {
@@ -702,6 +700,7 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 		ReloadAssetsPass3(&ctx, package, package);
 	}
 
+#ifdef HT_DYNAMIC
 	for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
 		Asset* plugin_asset = ctx.queue_recompile_plugins[i];
 
@@ -717,8 +716,10 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 
 		printf("Recompiling plugin!\n");
 	}
+#endif
 
 	MD_ArenaRelease(ctx.md_arena);
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths) {

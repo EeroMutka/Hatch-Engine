@@ -1,5 +1,5 @@
 
-function SpecifyWarnings()
+function specify_warnings()
 	flags "FatalWarnings" -- treat all warnings as errors
 	buildoptions "/w14062" -- error on unhandled enum members in switch cases
 	buildoptions "/w14456" -- error on shadowed locals
@@ -10,22 +10,22 @@ end
 workspace "Hatch"
 	architecture "x64"
 	configurations { "Debug", "Release" }
-	location "build_projects"
+	location "%{_ACTION}"
 
 project "Hatch"
 	kind "ConsoleApp"
 	language "C++"
 	targetdir "build"
 	
-	SpecifyWarnings()
+	specify_warnings()
 	
 	includedirs "plugin_include"
 	
 	files "editor_source/**"
 	files "plugin_include/ht_utils/fire/**"
-	removefiles "editor_source/test_main.cpp"
 	
 	defines "HT_EDITOR_DX11"
+	defines { "HATCH_DIR=\"" .. path.getabsolute(".") .. "\"" }
 	
 	-- for CloseVisualStudioPDBHandle
 	links "Rstrtmgr.lib"
@@ -42,19 +42,3 @@ project "Hatch"
 	filter "configurations:Release"
 		optimize "On"
 
-project "Test"
-	kind "ConsoleApp"
-	language "C++"
-	targetdir "build"
-	
-	SpecifyWarnings()
-	
-	includedirs "plugin_include"
-	
-	files "editor_source/test_main.cpp"
-	
-	filter "configurations:Debug"
-		symbols "On"
-
-	filter "configurations:Release"
-		optimize "On"

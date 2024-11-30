@@ -38,6 +38,8 @@ static ID3D11VertexShader* vertex_shader;
 static ID3D11PixelShader* pixel_shader;
 static ID3D11InputLayout* input_layout;
 
+// static ID3D11Texture2D* render_target;
+
 // -----------------------------------------------------
 
 struct Vertex {

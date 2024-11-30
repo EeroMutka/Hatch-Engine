@@ -109,10 +109,82 @@ EXPORT void AddTopBar(EditorState* s) {
 	//	s->frame.edit_dropdown_open = true;
 	//}
 	
+	UI_Vec2 dropdown_padding = {15.f, 2.f};
+
+	s->file_dropdown_open =
+		(s->file_dropdown_open && !(UI_InputWasPressed(UI_Input_MouseLeft) && s->dropdown_state.has_added_deepest_hovered_root)) ||
+		(!s->file_dropdown_open && UI_Pressed(file_button));
+
+	if (s->file_dropdown_open) {
+		s->frame.file_dropdown = UI_BOX();
+		s->frame.file_dropdown_button = file_button;
+		UI_InitRootBox(s->frame.file_dropdown, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
+		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.file_dropdown);
+		UI_PushBox(s->frame.file_dropdown);
+		s->frame.file_dropdown->inner_padding = dropdown_padding;
+
+		UI_AddLabel(UI_BOX(), UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Open Project");
+		
+		UI_Box* gen_premake = UI_BOX();
+		UI_AddLabel(gen_premake, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Generate Premake Project File");
+
+		if (UI_Clicked(gen_premake)) {
+			FILE* f = NULL;
+			fopen_s(&f, STR_FormC(TEMP, "%v/premake5.lua", s->project_directory), "wb");
+			ASSERT(f);
+			
+			STR_View project_name = STR_AfterLast(s->project_directory, '/');
+
+			fprintf(f, "HATCH_DIR = \"%s\"\n\n", HATCH_DIR);
+
+			fprintf(f, "%s",
+				"function specify_warnings()\n"
+				"\tflags \"FatalWarnings\" -- treat all warnings as errors\n"
+				"\tbuildoptions \"/w14062\" -- error on unhandled enum members in switch cases\n"
+				"\tbuildoptions \"/w14456\" -- error on shadowed locals\n"
+				"\tbuildoptions \"/wd4101\" -- allow unused locals\n"
+				"\tlinkoptions \"-IGNORE:4099\" -- disable linker warning: \"PDB was not found ...; linking object as if no debug info\"\n"
+				"end\n\n");
+
+			fprintf(f, "workspace \"%.*s\"\n", StrArg(project_name));
+			fprintf(f, "\tarchitecture \"x64\"\n");
+			fprintf(f, "\tconfigurations { \"Debug\", \"Release\" }\n");
+			fprintf(f, "\tlocation \"%%{_ACTION}\"\n\n");
+			
+			fprintf(f, "project \"%.*s\"\n", StrArg(project_name));
+			fprintf(f, "\tkind \"ConsoleApp\"\n");
+			fprintf(f, "\tlanguage \"C++\"\n");
+			fprintf(f, "\ttargetdir \"build\"\n\n");
+			
+			fprintf(f, "\tspecify_warnings()\n\n");
+			
+			fprintf(f, "\tincludedirs \"%%{HATCH_DIR}/plugin_include\"\n\n");
+
+			fprintf(f, "\tdefines \"HT_EDITOR_DX11\"\n\n");
+			fprintf(f, "\tdefines { \"HATCH_DIR=\\\"\" .. HATCH_DIR .. \"\\\"\" }\n\n");
+
+			fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
+			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/ht_utils/fire/**\"\n\n");
+			
+			fprintf(f, "\tlinks { \"d3d11\", \"d3dcompiler.lib\" } \n\n");
+			
+			fprintf(f, "\tfilter \"configurations:Debug\"\n");
+			fprintf(f, "\t\tsymbols \"On\"\n\n");
+
+			fprintf(f, "\tfilter \"configurations:Release\"\n");
+			fprintf(f, "\t\toptimize \"On\"\n\n");
+
+
+			fclose(f);
+
+			s->file_dropdown_open = false;
+		}
+
+		UI_PopBox(s->frame.file_dropdown);
+	}
+
 	UI_Box* window_button = UI_BOX();
 	UIAddTopBarButton(window_button, UI_SizeFit(), UI_SizeFit(), "Window");
-	
-	//if (s->window_dropdown_open && UI_InputWasPressed(UI_Input_MouseLeft)) TODO();
 
 	s->window_dropdown_open =
 		(s->window_dropdown_open && !(UI_InputWasPressed(UI_Input_MouseLeft) && s->dropdown_state.has_added_deepest_hovered_root)) ||
@@ -124,6 +196,7 @@ EXPORT void AddTopBar(EditorState* s) {
 		UI_InitRootBox(s->frame.window_dropdown, UI_SizeFit(), UI_SizeFit(), UI_BoxFlag_DrawOpaqueBackground|UI_BoxFlag_DrawTransparentBackground|UI_BoxFlag_DrawBorder);
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
 		UI_PushBox(s->frame.window_dropdown);
+		s->frame.window_dropdown->inner_padding = dropdown_padding;
 		
 		int i = 0;
 		for (DS_BkArrEach(&s->tab_classes, tab_i)) {
@@ -947,6 +1020,12 @@ EXPORT PluginInstance* GetPluginInstance(EditorState* s, HT_PluginInstance handl
 EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	UpdateAndDrawRMBMenu(s);
 
+	if (s->frame.file_dropdown) {
+		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.file_dropdown);
+		UI_BoxComputeRects(s->frame.file_dropdown, {s->frame.file_dropdown_button->computed_rect.min.x, s->frame.file_dropdown_button->computed_rect.max.y});
+		UI_DrawBox(s->frame.file_dropdown);
+	}
+
 	if (s->frame.window_dropdown) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.window_dropdown);
 		UI_BoxComputeRects(s->frame.window_dropdown, {s->frame.window_dropdown_button->computed_rect.min.x, s->frame.window_dropdown_button->computed_rect.max.y});
@@ -1327,6 +1406,8 @@ EXPORT void InitAPI(EditorState* s) {
 }
 
 EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
+#ifdef HT_DYNAMIC
+	
 	// TODO: only recompile if needs recompiling
 	bool ok = RecompilePlugin(s, plugin_asset);
 	if (!ok) return;
@@ -1373,9 +1454,13 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	}
 
 	plugin_asset->plugin.active_instance = plugin_instance->handle;
+
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+#endif
 }
 
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
+#ifdef HT_DYNAMIC
 	PluginInstance* plugin = GetPluginInstance(s, plugin_asset->plugin.active_instance);
 	ASSERT(plugin != NULL);
 
@@ -1411,6 +1496,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	FREE_SLOT(plugin_instance_i, &s->plugin_instances, &s->first_free_plugin_instance, freelist_next);
 
 	plugin_asset->plugin.active_instance = NULL;
+#endif
 }
 
 #ifdef HT_EDITOR_DX12

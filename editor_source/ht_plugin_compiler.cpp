@@ -1,3 +1,5 @@
+#ifdef HT_DYNAMIC
+
 #define _CRT_SECURE_NO_WARNINGS // for fopen
 
 #include "include/ht_common.h"
@@ -321,5 +323,8 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	FlushBuildLog(&build_log);
 
 	BUILD_ProjectDeinit(&project);
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 	return ok;
 }
+
+#endif

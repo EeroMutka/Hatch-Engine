@@ -18,6 +18,7 @@ EXPORT DS_Arena* TEMP;
 EXPORT DS_MemScopeNone MEM_SCOPE_NONE_;
 EXPORT DS_MemScope MEM_SCOPE_TEMP_;
 EXPORT uint64_t CPU_FREQUENCY;
+EXPORT STR_View DEFAULT_WORKING_DIRECTORY;
 
 extern "C" {
 	EXPORT UI_State UI_STATE;
@@ -42,6 +43,18 @@ static void AppInit(EditorState* s) {
 	DS_ArenaInit(&s->temporary_arena, 4096, DS_HEAP);
 
 	DS_Arena* persist = &s->persistent_arena;
+	DS_MemScope mem_scope_persist = MEM_SCOPE(persist);
+
+	// hmm... maybe we want the working directory to be the executable directory always. BUT we want a define for hatch directory!! For hatch resources...
+
+	STR_View exe_path;
+	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
+
+	DEFAULT_WORKING_DIRECTORY = STR_BeforeLast(exe_path, '/');
+
+	// The working directory should always be DEFAULT_WORKING_DIRECTORY!
+	// If setting working directory temporarily to something else, it must always be reset back to DEFAULT_WORKING_DIRECTORY.
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY);
 
 	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");
 	
@@ -63,9 +76,8 @@ static void AppInit(EditorState* s) {
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
 	
-	DS_MemScope mem_scope_persist = MEM_SCOPE(persist);
-	OS_ReadEntireFile(&mem_scope_persist, "../plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
-	OS_ReadEntireFile(&mem_scope_persist, "../plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
+	OS_ReadEntireFile(&mem_scope_persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
+	OS_ReadEntireFile(&mem_scope_persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
 	s->default_font = { UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f), 18 };
 	s->icons_font = { UI_STBTT_FontInit(icons_ttf.data, -2.f), 18 };
@@ -81,10 +93,6 @@ static void AppInit(EditorState* s) {
 		DS_ArrInit(&s->error_list.errors, DS_HEAP);
 	}
 
-	STR_View exe_path;
-	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
-	s->hatch_install_directory = STR_BeforeLast(STR_BeforeLast(exe_path, '\\'), '\\');
-	
 	UI_PanelTreeInit(&s->panel_tree, DS_HEAP);
 	s->panel_tree.query_tab_name = QueryTabName;
 	s->panel_tree.update_and_draw_tab = UpdateAndDrawTab;
@@ -169,8 +177,8 @@ static void AppInit(EditorState* s) {
 
 	InitAPI(s);
 
-	STR_View startup_project_file = STR_Form(TEMP, "%v/user_startup_project/.htproject", s->hatch_install_directory);
-	LoadProject(s, startup_project_file);
+	s->project_directory = STR_Form(DS_HEAP, "%s/user_startup_project", HATCH_DIR);
+	LoadProject(s, s->project_directory);
 }
 
 static void UpdateAndDraw(EditorState* s) {

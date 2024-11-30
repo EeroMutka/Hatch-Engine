@@ -4,8 +4,8 @@
 packages: {
 	"$HATCH_DIR/demos/$Scene",
 	"$HATCH_DIR/demos/$SceneEdit",
-	// "$HATCH_DIR/demos/$PhysicsGame",
-	"$HATCH_DIR/demos/$FGCourse",
+	"$HATCH_DIR/demos/$PhysicsGame",
+	// "$HATCH_DIR/demos/$FGCourse",
 }
 
 // Plugins are like processes in an OS, with the distinction that you can have max 1 instance of a
@@ -13,8 +13,8 @@ packages: {
 // running forever. The update order of plugins is determined by the order in which you enable them.
 run_plugins: {
 	"$SceneEdit/SceneEdit",
-	// "$PhysicsGame/Source/physics_game",
-	"$FGCourse/Source/fg",
+	"$PhysicsGame/Source/physics_game",
+	// "$FGCourse/Source/fg",
 }
 
 editor_layout: {
