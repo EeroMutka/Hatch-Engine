@@ -49,11 +49,9 @@ static void AppInit(EditorState* s) {
 
 	STR_View exe_path;
 	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
-
 	DEFAULT_WORKING_DIRECTORY = STR_BeforeLast(exe_path, '/');
 
-	// The working directory should always be DEFAULT_WORKING_DIRECTORY!
-	// If setting working directory temporarily to something else, it must always be reset back to DEFAULT_WORKING_DIRECTORY.
+	// The working directory should always be path of the executable by default
 	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY);
 
 	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");

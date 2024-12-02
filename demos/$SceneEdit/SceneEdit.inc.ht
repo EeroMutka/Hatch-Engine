@@ -24,9 +24,7 @@ typedef struct __SceneEditParams {
 	HT_Asset box_component_type;
 	HT_Asset editor_camera_type;
 } __SceneEditParams;
-typedef struct PhysicsGame__FollowerComponent {
-	long long target;
-} PhysicsGame__FollowerComponent;
-typedef struct PhysicsGame__physics_game_params_type {
+typedef struct FGCourse__fg_params_type {
 	HT_Asset scene_type;
-} PhysicsGame__physics_game_params_type;
+	HT_Asset editor_camera_type;
+} FGCourse__fg_params_type;

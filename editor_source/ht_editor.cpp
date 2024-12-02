@@ -170,7 +170,7 @@ EXPORT void AddTopBar(EditorState* s) {
 			fprintf(f, "\tdefines \"HT_EXPORT=static\"\n\n");
 
 			fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
-			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/ht_utils/fire/**\"\n\n");
+			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/**\"\n\n");
 
 			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
@@ -200,6 +200,9 @@ EXPORT void AddTopBar(EditorState* s) {
 
 			fprintf(f, "\tfilter \"configurations:Release\"\n");
 			fprintf(f, "\t\toptimize \"On\"\n\n");
+
+			fprintf(f, "\tfilter \"files:**.hlsl\"\n");
+			fprintf(f, "\t\tbuildaction \"None\" -- do not use Visual Studio's built-in HLSL compiler\n\n");
 
 			fclose(f);
 
@@ -1360,6 +1363,10 @@ static D3D12_CPU_DESCRIPTOR_HANDLE HT_D3D12_GetHatchRenderTargetView() {
 #endif
 
 #ifdef HT_EDITOR_DX11
+static void D3D11_SetRenderProc(void (*render)(HT_API* ht)) {
+	g_plugin_call_ctx->plugin->HT_D3D11_Render = render;
+}
+
 static ID3D11RenderTargetView* HT_D3D11_GetHatchRenderTargetView() {
 	EditorState* s = g_plugin_call_ctx->s;
 	return s->render_state->framebuffer_rtv;
@@ -1383,7 +1390,7 @@ EXPORT void HT_LogError(const char* fmt, ...) {
 	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Error, fmt, args);
 	va_end(args);
 }
-	
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	*(void**)&api.AddVertices = UI_AddVertices;
@@ -1397,7 +1404,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.GetAllOpenAssetsOfType = HT_GetAllOpenAssetsOfType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
 	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
-	
+
 #ifdef HT_EDITOR_DX12
 	api.D3DCompile = D3DCompile;
 	*(void**)&api.D3DCompileFromFile = HT_D3DCompileFromFile;
@@ -1411,6 +1418,7 @@ EXPORT void InitAPI(EditorState* s) {
 #endif
 
 #ifdef HT_EDITOR_DX11
+	api.D3D11_SetRenderProc = D3D11_SetRenderProc;
 	api.D3D11_Compile = D3DCompile;
 	*(void**)&api.D3D11_CompileFromFile = HT_D3DCompileFromFile;
 	api.D3D11_device = s->render_state->device;
@@ -1520,6 +1528,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 #endif
 
+	plugin->plugin_asset = NULL;
 	plugin->dll_handle = NULL;
 	plugin->LoadPlugin = NULL;
 	plugin->UnloadPlugin = NULL;
@@ -1570,14 +1579,12 @@ EXPORT void D3D12_BuildPluginCommandLists(EditorState* s) {
 EXPORT void D3D11_RenderPlugins(EditorState* s) {
 	for (DS_BkArrEach(&s->plugin_instances, i)) {
 		PluginInstance* plugin = DS_BkArrGet(&s->plugin_instances, i);
-		if (plugin->dll_handle == NULL) continue; // empty slot
+		if (plugin->plugin_asset == NULL) continue; // empty slot
 
-		void (*HT_D3D11_Render)(HT_API* ht);
-		*(void**)&HT_D3D11_Render = OS_GetProcAddress(plugin->dll_handle, "HT_D3D11_Render");
-		if (HT_D3D11_Render) {
+		if (plugin->HT_D3D11_Render) {
 			PluginCallContext ctx = {s, plugin};
 			g_plugin_call_ctx = &ctx;
-			HT_D3D11_Render(s->api);
+			plugin->HT_D3D11_Render(s->api);
 			g_plugin_call_ctx = NULL;
 		}
 	}

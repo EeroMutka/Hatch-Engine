@@ -390,16 +390,20 @@ struct ErrorList {
 
 struct PluginInstance {
 	HT_PluginInstance handle;
-	
+	Asset* plugin_asset; // NULL if unloaded
+
 	union {
-		Asset* plugin_asset;
 		DS_BucketArrayIndex freelist_next;
+		OS_DLL* dll_handle;
 	};
 
-	OS_DLL* dll_handle; // NULL if unloaded
 	void (*UpdatePlugin)(HT_API* HT);
 	void (*LoadPlugin)(HT_API* HT);
 	void (*UnloadPlugin)(HT_API* HT);
+
+#ifdef HT_EDITOR_DX11
+	void (*HT_D3D11_Render)(HT_API* ht);
+#endif
 
 	DS_DynArray(PluginAllocationHeader*) allocations;
 };

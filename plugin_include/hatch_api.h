@@ -209,6 +209,7 @@ static void HT_UpdatePlugin(struct HT_API* ht);
 #define HT__Stringify2(x) #x
 #define HT__Stringify(x) HT__Stringify2(x)
 
+// The HT_STATIC_PLUGIN_ID must be the same as the plugin name.
 HT_StaticExports HT__Concat(HT_STATIC_EXPORTS__, HT_STATIC_PLUGIN_ID) = { HT__Stringify(HT_STATIC_PLUGIN_ID), HT_LoadPlugin, HT_UnloadPlugin, HT_UpdatePlugin };
 
 #ifdef __cplusplus
@@ -534,9 +535,8 @@ struct HT_API {
 	ID3D11Device* D3D11_device;
 	ID3D11DeviceContext* D3D11_device_context;
 	
-	// When using D3D11, you may define the function:
-	// HT_EXPORT void HT_D3D11_Render(HT_API* ht)
-	
+	void (*D3D11_SetRenderProc)(void (*render)(HT_API* ht));
+
 	HRESULT (*D3D11_Compile)(const void* pSrcData, size_t SrcDataSize, const char* pSourceName,
 		const D3D_SHADER_MACRO* pDefines, ID3DInclude* pInclude, const char* pEntrypoint,
 		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);

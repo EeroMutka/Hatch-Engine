@@ -202,7 +202,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 
 	STR_View plugin_name = UI_TextToStr(plugin->name);
 
-	/*if (plugin->plugin.dll_handle) {
+	/*if (plugin->plugin.plugin_asset) {
 		printf("Unloading plugin with %d allocations\n", plugin->plugin.allocations.count);
 		UnloadPlugin(s, plugin);
 	}*/

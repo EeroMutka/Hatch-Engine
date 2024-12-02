@@ -1,3 +1,4 @@
 struct: {
 	scene_type: Asset
+	editor_camera_type: Asset
 }
