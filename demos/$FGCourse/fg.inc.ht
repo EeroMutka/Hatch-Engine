@@ -24,7 +24,7 @@ typedef struct SceneEdit__SceneEditParams {
 	HT_Asset box_component_type;
 	HT_Asset editor_camera_type;
 } SceneEdit__SceneEditParams;
-typedef struct __fg_params_type {
+typedef struct FGCourse__fg_params_type {
 	HT_Asset scene_type;
 	HT_Asset editor_camera_type;
-} __fg_params_type;
+} FGCourse__fg_params_type;

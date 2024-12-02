@@ -13,7 +13,7 @@ struct Camera {
 	mat4 ws_to_vs;
 };
 
-void UpdateCamera(Camera* camera, const HT_InputFrame* in) {
+static void UpdateCamera(Camera* camera, const HT_InputFrame* in) {
 	mat4 rotation_matrix = M_MatRotateY(camera->pitch) * M_MatRotateZ(camera->yaw);
 	
 	float mov_speed = InputIsDown(in, HT_InputKey_Shift) ? 3.f : 1.f;

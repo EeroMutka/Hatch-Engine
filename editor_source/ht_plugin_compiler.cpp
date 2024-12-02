@@ -237,10 +237,10 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
 
 			STR_View asset_package_name = "";
-			if (package != asset_package) { // add asset package as prefix if from external package
+			//if (package != asset_package) { // add asset package as prefix if from external package
 				asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
 				STR_CutStart(&asset_package_name, "$");
-			}
+			//}
 
 
 			fprintf(header, "typedef struct %.*s__%.*s {\n", StrArg(asset_package_name), StrArg(name));
