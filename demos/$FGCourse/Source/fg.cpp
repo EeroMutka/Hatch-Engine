@@ -1,17 +1,16 @@
-#define HT_STATIC_PLUGIN_ID fg
-#include <hatch_api.h>
 
-HT_EXPORT void HT_LoadPlugin(HT_API* ht) {}
-HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {}
-HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {}
+//HT_EXPORT void HT_LoadPlugin(HT_API* ht) {}
+//HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {}
+//HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {}
 
-#if 0
 #define HT_INCLUDE_D3D11_API
 #define WIN32_LEAN_AND_MEAN
 #include <d3d11.h>
 #undef far  // wtf windows.h
 #undef near // wtf windows.h
 
+#define HT_STATIC_PLUGIN_ID fg
+#include <hatch_api.h>
 
 #include <ht_utils/math/math_core.h>
 #include <ht_utils/math/math_extras.h>
@@ -29,27 +28,6 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {}
 #include <sstream>
 #include <iostream>
 
-// -----------------------------------------------------
-
-static ID3D11Buffer* vbo;
-static ID3D11Buffer* ibo;
-static int ibo_count;
-static ID3D11Buffer* cbo;
-static ID3D11VertexShader* vertex_shader;
-static ID3D11PixelShader* pixel_shader;
-static ID3D11InputLayout* input_layout;
-
-static Scene__Scene* open_scene;
-static ivec2 open_scene_rect_min;
-static ivec2 open_scene_rect_max;
-
-static ID3D11Texture2D* color_target;
-static ID3D11Texture2D* depth_target;
-static ID3D11RenderTargetView* color_target_view;
-static ID3D11DepthStencilView* depth_target_view;
-
-// -----------------------------------------------------
-
 struct ShaderConstants {
 	mat4 ws_to_cs;
 };
@@ -57,6 +35,40 @@ struct ShaderConstants {
 struct Vertex {
 	vec3 position;
 };
+
+struct VertexShader {
+	ID3D11VertexShader* shader;
+	ID3D11InputLayout* input_layout;
+};
+
+// -----------------------------------------------------
+
+static ID3D11Buffer* vbo;
+static ID3D11Buffer* ibo;
+static int ibo_count;
+static ID3D11Buffer* cbo;
+static ID3D11SamplerState* sampler;
+
+static VertexShader main_vs;
+static ID3D11PixelShader* main_ps;
+
+static VertexShader present_vs;
+static ID3D11PixelShader* present_ps;
+
+static ID3D11InputLayout* input_layout;
+
+
+static Scene__Scene* open_scene;
+static ivec2 open_scene_rect_min;
+static ivec2 open_scene_rect_max;
+
+static ID3D11Texture2D* color_target;
+static ID3D11Texture2D* depth_target;
+static ID3D11ShaderResourceView* color_target_srv;
+static ID3D11RenderTargetView* color_target_view;
+static ID3D11DepthStencilView* depth_target_view;
+
+// -----------------------------------------------------
 
 // bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
 static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
@@ -89,6 +101,7 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		if (color_target) {
 			color_target->Release();
 			color_target_view->Release();
+			color_target_srv->Release();
 			depth_target->Release();
 			depth_target_view->Release();
 		}
@@ -99,11 +112,14 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		desc.ArraySize = 1;
 		desc.SampleDesc.Count = 1;
 		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		desc.BindFlags = D3D11_BIND_RENDER_TARGET;
+		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
 		bool ok = ht->D3D11_device->CreateTexture2D(&desc, NULL, &color_target) == S_OK;
 		HT_ASSERT(ok);
 
 		ok = ht->D3D11_device->CreateRenderTargetView(color_target, NULL, &color_target_view) == S_OK;
+		HT_ASSERT(ok);
+
+		ok = ht->D3D11_device->CreateShaderResourceView(color_target, NULL, &color_target_srv) == S_OK;
 		HT_ASSERT(ok);
 		
 		D3D11_TEXTURE2D_DESC depth_desc = {};
@@ -113,7 +129,7 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		depth_desc.SampleDesc.Count = 1;
 		depth_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-		ok = ht->D3D11_device->CreateTexture2D(&desc, NULL, &depth_target) == S_OK;
+		ok = ht->D3D11_device->CreateTexture2D(&depth_desc, NULL, &depth_target) == S_OK;
 		HT_ASSERT(ok);
 
 		ok = ht->D3D11_device->CreateDepthStencilView(depth_target, NULL, &depth_target_view) == S_OK;
@@ -147,7 +163,7 @@ static void Render(HT_API* ht) {
 						0.f, -1.f,  0.f, 0.f,
 						0.f,  0.f,  0.f, 1.f,
 				};
-				ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, 1280.f / 720.f, 0.1f, 100.f);
+				ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 100.f);
 			}
 		}
 
@@ -161,18 +177,14 @@ static void Render(HT_API* ht) {
 		constants->ws_to_cs = ws_to_cs;
 		dc->Unmap(cbo, 0);
 
+		dc->ClearDepthStencilView(depth_target_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+		
+
 		dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-		dc->IASetInputLayout(input_layout);
-
-		dc->VSSetShader(vertex_shader, NULL, 0);
+		dc->IASetInputLayout(main_vs.input_layout);
+		dc->VSSetShader(main_vs.shader, NULL, 0);
 		dc->VSSetConstantBuffers(0, 1, &cbo);
-
-		// keep raster state from hatch
-		// dc->RSSetState(raster_state);
-
-		dc->PSSetShader(pixel_shader, NULL, 0);
-
-		dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
+		dc->PSSetShader(main_ps, NULL, 0);
 
 		D3D11_VIEWPORT viewport = {};
 		viewport.TopLeftX = 0;
@@ -195,10 +207,33 @@ static void Render(HT_API* ht) {
 
 		// dc->PSSetShaderResources(0, 1, &texture_srv);
 
+		float clear_color[] = {0.2f, 0.4f, 0.8f, 1.f};
+		dc->ClearRenderTargetView(color_target_view, clear_color);
+		dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
+
 		dc->DrawIndexed(ibo_count, 0, 0);
 		
+		{
+			D3D11_VIEWPORT present_viewport = {};
+			present_viewport.TopLeftX = (float)open_scene_rect_min.x;
+			present_viewport.TopLeftY = (float)open_scene_rect_min.y;
+			present_viewport.Width = (float)width;
+			present_viewport.Height = (float)height;
+			present_viewport.MinDepth = 0.f;
+			present_viewport.MaxDepth = 1.f;
+			dc->RSSetViewports(1, &present_viewport);
+
+			ID3D11RenderTargetView* present_target = ht->D3D11_GetHatchRenderTargetView();
 		
-		//ID3D11RenderTargetView* color_target = ht->D3D11_GetHatchRenderTargetView();
+			dc->VSSetShader(present_vs.shader, NULL, 0);
+			dc->PSSetShader(present_ps, NULL, 0);
+			dc->OMSetRenderTargets(1, &present_target, NULL);
+
+			dc->PSSetSamplers(0, 1, &sampler);
+			dc->PSSetShaderResources(0, 1, &color_target_srv);
+
+			dc->Draw(3, 0);
+		}
 	}
 }
 
@@ -225,20 +260,28 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	}
 }
 
-static ID3D11VertexShader* LoadVertexShader(HT_API* ht, string shader_path, D3D11_INPUT_ELEMENT_DESC* input_elem_desc) {
+static VertexShader LoadVertexShader(HT_API* ht, string shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
+	ID3DBlob* errors;
+
 	ID3DBlob* vs_blob;
-	bool ok = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, NULL) == S_OK;
-	HT_ASSERT(ok);
+	bool ok = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, &errors) == S_OK;
+	if (!ok) {
+		char* err = (char*)errors->GetBufferPointer();
+		HT_ASSERT(0);
+	}
 
 	ID3D11VertexShader* shader;
 	ok = ht->D3D11_device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), NULL, &shader) == S_OK;
 	HT_ASSERT(ok);
 
-	ok = ht->D3D11_device->CreateInputLayout(input_elem_desc, ARRAYSIZE(input_elem_desc), vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &input_layout) == S_OK;
-	HT_ASSERT(ok);
+	ID3D11InputLayout* input_layout = NULL;
+	if (input_elems_count > 0) {
+		ok = ht->D3D11_device->CreateInputLayout(input_elems, input_elems_count, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &input_layout) == S_OK;
+		HT_ASSERT(ok);
+	}
 
 	vs_blob->Release();
-	return shader;
+	return { shader, input_layout };
 }
 
 static ID3D11PixelShader* LoadPixelShader(HT_API* ht, string shader_path) {
@@ -317,27 +360,36 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	cbo_desc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
 	cbo_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	ht->D3D11_device->CreateBuffer(&cbo_desc, nullptr, &cbo);
+	
+	// create sampler
+	D3D11_SAMPLER_DESC sampler_desc = {};
+	sampler_desc.Filter         = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
 
 	vbo = CreateGPUBuffer(ht, (int)verts.size() * sizeof(Vertex), D3D11_BIND_VERTEX_BUFFER, verts.data());
 	ibo = CreateGPUBuffer(ht, (int)indices.size() * sizeof(u32), D3D11_BIND_INDEX_BUFFER, indices.data());
 	ibo_count = (int)indices.size();
 
-	// create vs
-	string shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/test_shader.hlsl";
+	string main_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/main_shader.hlsl";
+	string present_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/present_shader.hlsl";
 
-	vertex_shader = LoadVertexShader(ht, shader_path);
-	pixel_shader = LoadPixelShader(ht, shader_path);
-
-	// create input layout
-
-	D3D11_INPUT_ELEMENT_DESC input_elem_desc[] = {
+	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
 		{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
 	};
+	main_vs = LoadVertexShader(ht, main_shader_path, main_vs_inputs, _countof(main_vs_inputs));
+	main_ps = LoadPixelShader(ht, main_shader_path);
+
+	present_vs = LoadVertexShader(ht, present_shader_path, NULL, 0);
+	present_ps = LoadPixelShader(ht, present_shader_path);
 
 	ht->D3D11_SetRenderProc(Render);
 
-	//ok = ht->RegisterAssetViewerForType(params->scene_type, AssetViewerTabUpdate);
-	//HT_ASSERT(ok);
+	bool ok = ht->RegisterAssetViewerForType(params->scene_type, AssetViewerTabUpdate);
+	HT_ASSERT(ok);
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
@@ -371,5 +423,3 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 		}
 	}*/
 }
-
-#endif

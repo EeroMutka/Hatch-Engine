@@ -22,7 +22,8 @@ project "Hatch"
 	includedirs "plugin_include"
 	
 	files "editor_source/**"
-	files "plugin_include/ht_utils/fire/**"
+	files "plugin_include/**"
+	-- files "plugin_include/ht_utils/fire/**"
 	
 	defines "HT_DYNAMIC"
 	defines "HT_EDITOR_DX11"

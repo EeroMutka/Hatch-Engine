@@ -4,9 +4,6 @@ cbuffer constants : register(b0) {
     float4x4 ws_to_cs;
 }
 
-// Texture2D    mytexture : register(t0);
-// SamplerState mysampler : register(s0);
-
 struct VertexInput {
 	float3 position : POS;
 	// float2 uv       : UVPOS;
@@ -31,5 +28,5 @@ PixelInput vertex_shader(VertexInput vertex) {
 }
 
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
-    return float4(pixel.position_ws, 1);
+    return float4(frac(pixel.position_ws * 10), 1);
 }

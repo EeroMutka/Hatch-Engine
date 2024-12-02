@@ -171,8 +171,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	// hmm... so maybe SceneEdit can provide an API for unlocking the asset viewer registration.
 	// That way, by default it can take the asset viewer, but it also specifies that others can take it if they want to.
 	
-	bool ok = ht->RegisterAssetViewerForType(params->scene_type, DebugSceneTabUpdate);
-	HT_ASSERT(ok);
+	//bool ok = ht->RegisterAssetViewerForType(params->scene_type, DebugSceneTabUpdate);
+	//HT_ASSERT(ok);
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
