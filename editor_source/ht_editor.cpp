@@ -21,6 +21,10 @@
 
 #include <stdio.h> // temporarily here just for HT_DebugPrint
 
+#ifndef HT_DYNAMIC
+extern "C" HT_StaticExports HT_STATIC_EXPORTS__HT_RESERVED_DUMMY HT_ALL_STATIC_EXPORTS;
+#endif
+
 struct PluginCallContext {
 	EditorState* s;
 	PluginInstance* plugin;
@@ -160,12 +164,24 @@ EXPORT void AddTopBar(EditorState* s) {
 			
 			fprintf(f, "\tincludedirs \"%%{HATCH_DIR}/plugin_include\"\n\n");
 
-			fprintf(f, "\tdefines \"HT_EDITOR_DX11\"\n\n");
-			fprintf(f, "\tdefines { \"HATCH_DIR=\\\"\" .. HATCH_DIR .. \"\\\"\" }\n\n");
+			fprintf(f, "\tdefines \"HT_EDITOR_DX11\"\n");
+			fprintf(f, "\tdefines { \"HATCH_DIR=\\\"\" .. HATCH_DIR .. \"\\\"\" }\n");
+			fprintf(f, "\tdefines \"HT_EXPORT=static\"\n\n");
 
 			fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
 			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/ht_utils/fire/**\"\n\n");
 			
+			fprintf(f, "\tdefines { \"HT_ALL_STATIC_EXPORTS=\"\n");
+			
+			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+				if (asset->kind == AssetKind_Plugin) {
+					STR_View plugin_name = UI_TextToStr(asset->name);
+					fprintf(f, "\t\t..\",HT_STATIC_EXPORTS__%.*s\"\n", StrArg(plugin_name));
+				}
+			}
+			fprintf(f, "\t\t}\n\n");
+
 			fprintf(f, "\tlinks { \"d3d11\", \"d3dcompiler.lib\" } \n\n");
 			
 			fprintf(f, "\tfilter \"configurations:Debug\"\n");
@@ -173,7 +189,6 @@ EXPORT void AddTopBar(EditorState* s) {
 
 			fprintf(f, "\tfilter \"configurations:Release\"\n");
 			fprintf(f, "\t\toptimize \"On\"\n\n");
-
 
 			fclose(f);
 
@@ -1542,6 +1557,15 @@ EXPORT void D3D11_RenderPlugins(EditorState* s) {
 #endif
 
 EXPORT void UpdatePlugins(EditorState* s) {
+#ifdef HT_DYNAMIC
+#else
+	HT_StaticExports exports[] = {{0} HT_ALL_STATIC_EXPORTS};
+	for (int i = 1; i < DS_ArrayCount(exports); i++) {
+		HT_StaticExports plugin = exports[i];
+		__debugbreak();
+	}
+#endif
+
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 		if (asset->kind != AssetKind_Plugin) continue;

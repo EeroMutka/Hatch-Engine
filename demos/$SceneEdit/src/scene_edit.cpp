@@ -1,3 +1,5 @@
+#define HT_STATIC_PLUGIN_ID SceneEdit
+
 #include <hatch_api.h>
 #include "../SceneEdit.inc.ht"
 

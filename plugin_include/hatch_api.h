@@ -190,10 +190,34 @@ typedef struct HT_CachedGlyph {
 
 // typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
 
+typedef struct HT_StaticExports {
+	void (*HT_LoadPlugin)(struct HT_API* ht);
+	void (*HT_UnloadPlugin)(struct HT_API* ht);
+	void (*HT_UpdatePlugin)(struct HT_API* ht);
+} HT_StaticExports;
+
+#ifdef HT_STATIC_PLUGIN_ID
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+static void HT_LoadPlugin(struct HT_API* ht);
+static void HT_UnloadPlugin(struct HT_API* ht);
+static void HT_UpdatePlugin(struct HT_API* ht);
+
+HT_StaticExports HT_STATIC_EXPORTS__##HT_STATIC_PLUGIN_ID = { HT_LoadPlugin, HT_UnloadPlugin, HT_UpdatePlugin };
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+#endif
+
+#ifndef HT_EXPORT
 #ifdef __cplusplus
 #define HT_EXPORT extern "C" __declspec(dllexport)
 #else
 #define HT_EXPORT __declspec(dllexport)
+#endif
 #endif
 
 typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;

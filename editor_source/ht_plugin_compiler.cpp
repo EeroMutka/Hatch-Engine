@@ -293,7 +293,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	BUILD_Project project;
 	BUILD_ProjectInit(&project, STR_ToC(TEMP, plugin_name), &opts);
 
-	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%v/plugin_include", s->hatch_install_directory));
+	BUILD_AddIncludeDir(&project, STR_FormC(TEMP, "%s/plugin_include", HATCH_DIR));
 
 	for (int i = 0; i < plugin_opts->code_files.count; i++) {
 		HT_Asset code_file = *((HT_Asset*)plugin_opts->code_files.data + i);

@@ -24,6 +24,7 @@ project "Hatch"
 	files "editor_source/**"
 	files "plugin_include/ht_utils/fire/**"
 	
+	defines "HT_DYNAMIC"
 	defines "HT_EDITOR_DX11"
 	defines { "HATCH_DIR=\"" .. path.getabsolute(".") .. "\"" }
 	
