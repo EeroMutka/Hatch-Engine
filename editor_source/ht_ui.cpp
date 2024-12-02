@@ -50,7 +50,7 @@ EXPORT void UI_PanelTreeInit(UI_PanelTree* tree, DS_Allocator* allocator) {
 
 EXPORT void UIDropdownStateBeginFrame(UIDropdownState* s) {
 	s->deepest_hovered_root = s->deepest_hovered_root_new;
-	s->deepest_hovered_root_new = UI_INVALID_KEY;
+	s->deepest_hovered_root_new = 0;
 	s->has_added_deepest_hovered_root = false;
 }
 

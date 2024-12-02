@@ -59,7 +59,6 @@ typedef float UI_Size;
 #define UI_SizeFlex(WEIGHT) ((WEIGHT) - 100.f)
 
 typedef uint64_t UI_Key; // 0 is invalid value
-#define UI_INVALID_KEY (UI_Key)0
 
 typedef int UI_Axis;
 enum {

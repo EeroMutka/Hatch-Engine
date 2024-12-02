@@ -1274,7 +1274,7 @@ UI_API UI_Box* UI_InitBox(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags) 
 	}
 
 	// Keep the currently selected box selected unless overwritten by pressing some other box
-	if (UI_STATE.selected_box == box->key && UI_STATE.selected_box_new == UI_INVALID_KEY) {
+	if (UI_STATE.selected_box == box->key && UI_STATE.selected_box_new == 0) {
 		UI_STATE.selected_box_new = box->key;
 	}
 
@@ -1371,11 +1371,11 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font
 	DS_MapInit(&UI_STATE.data_from_key, UI_TEMP);
 	
 	UI_STATE.mouse_clicking_down_box = UI_STATE.mouse_clicking_down_box_new;
-	UI_STATE.mouse_clicking_down_box_new = UI_INVALID_KEY;
+	UI_STATE.mouse_clicking_down_box_new = 0;
 	UI_STATE.keyboard_clicking_down_box = UI_STATE.keyboard_clicking_down_box_new;
-	UI_STATE.keyboard_clicking_down_box_new = UI_INVALID_KEY;
+	UI_STATE.keyboard_clicking_down_box_new = 0;
 	UI_STATE.selected_box = UI_STATE.selected_box_new;
-	UI_STATE.selected_box_new = UI_INVALID_KEY;
+	UI_STATE.selected_box_new = 0;
 
 	// When clicking somewhere or pressing escape, by default, hide the selection box
 	if (UI_InputWasPressed(UI_Input_MouseLeft) || UI_InputWasPressed(UI_Input_Escape)) {

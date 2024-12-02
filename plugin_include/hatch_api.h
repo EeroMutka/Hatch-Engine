@@ -188,9 +188,8 @@ typedef struct HT_CachedGlyph {
 	float advance; // X-advance to the next character in pixel coordinates
 } HT_CachedGlyph;
 
-// typedef enum HT_AlignH { HT_AlignH_Left, HT_AlignH_Middle, HT_AlignH_Right } HT_AlignH;
-
 typedef struct HT_StaticExports {
+	const char* plugin_id;
 	void (*HT_LoadPlugin)(struct HT_API* ht);
 	void (*HT_UnloadPlugin)(struct HT_API* ht);
 	void (*HT_UpdatePlugin)(struct HT_API* ht);
@@ -205,11 +204,20 @@ static void HT_LoadPlugin(struct HT_API* ht);
 static void HT_UnloadPlugin(struct HT_API* ht);
 static void HT_UpdatePlugin(struct HT_API* ht);
 
-HT_StaticExports HT_STATIC_EXPORTS__##HT_STATIC_PLUGIN_ID = { HT_LoadPlugin, HT_UnloadPlugin, HT_UpdatePlugin };
+#define HT__Concat2(a, b) a ## b
+#define HT__Concat(a, b) HT__Concat2(a, b)
+#define HT__Stringify2(x) #x
+#define HT__Stringify(x) HT__Stringify2(x)
+
+HT_StaticExports HT__Concat(HT_STATIC_EXPORTS__, HT_STATIC_PLUGIN_ID) = { HT__Stringify(HT_STATIC_PLUGIN_ID), HT_LoadPlugin, HT_UnloadPlugin, HT_UpdatePlugin };
 
 #ifdef __cplusplus
 } // extern "C"
 #endif
+#else
+#ifndef HT_IS_EDITOR
+#error HT_STATIC_PLUGIN_ID must be defined before including <hatch_api.h>
+#endif // HT_IS_EDITOR
 #endif
 
 #ifndef HT_EXPORT

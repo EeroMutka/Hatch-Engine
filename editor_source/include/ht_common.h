@@ -1,4 +1,5 @@
 
+#define HT_IS_EDITOR
 #include "../plugin_include/hatch_api.h"
 
 // Convention for marking non-static / exported symbols
@@ -321,8 +322,8 @@ struct UI_PanelTree {
 };
 
 struct UIDropdownState {
-	UI_Key deepest_hovered_root = UI_INVALID_KEY;
-	UI_Key deepest_hovered_root_new = UI_INVALID_KEY;
+	UI_Key deepest_hovered_root = 0;
+	UI_Key deepest_hovered_root_new = 0;
 	bool has_added_deepest_hovered_root = false;
 };
 
@@ -482,7 +483,7 @@ struct EditorState {
 
 	bool file_dropdown_open;
 	bool window_dropdown_open;
-	UI_Key type_dropdown_open = UI_INVALID_KEY;
+	UI_Key type_dropdown_open = 0;
 	
 	// ------------------
 

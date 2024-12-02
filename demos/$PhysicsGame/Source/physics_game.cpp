@@ -1,3 +1,4 @@
+#define HT_STATIC_PLUGIN_ID physics_game
 #include <hatch_api.h>
 
 #include <ht_utils/math/math_core.h>
@@ -19,24 +20,18 @@ static Globals GLOBALS;
 // -----------------------------------------------------
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	ht->LogInfo("loading");
+	ht->LogInfo("Hello");
 }
 
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
-	
-	// ht->LogInfo("Hi");
-	// return;
-	
 	__physics_game_params_type* params = HT_GetPluginData(__physics_game_params_type, ht);
 	HT_ASSERT(params);
 	
 	int open_assets_count;
 	HT_Asset* open_assets = ht->GetAllOpenAssetsOfType(params->scene_type, &open_assets_count);
-	
-	// ht->LogInfo("a : %d", open_assets_count);
 	
 	for (int asset_i = 0; asset_i < open_assets_count; asset_i++) {
 		HT_Asset scene_asset = open_assets[asset_i];
@@ -53,9 +48,7 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 				entity->position.x -= 0.1f;
 			}
 			
-			ht->LogInfo("entity %f %f %f", entity->position.x, entity->position.y, entity->position.z);
+			ht->LogInfo("And here we have an entity: %f %f %f", entity->position.x, entity->position.y, entity->position.z);
 		}
 	}
-	
-	
 }

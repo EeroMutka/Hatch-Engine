@@ -23,6 +23,7 @@
 
 #ifndef HT_DYNAMIC
 extern "C" HT_StaticExports HT_STATIC_EXPORTS__HT_RESERVED_DUMMY HT_ALL_STATIC_EXPORTS;
+static const HT_StaticExports STATIC_EXPORTS[] = {{0} HT_ALL_STATIC_EXPORTS};
 #endif
 
 struct PluginCallContext {
@@ -170,9 +171,19 @@ EXPORT void AddTopBar(EditorState* s) {
 
 			fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
 			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/ht_utils/fire/**\"\n\n");
-			
+
+			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+				
+				// should packages be able to contain C code that isn't built? maybe...
+				// for now, just include ALL files within each package
+				if (asset->kind == AssetKind_Package) {
+					fprintf(f, "\tfiles \"%.*s/**\"\n", StrArg(asset->package.filesys_path));
+				}
+			}
+			fprintf(f, "\n");
+
 			fprintf(f, "\tdefines { \"HT_ALL_STATIC_EXPORTS=\"\n");
-			
 			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 				if (asset->kind == AssetKind_Plugin) {
@@ -367,7 +378,7 @@ static void AddTypeSelectorDropdown(EditorState* s, UI_Box* dropdown_button, HT_
 		UI_Box* label = UI_KBOX(UI_HashInt(UI_BKEY(dropdown_button), i));
 		UI_AddLabel(label, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable | UI_BoxFlag_Selectable, type_string);
 		if (UI_Pressed(label)) {
-			s->type_dropdown_open = UI_INVALID_KEY;
+			s->type_dropdown_open = 0;
 
 			// Change type!!
 			if (*type_kind != (HT_TypeKind)i) {
@@ -394,7 +405,7 @@ static void UIAddValType(EditorState* s, UI_Key key, HT_Type* type) {
 	UI_Box* kind_dropdown = UI_KBOX(key);
 	UI_AddDropdownButton(kind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, HT_TypeKindToString(type->kind), s->icons_font);
 	if (UI_Pressed(kind_dropdown)) {
-		s->type_dropdown_open = s->type_dropdown_open == kind_dropdown->key ? UI_INVALID_KEY : kind_dropdown->key;
+		s->type_dropdown_open = s->type_dropdown_open == kind_dropdown->key ? 0 : kind_dropdown->key;
 	}
 	
 	UI_Box* subkind_dropdown = NULL;
@@ -402,7 +413,7 @@ static void UIAddValType(EditorState* s, UI_Key key, HT_Type* type) {
 		subkind_dropdown = UI_KBOX(key);
 		UI_AddDropdownButton(subkind_dropdown, UI_SizeFlex(1.f), UI_SizeFit(), 0, HT_TypeKindToString(type->subkind), s->icons_font);
 		if (UI_Pressed(subkind_dropdown)) {
-			s->type_dropdown_open = s->type_dropdown_open == subkind_dropdown->key ? UI_INVALID_KEY : subkind_dropdown->key;
+			s->type_dropdown_open = s->type_dropdown_open == subkind_dropdown->key ? 0 : subkind_dropdown->key;
 		}
 	}
 
@@ -1050,7 +1061,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 	if (s->frame.type_dropdown) {
 		UIRegisterOrderedRoot(&s->dropdown_state, s->frame.type_dropdown);
 		if (UIOrderedDropdownShouldClose(&s->dropdown_state, s->frame.type_dropdown)) {
-			s->type_dropdown_open = UI_INVALID_KEY;
+			s->type_dropdown_open = 0;
 		}
 		else {
 			s->frame.type_dropdown->size[0] = s->frame.type_dropdown_button->computed_expanded_size.x;
@@ -1421,23 +1432,18 @@ EXPORT void InitAPI(EditorState* s) {
 }
 
 EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
-#ifdef HT_DYNAMIC
-	
-	// TODO: only recompile if needs recompiling
-	bool ok = RecompilePlugin(s, plugin_asset);
-	if (!ok) return;
-	
 	ASSERT(plugin_asset->plugin.active_instance == NULL);
 
 	Asset* package = plugin_asset;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 	ASSERT(ok);
 
-	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", UI_TextToStr(plugin_asset->name));
-	OS_DLL* dll = OS_LoadDLL(MEM_SCOPE_NONE, dll_path);
-	ok = dll != NULL;
-	ASSERT(ok);
+#ifdef HT_DYNAMIC
+	// TODO: only recompile if needs recompiling
+	ok = RecompilePlugin(s, plugin_asset);
+	if (!ok) return;
+#endif
 
 	// Allocate a plugin instance
 	DS_BucketArrayIndex plugin_instance_i;
@@ -1455,13 +1461,36 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	*plugin_instance = {};
 	plugin_instance->plugin_asset = plugin_asset;
 	plugin_instance->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
-	plugin_instance->dll_handle = dll;
 
+	STR_View plugin_name = UI_TextToStr(plugin_asset->name);
+
+#ifdef HT_DYNAMIC
+	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", plugin_name);
+	OS_DLL* dll = OS_LoadDLL(MEM_SCOPE_NONE, dll_path);
+	ok = dll != NULL;
+	ASSERT(ok);
+
+	plugin_instance->dll_handle = dll;
 	*(void**)&plugin_instance->LoadPlugin = OS_GetProcAddress(dll, "HT_LoadPlugin");
 	*(void**)&plugin_instance->UnloadPlugin = OS_GetProcAddress(dll, "HT_UnloadPlugin");
 	*(void**)&plugin_instance->UpdatePlugin = OS_GetProcAddress(dll, "HT_UpdatePlugin");
+#else
+	for (int i = 1; i < DS_ArrayCount(STATIC_EXPORTS); i++) {
+		HT_StaticExports exports = STATIC_EXPORTS[i];
+		if (STR_Match(STR_ToV(exports.plugin_id), plugin_name)) {
+			*(void**)&plugin_instance->LoadPlugin = exports.HT_LoadPlugin;
+			*(void**)&plugin_instance->UnloadPlugin = exports.HT_UnloadPlugin;
+			*(void**)&plugin_instance->UpdatePlugin = exports.HT_UpdatePlugin;
+			break;
+		}
+	}
+#endif
+	
+	ASSERT(plugin_instance->LoadPlugin);
+	ASSERT(plugin_instance->UnloadPlugin);
+	ASSERT(plugin_instance->UpdatePlugin);
 
-	if (plugin_instance->LoadPlugin) {
+	{
 		PluginCallContext ctx = {s, plugin_instance};
 		g_plugin_call_ctx = &ctx;
 		plugin_instance->LoadPlugin(s->api);
@@ -1471,22 +1500,25 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	plugin_asset->plugin.active_instance = plugin_instance->handle;
 
 	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
-#endif
 }
 
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
-#ifdef HT_DYNAMIC
 	PluginInstance* plugin = GetPluginInstance(s, plugin_asset->plugin.active_instance);
 	ASSERT(plugin != NULL);
 
-	if (plugin->UnloadPlugin) {
+	{
 		PluginCallContext ctx = {s, plugin};
 		g_plugin_call_ctx = &ctx;
 		plugin->UnloadPlugin(s->api);
 		g_plugin_call_ctx = NULL;
 	}
 
+#ifdef HT_DYNAMIC
 	OS_UnloadDLL(plugin->dll_handle);
+	
+	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
+	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
+#endif
 
 	plugin->dll_handle = NULL;
 	plugin->LoadPlugin = NULL;
@@ -1499,9 +1531,6 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	}
 	DS_ArrClear(&plugin->allocations);
 
-	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
-	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
-
 	// increment the handle generation to invalidate any handles
 	DecodedHandle plugin_handle = DecodeHandle(plugin->handle);
 	plugin_handle.generation += 1;
@@ -1511,7 +1540,6 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 	FREE_SLOT(plugin_instance_i, &s->plugin_instances, &s->first_free_plugin_instance, freelist_next);
 
 	plugin_asset->plugin.active_instance = NULL;
-#endif
 }
 
 #ifdef HT_EDITOR_DX12
@@ -1557,21 +1585,12 @@ EXPORT void D3D11_RenderPlugins(EditorState* s) {
 #endif
 
 EXPORT void UpdatePlugins(EditorState* s) {
-#ifdef HT_DYNAMIC
-#else
-	HT_StaticExports exports[] = {{0} HT_ALL_STATIC_EXPORTS};
-	for (int i = 1; i < DS_ArrayCount(exports); i++) {
-		HT_StaticExports plugin = exports[i];
-		__debugbreak();
-	}
-#endif
-
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 		if (asset->kind != AssetKind_Plugin) continue;
 		
 		PluginInstance* plugin_instance = GetPluginInstance(s, asset->plugin.active_instance);
-		if (plugin_instance && plugin_instance->UpdatePlugin != NULL) {
+		if (plugin_instance) {
 			PluginCallContext ctx = {s, plugin_instance};
 			g_plugin_call_ctx = &ctx;
 			plugin_instance->UpdatePlugin(s->api);
