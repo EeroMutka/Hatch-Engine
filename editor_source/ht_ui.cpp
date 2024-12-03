@@ -80,6 +80,23 @@ EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree) {
 	return panel;
 }
 
+EXPORT HT_String UITextToString(UI_Text text) {
+	HT_String result = {};
+	result.data = text.text.data;
+	result.size = text.text.count;
+	result.capacity = { (size_t)text.text.capacity };
+	return result;
+}
+
+EXPORT UI_Text StringToUIText(HT_String string) {
+	UI_Text result = {};
+	result.text.allocator = DS_HEAP;
+	result.text.capacity = (int)string.capacity;
+	result.text.count = (int)string.size;
+	result.text.data = string.data;
+	return result;
+}
+
 EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel) {
 	DS_ArrDeinit(&panel->tabs);
 	panel->freelist_next = tree->first_free_panel;

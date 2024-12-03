@@ -297,7 +297,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	}
 }
 
-static VertexShader LoadVertexShader(HT_API* ht, string shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
+static VertexShader LoadVertexShader(HT_API* ht, HT_StringView shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
 	ID3DBlob* errors;
 
 	ID3DBlob* vs_blob;
@@ -321,7 +321,7 @@ static VertexShader LoadVertexShader(HT_API* ht, string shader_path, D3D11_INPUT
 	return { shader, input_layout };
 }
 
-static ID3D11PixelShader* LoadPixelShader(HT_API* ht, string shader_path) {
+static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path) {
 	ID3DBlob* ps_blob;
 	bool ok = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "pixel_shader", "ps_5_0", 0, 0, &ps_blob, NULL) == S_OK;
 	HT_ASSERT(ok);
@@ -416,8 +416,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 	ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
 
-	string main_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/main_shader.hlsl";
-	string present_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/present_shader.hlsl";
+	HT_StringView main_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/main_shader.hlsl";
+	HT_StringView present_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/present_shader.hlsl";
 
 	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
 		{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},

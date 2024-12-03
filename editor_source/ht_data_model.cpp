@@ -145,10 +145,8 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 	//	name = "Untitled CPP File";
 	//}break;
 	}
-	if (kind != AssetKind_Package) {
-		UI_TextInit(DS_HEAP, &asset->name, name);
-	}
-
+	StringInit(&asset->name, name);
+	
 	return asset;
 }
 
@@ -158,7 +156,7 @@ EXPORT void StructTypeAddMember(AssetTree* tree, Asset* struct_type) {
 	// since we have an array, lets do the simplest thing and just array remove element/etc.
 
 	StructMember member = {0};
-	UI_TextInit(DS_HEAP, &member.name.text, "Unnamed member");
+	StringInit(&member.name, "Unnamed member");
 	DS_ArrPush(&struct_type->struct_type.members, member);
 	ComputeStructLayout(tree, struct_type);
 
@@ -224,8 +222,8 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_AssetRef:   { *out_size = sizeof(HT_Asset); *out_alignment = alignof(HT_Asset); } return;
 	case HT_TypeKind_Array:      { *out_size = sizeof(HT_Array); *out_alignment = alignof(HT_Array); } return;
 	case HT_TypeKind_Any:        { *out_size = sizeof(HT_Any); *out_alignment = alignof(HT_Any); } return;
-	case HT_TypeKind_ItemGroup:   { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
-	case HT_TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
+	case HT_TypeKind_ItemGroup:  { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
+	case HT_TypeKind_String:     { *out_size = sizeof(HT_String); *out_alignment = alignof(HT_String); } return;
 	case HT_TypeKind_Struct:     {
 		Asset* struct_asset = GetAsset(tree, type->handle);
 		Asset_StructType* struct_type = &struct_asset->struct_type;
@@ -391,15 +389,23 @@ EXPORT void ItemGroupRemove(HT_ItemGroup* group, void* elem, i32 item_client_siz
 	TODO();
 }
 
-EXPORT void StructMemberInit(StructMember* x) {
-	StringInit(&x->name);
-}
+EXPORT void StructMemberInit(StructMember* x) {} // placeholder for potential future changes
 EXPORT void StructMemberDeinit(StructMember* x) {
 	StringDeinit(&x->name);
 }
 
-EXPORT void StringInit(String* x) { UI_TextInit(DS_HEAP, &x->text, ""); }
-EXPORT void StringDeinit(String* x) { UI_TextDeinit(&x->text); }
+EXPORT void StringInit(HT_String* x, STR_View value) {
+	if (value.size > 0) StringSetValue(x, value);
+}
+EXPORT void StringDeinit(HT_String* x) {
+	STR_Free(DS_HEAP, x->view);
+}
+
+EXPORT void StringSetValue(HT_String* x, STR_View value) {
+	STR_Free(DS_HEAP, x->view);
+	x->view = STR_Clone(DS_HEAP, value);
+	x->capacity = value.size;
+}
 
 EXPORT void ArrayClear(HT_Array* array, int32_t elem_size) {
 	array->count = 0;
@@ -424,10 +430,8 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	if (asset->next) asset->next->prev = asset->prev;
 	else asset->parent->last_child = asset->prev;
 
-	if (asset->kind != AssetKind_Package) {
-		UI_TextDeinit(&asset->name);
-	}
-
+	StringDeinit(&asset->name);
+	
 	switch (asset->kind) {
 	case AssetKind_Root: break;
 	case AssetKind_Package: {
@@ -487,7 +491,7 @@ EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) 
 
 		Asset* new_parent = NULL;
 		for (Asset* asset = parent->first_child; asset; asset = asset->next) {
-			if (STR_MatchCaseInsensitive(UI_TextToStr(asset->name), name)) {
+			if (STR_MatchCaseInsensitive(asset->name, name)) {
 				new_parent = asset;
 				break;
 			}

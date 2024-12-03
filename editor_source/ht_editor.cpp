@@ -55,14 +55,19 @@ static void AssetTreeValueUI(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode*
 	}
 
 	if (*is_text_editing) {
-		UI_ValTextState* val_text_state = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &asset->name, NULL);
+		UI_Text asset_name = StringToUIText(asset->name);
+
+		UI_ValTextState* val_text_state = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &asset_name, NULL);
+
+		asset->name = UITextToString(asset_name);
+
 		text_box->flags &= ~UI_BoxFlag_DrawBorder;
 		if (!val_text_state->is_editing) {
 			*is_text_editing = false;
 		}
 	}
 	else {
-		STR_View name = UI_TextToStr(asset->name);
+		STR_View name = asset->name;
 		if (asset->kind == AssetKind_Package) {
 			name = asset->package.filesys_path.size > 0 ? STR_AfterLast(asset->package.filesys_path, '/') : "* Untitled Package";
 		}
@@ -189,8 +194,7 @@ EXPORT void AddTopBar(EditorState* s) {
 			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 				if (asset->kind == AssetKind_Plugin) {
-					STR_View plugin_name = UI_TextToStr(asset->name);
-					fprintf(f, "\t\t..\",HT_STATIC_EXPORTS__%.*s\"\n", StrArg(plugin_name));
+					fprintf(f, "\t\t..\",HT_STATIC_EXPORTS__%.*s\"\n", StrArg(asset->name));
 				}
 			}
 			fprintf(f, "\t\t}\n\n");
@@ -326,7 +330,7 @@ static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, 
 	if (*handle) {
 		Asset* asset_val = GetAsset(&s->asset_tree, *handle);
 		if (asset_val) {
-			asset_name = UI_TextToStr(asset_val->name);
+			asset_name = asset_val->name;
 			asset_name_color = UI_WHITE;
 		} else {
 			asset_name = "(Deleted Asset)";
@@ -469,14 +473,19 @@ static void UIStructMemberNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTree
 		}
 
 		if (*is_text_editing) {
-			UI_ValTextState* text_edit = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &member->name.text, NULL);
+			UI_Text member_name = StringToUIText(member->name);
+
+			UI_ValTextState* text_edit = UI_AddValText(text_box, UI_SizeFlex(1.f), UI_SizeFit(), &member_name, NULL);
+			
+			member->name = UITextToString(member_name);
+			
 			text_box->flags &= ~UI_BoxFlag_DrawBorder;
 			if (!text_edit->is_editing) {
 				*is_text_editing = false;
 			}
 		}
 		else {
-			UI_AddLabel(text_box, UI_SizeFlex(1.f), UI_SizeFit(), 0, UI_TextToStr(member->name.text));
+			UI_AddLabel(text_box, UI_SizeFlex(1.f), UI_SizeFit(), 0, member->name);
 		}
 	}
 	else if (column == 1) {
@@ -486,7 +495,7 @@ static void UIStructMemberNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTree
 	}
 }
 
-static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column) {
+static void UIAddStructDataNode(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNode* node, int row, int column) {
 	EditorState* s = (EditorState*)tree->user_data;
 	StructMemberValNode* member_val = (StructMemberValNode*)node;
 	UI_Key key = UI_KKEY(member_val->base.key);
@@ -542,11 +551,12 @@ static void UIStructDataNodeAdd(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 			UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), val);
 		}break;
 		case HT_TypeKind_String: {
-			String* val = (String*)member_val->data;
-			if (val->text.text.allocator == NULL) {
-				UI_TextInit(DS_HEAP, &val->text, "");
-			}
-			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &val->text, NULL);
+			HT_String* val = (HT_String*)member_val->data;
+			UI_Text ui_val = StringToUIText(*val);
+
+			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &ui_val, NULL);
+			
+			*val = UITextToString(ui_val);
 		}break;
 		case HT_TypeKind_Type: {
 			HT_Type* val = (HT_Type*)member_val->data;
@@ -577,8 +587,9 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
+			
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name = UI_TextToStr(member->name.text);
+			node->name = member->name;
 			node->type = member->type;
 			node->data = (char*)data + member->offset;
 			node->base.key = UI_HashInt(parent->base.key, i);
@@ -675,7 +686,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	members_tree.allow_selection = false;
 	members_tree.num_columns = 2;
 	members_tree.icons_font = s->icons_font;
-	members_tree.AddValueUI = UIStructDataNodeAdd;
+	members_tree.AddValueUI = UIAddStructDataNode;
 	members_tree.user_data = s;
 	UI_AddDataTree(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &members_tree, &s->properties_tree_data_ui_state);
 }
@@ -750,7 +761,7 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect area)
 		UI_PushBox(row);
 		UI_AddBox(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0);
 		UIAddAssetIcon(UI_KBOX(key), selected_asset, s->icons_font);
-		UI_AddLabel(UI_KBOX(key), UI_SizeFit(), UI_SizeFit(), 0, UI_TextToStr(selected_asset->name));
+		UI_AddLabel(UI_KBOX(key), UI_SizeFit(), UI_SizeFit(), 0, selected_asset->name);
 		UI_AddBox(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0);
 
 		static bool editing_plugin = false;
@@ -928,7 +939,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		}
 
 		if (selected_asset && selected_asset->kind == AssetKind_StructType) {
-			STR_View text = STR_Form(UI_TEMP, "New Struct Data (%v)", UI_TextToStr(selected_asset->name));
+			STR_View text = STR_Form(UI_TEMP, "New Struct Data (%v)", selected_asset->name);
 
 			UI_Box* new_struct_data = UI_BOX();
 			UI_AddLabel(new_struct_data, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, text);
@@ -1091,7 +1102,7 @@ EXPORT void UpdateAndDrawDropdowns(EditorState* s) {
 		UI_PushBox(box);
 
 		UIAddAssetIcon(UI_BOX(), asset, s->icons_font);
-		UI_AddLabel(UI_BOX(), UI_SizeFit(), UI_SizeFit(), 0, UI_TextToStr(asset->name));
+		UI_AddLabel(UI_BOX(), UI_SizeFit(), UI_SizeFit(), 0, asset->name);
 
 		UI_PopBox(box);
 		UI_BoxComputeRects(box, UI_STATE.mouse_pos);
@@ -1478,7 +1489,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	plugin_instance->plugin_asset = plugin_asset;
 	plugin_instance->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
 
-	STR_View plugin_name = UI_TextToStr(plugin_asset->name);
+	STR_View plugin_name = plugin_asset->name;
 
 #ifdef HT_DYNAMIC
 	STR_View dll_path = STR_Form(TEMP, ".plugin_binaries\\%v.dll", plugin_name);

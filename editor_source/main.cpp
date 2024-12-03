@@ -141,19 +141,16 @@ static void AppInit(EditorState* s) {
 		asset_browser_panel->link[1] = log_panel;
 		log_panel->link[0] = asset_browser_panel;*/
 
-	UI_TextInit(DS_HEAP, &s->dummy_text, "");
-	UI_TextInit(DS_HEAP, &s->dummy_text_2, "");
-
 	{
 		s->asset_tree.name_and_type_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 		
 		StructMember name_member = {0};
-		UI_TextInit(DS_HEAP, &name_member.name.text, "Name");
+		StringInit(&name_member.name, "Name");
 		name_member.type.kind = HT_TypeKind_String;
 		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, name_member);
 
 		StructMember type_member = {0};
-		UI_TextInit(DS_HEAP, &type_member.name.text, "HT_Type");
+		StringInit(&type_member.name, "HT_Type");
 		type_member.type.kind = HT_TypeKind_Type;
 		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, type_member);
 		
@@ -162,13 +159,13 @@ static void AppInit(EditorState* s) {
 		s->asset_tree.plugin_options_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
 
 		StructMember member_source_files = {0};
-		UI_TextInit(DS_HEAP, &member_source_files.name.text, "Code Files");
+		StringInit(&member_source_files.name, "Code Files");
 		member_source_files.type.kind = HT_TypeKind_Array;
 		member_source_files.type.subkind = HT_TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_source_files);
 
 		StructMember member_data = {0};
-		UI_TextInit(DS_HEAP, &member_data.name.text, "Data Asset");
+		StringInit(&member_data.name, "Data Asset");
 		member_data.type.kind = HT_TypeKind_AssetRef;
 		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
 		
@@ -291,9 +288,11 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main() {
-	EditorState editor_state = {};
+
 	RenderState render_state = {};
-	
+
+	EditorState editor_state = {};
+	editor_state.window_size = {1280, 720};
 	editor_state.render_state = &render_state;
 	
 	TEMP = &editor_state.temporary_arena;
@@ -302,6 +301,7 @@ int main() {
 	CPU_FREQUENCY = OS_GetCPUFrequency();
 
 	AppInit(&editor_state);
+	HT_StringView my_test = "Hellope";
 
 	for (;;) {
 		DS_ArenaReset(&editor_state.temporary_arena);

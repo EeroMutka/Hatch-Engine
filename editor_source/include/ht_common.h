@@ -14,8 +14,11 @@
 #define TODO() __debugbreak()
 
 #define DS_ASSERT(X) ASSERT(X)
-#define STR_ASSERT(X) ASSERT(X)
 #include <ht_utils/fire/fire_ds.h>
+
+#define STR_ASSERT(X) ASSERT(X)
+#define STR_CUSTOM_VIEW_TYPE
+typedef HT_StringView STR_View;
 #include <ht_utils/fire/fire_string.h>
 
 #define UI_CUSTOM_VEC2
@@ -134,12 +137,8 @@ enum AssetKind {
 	AssetKind_StructData,
 };
 
-struct String {
-	UI_Text text; // for now, use UI_Text. This is just a quick thing to get started
-};
-
 struct StructMember {
-	String name;
+	HT_String name;
 	HT_Type type;
 	i32 offset;
 };
@@ -187,7 +186,7 @@ struct Asset_StructData {
 
 struct Asset {
 	AssetKind kind;
-	UI_Text name; // not used for AssetKind_Package
+	HT_String name; // not used for AssetKind_Package
 	HT_Asset handle;
 	u64 modtime;
 
@@ -277,10 +276,11 @@ EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item);
 // if `move_after_this` is HT_ITEM_INDEX_INVALID, the item is moved to the beginning of the list.
 EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this);
 
-EXPORT void StructMemberInit(StructMember* x);
+EXPORT void StructMemberInit(StructMember* x); // value must be zero-initialized already
 EXPORT void StructMemberDeinit(StructMember* x);
-EXPORT void StringInit(String* x);
-EXPORT void StringDeinit(String* x);
+EXPORT void StringInit(HT_String* x, STR_View value); // value must be zero-initialized already
+EXPORT void StringDeinit(HT_String* x);
+EXPORT void StringSetValue(HT_String* x, STR_View value);
 
 // - returns NULL if not found
 EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path);
@@ -322,9 +322,9 @@ struct UI_PanelTree {
 };
 
 struct UIDropdownState {
-	UI_Key deepest_hovered_root = 0;
-	UI_Key deepest_hovered_root_new = 0;
-	bool has_added_deepest_hovered_root = false;
+	UI_Key deepest_hovered_root;
+	UI_Key deepest_hovered_root_new;
+	bool has_added_deepest_hovered_root;
 };
 
 EXPORT void UI_AddDropdownButton(UI_Box* box, UI_Size w, UI_Size h, UI_BoxFlags flags, STR_View string, UI_Font icons_font);
@@ -334,6 +334,9 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 
 EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree);
 EXPORT void FreeUIPanel(UI_PanelTree* tree, UI_Panel* panel);
+
+EXPORT HT_String UITextToString(UI_Text text);
+EXPORT UI_Text StringToUIText(HT_String string);
 
 EXPORT void UIDropdownStateBeginFrame(UIDropdownState* s);
 
@@ -439,7 +442,7 @@ struct EditorState {
 	DS_Arena persistent_arena;
 	DS_Arena temporary_arena;
 
-	ivec2 window_size = {1280, 720};
+	ivec2 window_size;
 	OS_Window window;
 
 	HT_InputFrame input_frame;
@@ -447,9 +450,6 @@ struct EditorState {
 	UI_Inputs ui_inputs;
 	UI_Font default_font;
 	UI_Font icons_font;
-
-	UI_Text dummy_text;
-	UI_Text dummy_text_2;
 
 	STR_View project_directory;
 
@@ -488,7 +488,7 @@ struct EditorState {
 
 	bool file_dropdown_open;
 	bool window_dropdown_open;
-	UI_Key type_dropdown_open = 0;
+	UI_Key type_dropdown_open;
 	
 	// ------------------
 

@@ -28,6 +28,7 @@
 #define STR_MemFree(ALLOCATOR, PTR) free((void*)(PTR))
 #endif
 
+#ifndef STR_CUSTOM_VIEW_TYPE
 typedef struct STR_View {
 	const char* data;
 	size_t size;
@@ -38,6 +39,7 @@ typedef struct STR_View {
 	STR_View(const char* c_string) : data(c_string), size(c_string ? strlen(c_string) : 0) {}
 #endif
 } STR_View;
+#endif // STR_CUSTOM_VIEW_TYPE
 
 #ifndef STR_API
 #define STR_API static

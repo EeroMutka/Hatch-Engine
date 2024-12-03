@@ -77,15 +77,28 @@ typedef union ivec4 {
 	int _[4];
 } ivec4;
 
-typedef struct string { // utf8-encoded string
+typedef struct HT_StringView { // utf8-encoded string view, NOT null-terminated
 	char* data;
 	size_t size;
 #ifdef __cplusplus
-	string() : data(0), size(0) {}
-	string(const char* _data, size_t _size) : data((char*)_data), size(_size) {}
-	string(const char* _cstr) : data((char*)_cstr), size(_cstr ? strlen(_cstr) : 0) {}
+	inline HT_StringView() : data(0), size(0) {}
+	inline HT_StringView(const char* _data, size_t _size) : data((char*)_data), size(_size) {}
+	inline HT_StringView(const char* _cstr) : data((char*)_cstr), size(_cstr ? strlen(_cstr) : 0) {}
+	inline HT_StringView(struct HT_String string); // needs to be defined after the HT_String struct
 #endif
-} string;
+} HT_StringView;
+
+typedef struct HT_String { // utf8-encoded string, NOT null-terminated. TODO: we might as well include null-terminator?
+	union {
+		struct { char* data; size_t size; };
+		HT_StringView view;
+	};
+	size_t capacity;
+} HT_String;
+
+#ifdef __cplusplus
+inline HT_StringView::HT_StringView(HT_String string) : data(string.data), size(string.size) {}
+#endif
 
 typedef enum HT_TypeKind {
 	HT_TypeKind_Float,
@@ -146,7 +159,7 @@ typedef struct HT_ItemGroup {
 typedef struct HT_ItemHeader {
 	HT_ItemIndex prev;
 	HT_ItemIndex next;
-	string name;
+	HT_StringView name;
 } HT_ItemHeader;
 
 typedef struct HT_ItemHandleDecoded {
@@ -466,7 +479,7 @@ struct HT_API {
 	 
 	// Returns an empty string if the asset is invalid, otherwise an absolute filepath to the asset.
 	// The returned string is valid for this frame only.
-	string (*AssetGetFilepath)(HT_Asset asset);
+	HT_StringView (*AssetGetFilepath)(HT_Asset asset);
 	
 	// Whenever an asset data is changed, the modtime integer becomes larger.
 	// For folders, the modtime is always the maximum modtime of any asset inside it (applies recursively).
@@ -478,7 +491,7 @@ struct HT_API {
 	// NOTE: A plugin may be unloaded in-between frames, never in the middle of a frame.
 	HT_PluginInstance (*GetPluginInstance)(HT_Asset plugin_asset); // returns NULL if plugin is not active
 	bool (*PluginInstanceIsValid)(HT_PluginInstance plugin_instance);
-	void* (*PluginInstanceFindProcAddress)(HT_PluginInstance plugin_instance, string name); // returns NULL if not found
+	void* (*PluginInstanceFindProcAddress)(HT_PluginInstance plugin_instance, HT_StringView name); // returns NULL if not found
 	
 	// -- Memory allocation ---------------------------
 	
@@ -512,7 +525,7 @@ struct HT_API {
 	
 	// -- UI -----------------------------------------
 	
-	HT_TabClass* (*CreateTabClass)(string name);
+	HT_TabClass* (*CreateTabClass)(HT_StringView name);
 	void (*DestroyTabClass)(HT_TabClass* tab);
 	
 	// poll next custom tab update
@@ -542,7 +555,7 @@ struct HT_API {
 		const char* pTarget, u32 Flags1, u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
 	
 	// NOTE: The filename parameter is wchar_t* in the official D3DCompiler API, but Hatch does a conversion here.
-	HRESULT (*D3D11_CompileFromFile)(string FileName, const D3D_SHADER_MACRO* pDefines,
+	HRESULT (*D3D11_CompileFromFile)(HT_StringView FileName, const D3D_SHADER_MACRO* pDefines,
 		ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
 		u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs);
 	

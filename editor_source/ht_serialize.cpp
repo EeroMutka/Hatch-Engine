@@ -18,7 +18,7 @@ static STR_View GetAssetExt(AssetKind kind) {
 }
 
 EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
-	STR_View result = STR_Form(arena, "%v%v", UI_TextToStr(asset->name), GetAssetExt(asset->kind));
+	STR_View result = STR_Form(arena, "%v%v", asset->name, GetAssetExt(asset->kind));
 	return result;
 }
 
@@ -58,8 +58,7 @@ EXPORT void RegenerateTypeTable(EditorState* s) {
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
 		if (asset->kind == AssetKind_StructType) {
-			STR_View name = UI_TextToStr(asset->name);
-			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
+			if (STR_Match(asset->name, "Untitled Struct")) continue; // temporary hack against builtin structures
 			
 			DS_ArrPush(&s->type_table, asset->handle);
 		}
@@ -92,6 +91,7 @@ EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 		LoadPackages(s, package_paths);
 	}
 	
+
 	RegenerateTypeTable(s);
 
 	MD_Node* editor_layout = MD_ChildFromString(parse.node, MD_S8Lit("editor_layout"), 0);
@@ -120,7 +120,7 @@ EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset) {
 
 	STR_View result = AssetGetFilename(TEMP, asset);
 	for (Asset* p = asset->parent; p->kind != AssetKind_Package; p = p->parent) {
-		result = STR_Form(TEMP, "%v/%v", UI_TextToStr(p->name), result);
+		result = STR_Form(TEMP, "%v/%v", p->name, result);
 	}
 	return result;
 }
@@ -134,13 +134,13 @@ EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset) {
 	for (Asset* p = asset->parent; p->kind != AssetKind_Root; p = p->parent) {
 		result = p->kind == AssetKind_Package ?
 			STR_Form(arena, "%v/%v", p->package.filesys_path, result) :
-			STR_Form(TEMP, "%v/%v", UI_TextToStr(p->name), result);
+			STR_Form(TEMP, "%v/%v", p->name, result);
 	}
 	return result;
 }
 
 EXPORT STR_View AssetGetFilepathUsingParentDirectory(DS_Arena* arena, STR_View directory, Asset* asset) {
-	STR_View result = STR_Form(arena, "%v/%v%v", directory, UI_TextToStr(asset->name), GetAssetExt(asset->kind));
+	STR_View result = STR_Form(arena, "%v/%v%v", directory, asset->name, GetAssetExt(asset->kind));
 	return result;
 }
 
@@ -166,8 +166,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 
 		for (Asset* child = asset->first_child; child; child = child->next) {
 			//STR_View filesys_name = STR_AfterLast(child->filesys_path, '/');
-			STR_View child_name = UI_TextToStr(child->name);
-			uint64_t hash = DS_MurmurHash64A(child_name.data, child_name.size, 0);
+			uint64_t hash = DS_MurmurHash64A(child->name.data, child->name.size, 0);
 			DS_MapInsert(&asset_from_name, hash, child);
 		}
 
@@ -343,8 +342,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 
 			asset = MakeNewAsset(tree, asset_kind);
 
-			//asset->has_unsaved_changes = false;
-			UI_TextSet(&asset->name, asset_kind == AssetKind_File ? name : stem);
+			StringSetValue(&asset->name, asset_kind == AssetKind_File ? name : stem);
 
 			MoveAssetToInside(tree, asset, parent);
 		}
@@ -470,7 +468,7 @@ static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* package, Asset* p
 					StructMemberInit(&member);
 
 					STR_View name = StrFromMD(it->string);
-					UI_TextSet(&member.name.text, name);
+					StringSetValue(&member.name, name);
 
 					MDParser child_p = {it->first_child};
 					member.type = ParseMetadeskType(ctx->tree, package, &child_p);
@@ -496,10 +494,9 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember member = struct_asset->struct_type.members[i];
-			STR_View member_name = UI_TextToStr(member.name.text);
 
 			ASSERT(!MD_NodeIsNil(p->node));
-			ASSERT(MD_S8Match(p->node->string, StrToMD(member_name), 0));
+			ASSERT(MD_S8Match(p->node->string, StrToMD(member.name), 0));
 
 			MDParser child_p = {p->node->first_child};
 			ParseMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, &child_p);
@@ -645,7 +642,8 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 
 			if (asset->kind == AssetKind_StructData) {
 				MD_Node* type_node = MD_ChildFromString(parse.node, MD_S8Lit("type"), 0);
-				Asset* type_asset = FindAssetFromPath(ctx->tree, package, StrFromMD(type_node->first_child->string));
+				STR_View str = StrFromMD(type_node->first_child->string);
+				Asset* type_asset = FindAssetFromPath(ctx->tree, package, str);
 				ASSERT(type_asset != NULL);
 				ASSERT(type_asset->kind == AssetKind_StructType);
 
