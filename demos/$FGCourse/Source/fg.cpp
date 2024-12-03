@@ -152,8 +152,6 @@ static void UpdateShaderConstants(ID3D11DeviceContext* dc, ShaderConstants val) 
 
 static void Render(HT_API* ht) {
 	if (open_scene) {
-		FGCourse__fg_params_type* params = HT_GetPluginData(FGCourse__fg_params_type, ht);
-
 		int width = open_scene_rect_max.x - open_scene_rect_min.x;
 		int height = open_scene_rect_max.y - open_scene_rect_min.y;
 		MaybeRecreateRenderTargets(ht, width, height);
@@ -161,7 +159,7 @@ static void Render(HT_API* ht) {
 		mat4 ws_to_cs = {};
 		for (int i = 0; i < open_scene->extended_data.count; i++) {
 			HT_Any any = ((HT_Any*)open_scene->extended_data.data)[i];
-			if (any.type._struct == params->editor_camera_type) {
+			if (any.type.handle == ht->types->SceneEdit__EditorCamera) {
 				SceneEdit__EditorCamera* camera = (SceneEdit__EditorCamera*)any.data;
 
 				//ws_to_cs = M_MatScale({0.1f, 0.1f, 0.1f});
@@ -279,14 +277,12 @@ static void Render(HT_API* ht) {
 }
 
 static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
-	FGCourse__fg_params_type* params = HT_GetPluginData(FGCourse__fg_params_type, ht);
-
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
 	open_scene = scene;
 	open_scene_rect_min = update_info->rect_min;
 	open_scene_rect_max = update_info->rect_max;
 
-	SceneEditUpdate(ht, scene, params->editor_camera_type);
+	SceneEditUpdate(ht, scene);
 
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
@@ -398,8 +394,6 @@ static Mesh LoadOBJ(HT_API* ht, const char* file_cstr) {
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	FGCourse__fg_params_type* params = HT_GetPluginData(FGCourse__fg_params_type, ht);
-	HT_ASSERT(params);
 
 	// obj loading
 	mesh_monkey = LoadOBJ(ht, "C:/dev/Hatch/test_assets/monkey.obj");
@@ -436,7 +430,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 
 	ht->D3D11_SetRenderProc(Render);
 
-	bool ok = ht->RegisterAssetViewerForType(params->scene_type, AssetViewerTabUpdate);
+	bool ok = ht->RegisterAssetViewerForType(ht->types->Scene__Scene, AssetViewerTabUpdate);
 	HT_ASSERT(ok);
 }
 
@@ -444,9 +438,6 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
-	FGCourse__fg_params_type* params = HT_GetPluginData(FGCourse__fg_params_type, ht);
-	HT_ASSERT(params);
-	
 	/*
 	int open_assets_count;
 	HT_Asset* open_assets = ht->GetAllOpenAssetsOfType(params->scene_type, &open_assets_count);

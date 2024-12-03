@@ -1,12 +1,12 @@
 
-static Camera SceneEditUpdate(HT_API* ht, Scene__Scene* scene, HT_Asset editor_camera_type) {
+static Camera SceneEditUpdate(HT_API* ht, Scene__Scene* scene) {
 	Camera camera = {};
 	{
-		// find or add "__EditorCamera" to the scene extended data
+		// find or add EditorCamera to the scene extended data
 		SceneEdit__EditorCamera* editor_camera = NULL;
 		for (int i = 0; i < scene->extended_data.count; i++) {
 			HT_Any any = ((HT_Any*)scene->extended_data.data)[i];
-			if (any.type._struct == editor_camera_type) {
+			if (any.type.handle == ht->types->SceneEdit__EditorCamera) {
 				editor_camera = (SceneEdit__EditorCamera*)any.data;
 				break;
 			}

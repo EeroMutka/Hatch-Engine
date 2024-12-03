@@ -97,10 +97,7 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
 	HT_ASSERT(scene);
 	
-	SceneEdit__SceneEditParams* params = HT_GetPluginData(SceneEdit__SceneEditParams, ht);
-	HT_ASSERT(params);
-	
-	Camera camera = SceneEditUpdate(ht, scene, params->editor_camera_type);
+	Camera camera = SceneEditUpdate(ht, scene);
 	
 	vec2 rect_size = rect_max - rect_min;
 	vec2 rect_middle = (rect_min + rect_max) * 0.5f;
@@ -124,7 +121,7 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
 			
-			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type._struct == params->box_component_type) {
+			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type.handle == ht->types->Scene__BoxComponent) {
 				Scene__BoxComponent* box_component = (Scene__BoxComponent*)comp_any->data;
 				
 				vp.camera.ws_to_ss =
@@ -165,13 +162,10 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	SceneEdit__SceneEditParams* params = HT_GetPluginData(SceneEdit__SceneEditParams, ht);
-	HT_ASSERT(params);
-
 	// hmm... so maybe SceneEdit can provide an API for unlocking the asset viewer registration.
 	// That way, by default it can take the asset viewer, but it also specifies that others can take it if they want to.
 	
-	//bool ok = ht->RegisterAssetViewerForType(params->scene_type, DebugSceneTabUpdate);
+	//bool ok = ht->RegisterAssetViewerForType(ht->types->Scene__Scene, DebugSceneTabUpdate);
 	//HT_ASSERT(ok);
 }
 

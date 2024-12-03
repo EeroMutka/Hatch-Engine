@@ -185,9 +185,9 @@ EXPORT void InitStructDataAsset(AssetTree* tree, Asset* asset, Asset* struct_typ
 	asset->struct_data.struct_type = struct_type->handle;
 	asset->struct_data.data = DS_MemAlloc(DS_HEAP, struct_type->struct_type.size);
 	
-	HT_Type type;
+	HT_Type type = {};
 	type.kind = HT_TypeKind_Struct;
-	type._struct = struct_type->handle;
+	type.handle = struct_type->handle;
 	Construct(tree, asset->struct_data.data, &type);
 	
 	// memset(asset->struct_data.data, 0, struct_type->struct_type.size);
@@ -200,9 +200,9 @@ EXPORT void InitStructDataAsset(AssetTree* tree, Asset* asset, Asset* struct_typ
 
 EXPORT void DeinitStructDataAssetIfInitialized(AssetTree* tree, Asset* asset) {
 	if (asset->struct_data.data) {
-		HT_Type type;
+		HT_Type type = {};
 		type.kind = HT_TypeKind_Struct;
-		type._struct = asset->struct_data.struct_type;
+		type.handle = asset->struct_data.struct_type;
 		Destruct(tree, asset->struct_data.data, &type);
 
 		DS_MemFree(DS_HEAP, asset->struct_data.data);
@@ -227,7 +227,7 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_ItemGroup:   { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
 	case HT_TypeKind_String:     { *out_size = sizeof(String); *out_alignment = alignof(String); } return;
 	case HT_TypeKind_Struct:     {
-		Asset* struct_asset = GetAsset(tree, type->_struct);
+		Asset* struct_asset = GetAsset(tree, type->handle);
 		Asset_StructType* struct_type = &struct_asset->struct_type;
 		ASSERT(struct_asset != NULL && struct_asset->kind == AssetKind_StructType);
 
@@ -514,7 +514,7 @@ EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type) {
 		ItemGroupInit(tree, (HT_ItemGroup*)data, &item_type);
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
-		Asset* struct_asset = GetAsset(tree, type->_struct);
+		Asset* struct_asset = GetAsset(tree, type->handle);
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
 			Construct(tree, (char*)data + member->offset, &member->type);
@@ -532,7 +532,7 @@ EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type) {
 		ItemGroupDeinit((HT_ItemGroup*)data);
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
-		Asset* struct_asset = GetAsset(tree, type->_struct);
+		Asset* struct_asset = GetAsset(tree, type->handle);
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
 			Destruct(tree, (char*)data + member->offset, &member->type);

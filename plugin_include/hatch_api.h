@@ -160,7 +160,7 @@ typedef struct HT_ItemHandle_* HT_ItemHandle;
 typedef struct HT_Type {
 	HT_TypeKind kind;
 	HT_TypeKind subkind; // for arrays, this is the element type
-	HT_Asset _struct;
+	HT_Asset handle; // Handle to the struct asset if struct, otherwise null.
 } HT_Type;
 
 typedef struct HT_Any {
@@ -451,7 +451,7 @@ struct HT_API {
 	
 	// -- Data model ----------------------------------
 	
-	const HT_GeneratedTypeTable* type_table;
+	const HT_GeneratedTypeTable* types;
 	
 	// Returns NULL if data asset is invalid or of different type than `type_id`
 	void* (*GetPluginData)(/*HT_Asset type_id*/);

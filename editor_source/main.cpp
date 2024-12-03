@@ -108,6 +108,8 @@ static void AppInit(EditorState* s) {
 	DS_BkArrInit(&s->asset_tree.assets, DS_HEAP, 32);
 	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
 
+	DS_ArrInit(&s->type_table, DS_HEAP);
+
 	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);

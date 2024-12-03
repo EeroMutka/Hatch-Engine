@@ -28,5 +28,5 @@ PixelInput vertex_shader(VertexInput vertex) {
 }
 
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
-    return float4(frac(pixel.position_ws * 2), 1);
+    return float4(pixel.position_ws, 1);
 }

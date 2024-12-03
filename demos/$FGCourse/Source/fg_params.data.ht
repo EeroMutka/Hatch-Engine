@@ -1,5 +1,3 @@
 type: "Source/fg_params_type"
 data: {
-	scene_type: "$Scene/types/Scene"
-	editor_camera_type: "$SceneEdit/EditorCamera"
 }

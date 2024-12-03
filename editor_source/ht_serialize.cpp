@@ -53,6 +53,20 @@ static void LoadEditorPanel(EditorState* s, MD_Node* node, UI_Panel* panel) {
 	else if (MD_S8Match(node->string, MD_S8Lit("asset_viewer"), 0))   DS_ArrPush(&panel->tabs, s->asset_viewer_tab_class);
 }
 
+EXPORT void RegenerateTypeTable(EditorState* s) {
+	DS_ArrClear(&s->type_table);
+	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+		if (asset->kind == AssetKind_StructType) {
+			STR_View name = UI_TextToStr(asset->name);
+			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
+			
+			DS_ArrPush(&s->type_table, asset->handle);
+		}
+	}
+	s->api->types = (HT_GeneratedTypeTable*)s->type_table.data;
+}
+
 EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 	ASSERT(OS_PathIsAbsolute(project_directory));
 
@@ -78,6 +92,14 @@ EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 		LoadPackages(s, package_paths);
 	}
 	
+	RegenerateTypeTable(s);
+
+	MD_Node* editor_layout = MD_ChildFromString(parse.node, MD_S8Lit("editor_layout"), 0);
+	if (!MD_NodeIsNil(editor_layout)) {
+		ASSERT(editor_layout->first_child == editor_layout->last_child && !MD_NodeIsNil(editor_layout->first_child));
+		LoadEditorPanel(s, editor_layout->first_child, s->panel_tree.root);
+	}
+
 	MD_Node* run_plugins = MD_ChildFromString(parse.node, MD_S8Lit("run_plugins"), 0);
 	if (!MD_NodeIsNil(run_plugins)) {
 		for (MD_Node* child = run_plugins->first_child; !MD_NodeIsNil(child); child = child->next) {
@@ -90,12 +112,6 @@ EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 		}
 	}
 
-	MD_Node* editor_layout = MD_ChildFromString(parse.node, MD_S8Lit("editor_layout"), 0);
-	if (!MD_NodeIsNil(editor_layout)) {
-		ASSERT(editor_layout->first_child == editor_layout->last_child && !MD_NodeIsNil(editor_layout->first_child));
-		LoadEditorPanel(s, editor_layout->first_child, s->panel_tree.root);
-	}
-	
 	MD_ArenaRelease(md_arena);
 }
 
@@ -397,7 +413,7 @@ static bool ParseMetadeskFloat(MDParser* p, float *out_value) {
 static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MDParser* p) {
 	ASSERT(!MD_NodeIsNil(p->node));
 
-	HT_Type result;
+	HT_Type result = {};
 	STR_View type_name = StrFromMD(p->node->string);
 
 	HT_TypeKind builtin_type = StringToTypeKind(type_name);
@@ -409,7 +425,7 @@ static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MDParser* p) {
 		Asset* struct_type = FindAssetFromPath(tree, package, type_name);
 		ASSERT(struct_type);
 		result.kind = HT_TypeKind_Struct;
-		result._struct = struct_type->handle;
+		result.handle = struct_type->handle;
 	}
 
 	if (MD_NodeHasTag(p->node, MD_S8Lit("Array"), 0)) {
@@ -476,7 +492,7 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 
 	switch (type->kind) {
 	case HT_TypeKind_Struct: {
-		Asset* struct_asset = GetAsset(tree, type->_struct);
+		Asset* struct_asset = GetAsset(tree, type->handle);
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember member = struct_asset->struct_type.members[i];
@@ -639,7 +655,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 				MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data"), 0);
 
 				HT_Type type = { HT_TypeKind_Struct };
-				type._struct = type_asset->handle;
+				type.handle = type_asset->handle;
 				MDParser child_p = {data_node->first_child};
 				ParseMetadeskValue(ctx->tree, package, asset->struct_data.data, &type, &child_p);
 			}
@@ -715,6 +731,9 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 		}
 
 		printf("Recompiling plugin!\n");
+	}
+	if (ctx.queue_recompile_plugins.count > 0) {
+		RegenerateTypeTable(s);
 	}
 #endif
 

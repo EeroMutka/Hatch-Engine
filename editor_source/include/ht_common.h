@@ -462,6 +462,7 @@ struct EditorState {
 
 	AssetTree asset_tree;
 	UI_DataTreeState assets_tree_ui_state;
+	DS_DynArray(HT_Asset) type_table; // quick and dirty solution
 
 	UI_DataTreeState properties_tree_type_ui_state;
 	UI_DataTreeState properties_tree_data_ui_state;
@@ -538,6 +539,8 @@ EXPORT void HotreloadPackages(EditorState* s);
 EXPORT STR_View GetAssetFileExtension(Asset* asset);
 
 EXPORT void SavePackageToDisk(Asset* package);
+
+EXPORT void RegenerateTypeTable(EditorState* s);
 
 EXPORT void LoadProject(EditorState* s, STR_View project_file);
 EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths);

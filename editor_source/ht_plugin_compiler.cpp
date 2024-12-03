@@ -224,11 +224,13 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 		//Asset* plugin_data_type = plugin_data->struct_data.struct_type.asset;
 	}
 
+	// include a "type" table.
+
 	// for now, do the simple way that doesn't work in many cases.
-	// This is totally wrong.
+	// see RegenerateTypeTable
+	fprintf(header, "typedef struct HT_GeneratedTypeTable {\n");
 	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
 		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
-
 		if (asset->kind == AssetKind_StructType) {
 			STR_View name = UI_TextToStr(asset->name);
 			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
@@ -236,12 +238,26 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 			Asset* asset_package = asset;
 			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
 
-			STR_View asset_package_name = "";
-			//if (package != asset_package) { // add asset package as prefix if from external package
-				asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
-				STR_CutStart(&asset_package_name, "$");
-			//}
+			STR_View asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
+			STR_CutStart(&asset_package_name, "$");
+			
+			fprintf(header, "\tHT_Asset %.*s__%.*s;\n", StrArg(asset_package_name), StrArg(name));
+		}
+	}
+	fprintf(header, "\tint _unused;\n");
+	fprintf(header, "} HT_GeneratedTypeTable;\n");
+	
+	for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
+		if (asset->kind == AssetKind_StructType) {
+			STR_View name = UI_TextToStr(asset->name);
+			if (STR_Match(name, "Untitled Struct")) continue; // temporary hack against builtin structures
 
+			Asset* asset_package = asset;
+			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
+
+			STR_View asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
+			STR_CutStart(&asset_package_name, "$");
 
 			fprintf(header, "typedef struct %.*s__%.*s {\n", StrArg(asset_package_name), StrArg(name));
 

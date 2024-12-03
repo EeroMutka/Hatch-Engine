@@ -15,6 +15,8 @@ OS_API bool OS_DeleteFile(DS_MemScopeNone* m, STR_View file_path);
 
 OS_API bool OS_FileGetModtime(DS_MemScopeNone* m, STR_View file_path, uint64_t* out_modtime);
 
+OS_API bool OS_RunProcess(DS_MemScopeNone* m, STR_View command_string, uint32_t* out_exit_code);
+
 OS_API void OS_DeleteDirectory(DS_MemScopeNone* m, STR_View directory_path);
 
 OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path);

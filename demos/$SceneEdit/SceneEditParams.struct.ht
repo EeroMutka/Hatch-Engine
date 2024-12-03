@@ -1,7 +1,2 @@
 struct: {
-	// TODO: I think access to types should be generated into the .inc.ht file so that
-	// this wouldn't be necessary!!
-	scene_type: Asset
-	box_component_type: Asset
-	editor_camera_type: Asset
 }

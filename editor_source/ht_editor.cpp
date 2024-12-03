@@ -131,11 +131,13 @@ EXPORT void AddTopBar(EditorState* s) {
 		UI_AddLabel(UI_BOX(), UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Open Project");
 		
 		UI_Box* gen_premake = UI_BOX();
-		UI_AddLabel(gen_premake, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Generate Premake Project File");
+		UI_AddLabel(gen_premake, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Generate Project (Premake5/VS2022)");
 
 		if (UI_Clicked(gen_premake)) {
+			OS_SetWorkingDir(MEM_SCOPE_NONE, s->project_directory);
+
 			FILE* f = NULL;
-			fopen_s(&f, STR_FormC(TEMP, "%v/premake5.lua", s->project_directory), "wb");
+			fopen_s(&f, "premake5.lua", "wb");
 			ASSERT(f);
 			
 			STR_View project_name = STR_AfterLast(s->project_directory, '/');
@@ -205,6 +207,12 @@ EXPORT void AddTopBar(EditorState* s) {
 			fprintf(f, "\t\tbuildaction \"None\" -- do not use Visual Studio's built-in HLSL compiler\n\n");
 
 			fclose(f);
+
+			// also want to run the command now.
+			u32 exit_code;
+			bool ok = OS_RunProcess(MEM_SCOPE_NONE, "premake5 vs2022", &exit_code);
+			
+			OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 
 			s->file_dropdown_open = false;
 		}
@@ -422,7 +430,7 @@ static void UIAddValType(EditorState* s, UI_Key key, HT_Type* type) {
 
 	HT_TypeKind leaf_kind = type->kind == HT_TypeKind_Array ? type->subkind : type->kind;
 	if (leaf_kind == HT_TypeKind_Struct) {
-		UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &type->_struct);
+		UIAddValAssetRef(s, UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), &type->handle);
 	}
 
 	if (s->type_dropdown_open == kind_dropdown->key) {
@@ -565,7 +573,7 @@ static void AddDataTreeNode(UI_DataTreeNode* parent, UI_DataTreeNode* node) { //
 
 static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* parent, void* data, HT_Type* type) {
 	if (type->kind == HT_TypeKind_Struct) {
-		Asset* struct_asset = GetAsset(&s->asset_tree, type->_struct);
+		Asset* struct_asset = GetAsset(&s->asset_tree, type->handle);
 
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember* member = &struct_asset->struct_type.members[i];
@@ -659,7 +667,7 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 	root.base.key = key;
 	root.data = data;
 	root.type.kind = HT_TypeKind_Struct;
-	root.type._struct = struct_type->handle;
+	root.type.handle = struct_type->handle;
 	BuildStructMemberValNodes(s, &root, data, &root.type);
 
 	UI_DataTree members_tree = {0};
@@ -811,7 +819,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 		MoveAssetToInside(&g_asset_tree, type2, g_asset_tree.root);
 		StructMemberNode* m1 = StructTypeAddMember(type2);
 		m1->type.kind = HT_TypeKind_Struct;
-		m1->type._struct = GetAssetHandle(type_vec2);
+		m1->type.handle = GetAssetHandle(type_vec2);
 		UI_TextSet(&m1->name, "position");
 
 		StructMemberNode* m2 = StructTypeAddMember(type2);

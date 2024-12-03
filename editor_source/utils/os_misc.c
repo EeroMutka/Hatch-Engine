@@ -77,6 +77,41 @@ OS_API bool OS_FileGetModtime(DS_MemScopeNone* m, STR_View file_path, uint64_t* 
 	return h != INVALID_HANDLE_VALUE;
 }
 
+// NOTE: CreateProcessW may write to the command_string in-place! CreateProcessW requires that.
+OS_API bool OS_RunProcess(DS_MemScopeNone* m, STR_View command_string, uint32_t* out_exit_code) {
+	DS_MemScope temp = DS_ScopeBeginT(m);
+
+	// https://learn.microsoft.com/en-us/windows/win32/procthread/creating-a-child-process-with-redirected-input-and-output
+
+	SECURITY_ATTRIBUTES security_attrs = {0};
+	security_attrs.nLength = sizeof(SECURITY_ATTRIBUTES);
+	security_attrs.lpSecurityDescriptor = NULL;
+	security_attrs.bInheritHandle = 1;
+
+	STARTUPINFOW startup_info = {0};
+	startup_info.cb = sizeof(STARTUPINFOW);
+	startup_info.dwFlags = STARTF_USESTDHANDLES;
+	startup_info.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+	startup_info.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+	startup_info.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+	wchar_t* command_string_wide = OS_UTF8ToWide(&temp, command_string, 1); // NOTE: CreateProcessW may modify the command string in place.
+
+	PROCESS_INFORMATION process_info = {0};
+	bool ok = CreateProcessW(NULL, command_string_wide, NULL, NULL, true, CREATE_UNICODE_ENVIRONMENT, NULL, NULL, &startup_info, &process_info);
+
+	if (ok) {
+		WaitForSingleObject(process_info.hProcess, INFINITE);
+		if (out_exit_code) ok = GetExitCodeProcess(process_info.hProcess, (DWORD*)out_exit_code);
+
+		CloseHandle(process_info.hProcess);
+		CloseHandle(process_info.hThread);
+	}
+
+	DS_ScopeEnd(&temp);
+	return ok;
+}
+
 OS_API void OS_DeleteDirectory(DS_MemScopeNone* m, STR_View directory_path) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 
