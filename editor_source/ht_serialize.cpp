@@ -513,8 +513,9 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 			HT_ItemIndex item_i = ItemGroupAdd(val);
 
 			HT_ItemHeader* item = GetItemFromIndex(val, item_i);
-			STR_View name = STR_Clone(DS_HEAP, StrFromMD(p->node->string));
-			item->name = {name.data, name.size};
+			
+			STR_View name = StrFromMD(p->node->string);
+			StringSetValue(&item->name, name);
 
 			MoveItemToAfter(val, item_i, val->last);
 

@@ -320,7 +320,9 @@ struct StructMemberValNode {
 	UI_DataTreeNode base; // Must be the first member for downcasting
 	void* data;
 	HT_Type type;
-	STR_View name;
+	
+	HT_String* name_rw; // if NULL, `name_ro` is used
+	STR_View name_ro;
 };
 
 static void UIAddValAssetRef(EditorState* s, UI_Box* box, UI_Size w, UI_Size h, HT_Asset* handle) {
@@ -501,7 +503,14 @@ static void UIAddStructDataNode(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 	UI_Key key = UI_KKEY(member_val->base.key);
 
 	if (column == 0) {
-		UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, member_val->name);
+		if (member_val->name_rw) {
+			UI_Text ui_val = StringToUIText(*member_val->name_rw);
+			UI_AddValText(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFlex(1.f), &ui_val, NULL);
+			*member_val->name_rw = UITextToString(ui_val);
+		}
+		else {
+			UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, member_val->name_ro);
+		}
 	}
 	else {
 		parent->inner_padding = {5.f, 1.f};
@@ -589,7 +598,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			StructMember* member = &struct_asset->struct_type.members[i];
 			
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name = member->name;
+			node->name_ro = member->name;
 			node->type = member->type;
 			node->data = (char*)data + member->offset;
 			node->base.key = UI_HashInt(parent->base.key, i);
@@ -608,7 +617,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			BuildStructMemberValNodes(s, parent, any->data, &any->type);
 		} else {
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name = "data";
+			node->name_ro = "data";
 			node->type = any->type;
 			node->data = any->data;
 			node->base.key = UI_KKEY(parent->base.key);
@@ -632,7 +641,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 
 		for (int j = 0; j < array->count; j++) {
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name = STR_Form(UI_TEMP, "[%d]", j);
+			node->name_ro = STR_Form(UI_TEMP, "[%d]", j);
 			node->type = elem_type;
 			node->data = (char*)array->data + elem_size * j;
 			node->base.key = UI_HashInt(parent->base.key, j);
@@ -656,7 +665,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 			HT_ItemHeader* item = GetItemFromIndex(group, i);
 			
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name = {item->name.data, item->name.size};
+			node->name_rw = &item->name;
 			node->type = item_type;
 			node->data = (char*)item + group->item_offset;
 			node->base.key = UI_HashInt(parent->base.key, i);

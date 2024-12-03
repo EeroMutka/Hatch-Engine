@@ -318,7 +318,7 @@ EXPORT void ItemGroupDeinit(HT_ItemGroup* group) {
 	HT_ItemIndex item_i = group->first;
 	while (item_i) {
 		HT_ItemHeader* item = GetItemFromIndex(group, item_i);
-		STR_Free(DS_HEAP, {item->name.data, item->name.size});
+		StringDeinit(&item->name);
 		item_i = item->next;
 	}
 	
@@ -371,7 +371,7 @@ EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group) {
 		item = GetItemFromIndex(group, index);
 		group->last_bucket_end += 1;
 	}
-	item->name = {};
+	StringInit(&item->name, "");
 	item->prev = 0;
 	item->next = 0;
 	return index;
@@ -395,6 +395,7 @@ EXPORT void StructMemberDeinit(StructMember* x) {
 }
 
 EXPORT void StringInit(HT_String* x, STR_View value) {
+	*x = {};
 	if (value.size > 0) StringSetValue(x, value);
 }
 EXPORT void StringDeinit(HT_String* x) {

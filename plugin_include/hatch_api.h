@@ -159,7 +159,7 @@ typedef struct HT_ItemGroup {
 typedef struct HT_ItemHeader {
 	HT_ItemIndex prev;
 	HT_ItemIndex next;
-	HT_StringView name;
+	HT_String name;
 } HT_ItemHeader;
 
 typedef struct HT_ItemHandleDecoded {

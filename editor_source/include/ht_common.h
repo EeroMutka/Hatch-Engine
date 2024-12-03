@@ -278,7 +278,7 @@ EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex
 
 EXPORT void StructMemberInit(StructMember* x); // value must be zero-initialized already
 EXPORT void StructMemberDeinit(StructMember* x);
-EXPORT void StringInit(HT_String* x, STR_View value); // value must be zero-initialized already
+EXPORT void StringInit(HT_String* x, STR_View value); // `x` may be uninitialized before
 EXPORT void StringDeinit(HT_String* x);
 EXPORT void StringSetValue(HT_String* x, STR_View value);
 
