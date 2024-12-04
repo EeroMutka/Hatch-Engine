@@ -3,6 +3,8 @@
 
 typedef struct HT_GeneratedTypeTable {
 	HT_Asset Scene__BoxComponent;
+	HT_Asset Scene__MeshComponent;
+	HT_Asset Scene__Mesh;
 	HT_Asset Scene__Scene;
 	HT_Asset Scene__SceneEntity;
 	HT_Asset SceneEdit__EditorCamera;
@@ -13,6 +15,12 @@ typedef struct HT_GeneratedTypeTable {
 typedef struct Scene__BoxComponent {
 	vec3 half_extent;
 } Scene__BoxComponent;
+typedef struct Scene__MeshComponent {
+	HT_Asset mesh;
+} Scene__MeshComponent;
+typedef struct Scene__Mesh {
+	HT_Asset mesh_source;
+} Scene__Mesh;
 typedef struct Scene__Scene {
 	HT_ItemGroup entities;
 	HT_Array extended_data;

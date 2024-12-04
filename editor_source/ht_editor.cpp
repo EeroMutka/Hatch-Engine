@@ -1497,6 +1497,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	*plugin_instance = {};
 	plugin_instance->plugin_asset = plugin_asset;
 	plugin_instance->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
+	DS_ArrInit(&plugin_instance->allocations, DS_HEAP);
 
 	STR_View plugin_name = plugin_asset->name;
 
@@ -1566,7 +1567,8 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 		PluginAllocationHeader* allocation = plugin->allocations[i];
 		DS_MemFree(DS_HEAP, allocation);
 	}
-	DS_ArrClear(&plugin->allocations);
+	DS_ArrDeinit(&plugin->allocations);
+	plugin->allocations = {};
 
 	// increment the handle generation to invalidate any handles
 	DecodedHandle plugin_handle = DecodeHandle(plugin->handle);

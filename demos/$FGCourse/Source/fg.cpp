@@ -16,6 +16,9 @@
 #include <ht_utils/math/math_extras.h>
 #include <ht_utils/input/input.h>
 
+#define DS_NO_MALLOC
+#include <ht_utils/fire/fire_ds.h>
+
 #include "../fg.inc.ht"
 
 #include "../../$SceneEdit/src/camera.h"
@@ -28,12 +31,28 @@
 #include <sstream>
 #include <iostream>
 
+#include "ufbx.h"
+
+// -----------------------------------------------------
+
+struct Allocator { DS_AllocatorBase base; HT_API* ht; };
+
+static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data);
+
+static Allocator HT_TEMP_ALLOCATOR;
+static Allocator HT_HEAP_ALLOCATOR;
+static DS_Arena TEMP_ARENA;
+static DS_Arena* TEMP;
+static DS_Allocator* HEAP;
+
+// -----------------------------------------------------
+
+#include "mesh_import.h"
+
+// -----------------------------------------------------
+
 struct ShaderConstants {
 	mat4 ws_to_cs;
-};
-
-struct Vertex {
-	vec3 position;
 };
 
 struct VertexShader {
@@ -41,16 +60,10 @@ struct VertexShader {
 	ID3D11InputLayout* input_layout;
 };
 
-struct Mesh {
-	ID3D11Buffer* vbo;
-	ID3D11Buffer* ibo;
-	int ibo_count;
-};
-
 // -----------------------------------------------------
 
 static Mesh mesh_monkey;
-static Mesh mesh_cube;
+//static Mesh mesh_cube;
 
 static ID3D11Buffer* cbo;
 static ID3D11SamplerState* sampler;
@@ -75,6 +88,17 @@ static ID3D11RenderTargetView* color_target_view;
 static ID3D11DepthStencilView* depth_target_view;
 
 // -----------------------------------------------------
+
+static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
+	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
+	if (ptr) memcpy(data, ptr, old_size);
+	return data;
+}
+
+static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
+	void* data = ((Allocator*)allocator)->ht->AllocatorProc(ptr, size);
+	return data;
+}
 
 // bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
 static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
@@ -213,11 +237,12 @@ static void Render(HT_API* ht) {
 
 		u32 vbo_stride = sizeof(Vertex);
 		
-		{
+		for (int i = 0; i < mesh_monkey.parts.count; i++) {
+			MeshPart part = mesh_monkey.parts[i];
 			u32 vbo_offset = 0;
 			dc->IASetVertexBuffers(0, 1, &mesh_monkey.vbo, &vbo_stride, &vbo_offset);
 			dc->IASetIndexBuffer(mesh_monkey.ibo, DXGI_FORMAT_R32_UINT, 0);
-			dc->DrawIndexed(mesh_monkey.ibo_count, 0, 0);
+			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 		}
 		
 		for (HT_ItemGroupEach(&open_scene->entities, i)) {
@@ -236,12 +261,12 @@ static void Render(HT_API* ht) {
 			constants.ws_to_cs = ls_to_ws * ws_to_cs;
 			UpdateShaderConstants(dc, constants);
 
-			{
-				u32 vbo_offset = 0;
-				dc->IASetVertexBuffers(0, 1, &mesh_cube.vbo, &vbo_stride, &vbo_offset);
-				dc->IASetIndexBuffer(mesh_cube.ibo, DXGI_FORMAT_R32_UINT, 0);
-				dc->DrawIndexed(mesh_cube.ibo_count, 0, 0);
-			}
+			//{
+			//	u32 vbo_offset = 0;
+			//	dc->IASetVertexBuffers(0, 1, &mesh_cube.vbo, &vbo_stride, &vbo_offset);
+			//	dc->IASetIndexBuffer(mesh_cube.ibo, DXGI_FORMAT_R32_UINT, 0);
+			//	dc->DrawIndexed(mesh_cube.ibo_count, 0, 0);
+			//}
 
 			if (InputIsDown(ht->input_frame, HT_InputKey_Y)) {
 				entity->position.x += 0.1f;
@@ -334,70 +359,20 @@ static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path)
 	return shader;
 }
 
-static Mesh LoadOBJ(HT_API* ht, const char* file_cstr) {
+HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
+	
+	// Init fire-ds allocators
+	{
+		HT_TEMP_ALLOCATOR = {{TempAllocatorProc}, ht};
+		HT_HEAP_ALLOCATOR = {{HeapAllocatorProc}, ht};
 
-	// TODO: fix working directory
-	// std::ifstream file("C:/dev/Hatch/test_assets/cube.obj");
-	std::ifstream file(file_cstr);
-
-	std::vector<vec3> verts;
-	std::vector<int> indices;
-
-	if (file.is_open()) {
-		std::string line_str;
-		while (getline(file, line_str)) {
-			std::istringstream line(line_str);
-
-			std::string word;
-			line >> word;
-
-			if (word == "v") {
-				vec3 vert;
-				line >> vert.x;
-				line >> vert.y;
-				line >> vert.z;
-				verts.push_back(vert);
-			}
-			else if (word == "f") {
-				std::vector<int> polygon_indices;
-
-				while (true) {
-					std::string vert_word_str;
-					line >> vert_word_str;
-					if (vert_word_str.size() == 0) break;
-
-					std::istringstream vert_word(vert_word_str);
-					int vert_index;
-					vert_word >> vert_index;
-					polygon_indices.push_back(vert_index-1);
-				}
-
-				for (int i = 2; i < polygon_indices.size(); i++) {
-					int i1 = polygon_indices[0];
-					int i2 = polygon_indices[i];
-					int i3 = polygon_indices[i-1];
-					indices.push_back(i1);
-					indices.push_back(i2);
-					indices.push_back(i3);
-				}
-			}
-		}
-
-		file.close();
+		DS_ArenaInit(&TEMP_ARENA, 0, (DS_Allocator*)&HT_TEMP_ALLOCATOR);
+		TEMP = &TEMP_ARENA;
+		HEAP = (DS_Allocator*)&HT_HEAP_ALLOCATOR;
 	}
 
-	Mesh mesh = {};
-	mesh.vbo = CreateGPUBuffer(ht, (int)verts.size() * sizeof(Vertex), D3D11_BIND_VERTEX_BUFFER, verts.data());
-	mesh.ibo = CreateGPUBuffer(ht, (int)indices.size() * sizeof(u32), D3D11_BIND_INDEX_BUFFER, indices.data());
-	mesh.ibo_count = (int)indices.size();
-	return mesh;
-}
-
-HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-
-	// obj loading
-	mesh_monkey = LoadOBJ(ht, "C:/dev/Hatch/test_assets/monkey.obj");
-	mesh_cube = LoadOBJ(ht, "C:/dev/Hatch/test_assets/cube.obj");
+	mesh_monkey = ImportMesh(ht, HEAP, "C:/dev/Hatch/demos/$FGCourse/Meshes/monkey.fbx");
+	//mesh_cube = LoadOBJ(ht, "C:/dev/Hatch/test_assets/cube.obj");
 	
 	// create cbo
 	D3D11_BUFFER_DESC cbo_desc = {};
