@@ -1,6 +1,7 @@
 #define HT_STATIC_PLUGIN_ID fg
 
 #include "common.h"
+#include "message_manager.h"
 #include "mesh_manager.h"
 
 // -----------------------------------------------------
@@ -326,10 +327,26 @@ void FG::Init(HT_API* ht_api) {
 	heap = (DS_Allocator*)&heap_allocator_wrapper;
 }
 
+struct TestMessage : Message {
+	int x;
+	int y;
+};
+
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	FG::Init(ht);
+	MessageManager::Init();
 	MeshManager::Init();
 	
+	TestMessage test_msg = {};
+	test_msg.x = 5;
+	test_msg.y = 6;
+	MessageManager::SendNewMessage(test_msg);
+	
+	TestMessage result_msg;
+	MessageManager::PeekNextMessage(&result_msg);
+	
+	uint64_t hash_code = typeid(test_msg).hash_code();
+
 	// create cbo
 	D3D11_BUFFER_DESC cbo_desc = {};
 	cbo_desc.ByteWidth      = sizeof(ShaderConstants) + 0xf & 0xfffffff0; // ensure constant buffer size is multiple of 16 bytes

@@ -1,3 +1,5 @@
+
+// TODO: abstract the D3D11 stuff into its own file?
 #define HT_INCLUDE_D3D11_API
 #define WIN32_LEAN_AND_MEAN
 #include <d3d11.h>
