@@ -23,17 +23,15 @@ struct Allocator {
 	HT_API* ht;
 };
 
-struct FG_Globals {
-	HT_API* ht;
-	Allocator temp_allocator_wrapper;
-	Allocator heap_allocator_wrapper;
-	DS_Arena temp_arena;
-	DS_Arena* temp;
-	DS_Allocator* heap;
+class FG {
+public:
+	static void Init(HT_API* ht_api);
+	static HT_API* ht;
+	static DS_Arena* temp;
+	static DS_Allocator* heap;
+
+private:
+	static Allocator temp_allocator_wrapper;
+	static Allocator heap_allocator_wrapper;
+	static DS_Arena temp_arena;
 };
-
-#ifndef FG_GLOBALS_DEF
-#define FG_GLOBALS_DEF extern
-#endif
-
-FG_GLOBALS_DEF FG_Globals FG;

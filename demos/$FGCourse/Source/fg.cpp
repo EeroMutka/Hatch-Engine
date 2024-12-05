@@ -1,8 +1,6 @@
 #define HT_STATIC_PLUGIN_ID fg
 
-#define FG_GLOBALS_DEF
 #include "common.h"
-
 #include "mesh_manager.h"
 
 // -----------------------------------------------------
@@ -17,6 +15,13 @@ struct VertexShader {
 };
 
 // -----------------------------------------------------
+
+DS_Arena* FG::temp;
+DS_Allocator* FG::heap;
+HT_API* FG::ht;
+Allocator FG::temp_allocator_wrapper;
+Allocator FG::heap_allocator_wrapper;
+DS_Arena FG::temp_arena;;
 
 static ID3D11Buffer* cbo;
 static ID3D11SamplerState* sampler;
@@ -42,8 +47,8 @@ static ID3D11DepthStencilView* depth_target_view;
 // -----------------------------------------------------
 
 void MeshManager::Init() {
-	DS_MapInit(&instance.meshes, FG.heap);
-	DS_MapInit(&instance.textures, FG.heap);
+	DS_MapInit(&instance.meshes, FG::heap);
+	DS_MapInit(&instance.textures, FG::heap);
 }
 
 static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
@@ -185,16 +190,6 @@ static void Render(HT_API* ht) {
 		float clear_color[] = {0.2f, 0.4f, 0.8f, 1.f};
 		dc->ClearRenderTargetView(color_target_view, clear_color);
 		dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
-
-		u32 vbo_stride = sizeof(Vertex);
-		
-		//for (int i = 0; i < mesh_monkey.parts.count; i++) {
-		//	MeshPart part = mesh_monkey.parts[i];
-		//	u32 vbo_offset = 0;
-		//	dc->IASetVertexBuffers(0, 1, &mesh_monkey.vbo, &vbo_stride, &vbo_offset);
-		//	dc->IASetIndexBuffer(mesh_monkey.ibo, DXGI_FORMAT_R32_UINT, 0);
-		//	dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-		//}
 		
 		for (HT_ItemGroupEach(&open_scene->entities, entity_i)) {
 			Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &open_scene->entities, entity_i);
@@ -210,25 +205,23 @@ static void Render(HT_API* ht) {
 			constants.ws_to_cs = ls_to_ws * ws_to_cs;
 			UpdateShaderConstants(dc, constants);
 
-				//if (DS_MapFind(&asset_manager.meshes, mesh_component->mesh, &mesh_data)) {
-				//bool found_texture = DS_MapFind(&asset_manager.textures, mesh_component->color_texture, &color_texture);
-				//if (found_texture) {
-
 			if (mesh_component) {
 				Mesh mesh_data;
-				if (MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data)) {
-
+				Texture color_texture;
+				bool ok =
+					MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data) &&
+					MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture);
+				
+				if (ok) {
 					for (int i = 0; i < mesh_data.parts.count; i++) {
 						MeshPart part = mesh_data.parts[i];
 						u32 vbo_offset = 0;
+						u32 vbo_stride = sizeof(Vertex);
 						dc->IASetVertexBuffers(0, 1, &mesh_data.vbo, &vbo_stride, &vbo_offset);
 						dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
 
-						Texture color_texture;
-						if (MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture)) {
-							dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
-							dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-						}
+						dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
+						dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 					}
 				}
 			}
@@ -267,13 +260,6 @@ static void Render(HT_API* ht) {
 
 static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
-	
-	//if (open_scene != scene) {
-		//if (open_scene) HT_ASSERT(0); // TODO: unload scene
-		// load scene
-		//LoadScene(ht, scene);
-	//}
-	
 	open_scene = scene;
 	open_scene_rect_min = update_info->rect_min;
 	open_scene_rect_max = update_info->rect_max;
@@ -330,23 +316,19 @@ static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path)
 	return shader;
 }
 
-static void InitFG(HT_API* ht) {
-	FG.ht = ht;
-	FG.temp_allocator_wrapper = {{TempAllocatorProc}, ht};
-	FG.heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
+void FG::Init(HT_API* ht_api) {
+	ht = ht_api;
+	temp_allocator_wrapper = {{TempAllocatorProc}, ht};
+	heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
 
-	DS_ArenaInit(&FG.temp_arena, 0, (DS_Allocator*)&FG.temp_allocator_wrapper);
-	FG.temp = &FG.temp_arena;
-	FG.heap = (DS_Allocator*)&FG.heap_allocator_wrapper;
+	DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
+	temp = &temp_arena;
+	heap = (DS_Allocator*)&heap_allocator_wrapper;
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	InitFG(ht);
-	
+	FG::Init(ht);
 	MeshManager::Init();
-
-	//mesh_monkey = ImportMesh(ht, HEAP, "C:/dev/Hatch/demos/$FGCourse/Meshes/monkey.fbx");
-	//mesh_cube = LoadOBJ(ht, "C:/dev/Hatch/test_assets/cube.obj");
 	
 	// create cbo
 	D3D11_BUFFER_DESC cbo_desc = {};
