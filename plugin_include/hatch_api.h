@@ -229,9 +229,9 @@ HT_StaticExports HT__Concat(HT_STATIC_EXPORTS__, HT_STATIC_PLUGIN_ID) = { HT__St
 } // extern "C"
 #endif
 #else
-#ifndef HT_IS_EDITOR
+#ifndef HT_NO_STATIC_PLUGIN_EXPORTS
 #error HT_STATIC_PLUGIN_ID must be defined before including <hatch_api.h>
-#endif // HT_IS_EDITOR
+#endif
 #endif
 
 #ifndef HT_EXPORT

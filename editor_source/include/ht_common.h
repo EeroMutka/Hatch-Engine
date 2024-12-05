@@ -1,5 +1,5 @@
 
-#define HT_IS_EDITOR
+#define HT_NO_STATIC_PLUGIN_EXPORTS
 #include "../plugin_include/hatch_api.h"
 
 // Convention for marking non-static / exported symbols

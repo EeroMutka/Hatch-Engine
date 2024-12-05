@@ -1,54 +1,9 @@
-
-//HT_EXPORT void HT_LoadPlugin(HT_API* ht) {}
-//HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {}
-//HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {}
-
-#define HT_INCLUDE_D3D11_API
-#define WIN32_LEAN_AND_MEAN
-#include <d3d11.h>
-#undef far  // wtf windows.h
-#undef near // wtf windows.h
-
 #define HT_STATIC_PLUGIN_ID fg
-#include <hatch_api.h>
 
-#include <ht_utils/math/math_core.h>
-#include <ht_utils/math/math_extras.h>
-#include <ht_utils/input/input.h>
+#define FG_GLOBALS_DEF
+#include "common.h"
 
-#define DS_NO_MALLOC
-#include <ht_utils/fire/fire_ds.h>
-
-#include "../fg.inc.ht"
-
-#include "../../$SceneEdit/src/camera.h"
-#include "../../$SceneEdit/src/scene_edit.h"
-
-// for obj loading
-#include <vector>
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-
-#include "ufbx.h"
-#include "stb_image.h"
-
-// -----------------------------------------------------
-
-struct Allocator { DS_AllocatorBase base; HT_API* ht; };
-
-static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data);
-
-static Allocator HT_TEMP_ALLOCATOR;
-static Allocator HT_HEAP_ALLOCATOR;
-static DS_Arena TEMP_ARENA;
-static DS_Arena* TEMP;
-static DS_Allocator* HEAP;
-
-// -----------------------------------------------------
-
-#include "mesh_import.h"
+#include "mesh_manager.h"
 
 // -----------------------------------------------------
 
@@ -62,9 +17,6 @@ struct VertexShader {
 };
 
 // -----------------------------------------------------
-
-static DS_Map(HT_Asset, Mesh) meshes;
-static DS_Map(HT_Asset, Texture) textures;
 
 static ID3D11Buffer* cbo;
 static ID3D11SamplerState* sampler;
@@ -88,6 +40,11 @@ static ID3D11RenderTargetView* color_target_view;
 static ID3D11DepthStencilView* depth_target_view;
 
 // -----------------------------------------------------
+
+void MeshManager::Init() {
+	DS_MapInit(&instance.meshes, FG.heap);
+	DS_MapInit(&instance.textures, FG.heap);
+}
 
 static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
 	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
@@ -113,31 +70,6 @@ static T* FindComponent(Scene__SceneEntity* entity, HT_Asset struct_type) {
 		}
 	}
 	return result;
-}
-
-// bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
-static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
-	HT_ASSERT(size > 0);
-	
-	D3D11_BUFFER_DESC desc = {0};
-	desc.ByteWidth = size;
-	desc.Usage = D3D11_USAGE_DYNAMIC; // lets do dynamic for simplicity    D3D11_USAGE_DEFAULT;
-	desc.BindFlags = bind_flags;
-	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	// TODO: We can provide initial data by just passing it as the second arg to CreateBuffer!!!!
-	ID3D11Buffer* buffer;
-	bool ok = ht->D3D11_device->CreateBuffer(&desc, NULL, &buffer) == S_OK;
-	HT_ASSERT(ok);
-
-	D3D11_MAPPED_SUBRESOURCE buffer_mapped;
-	ok = ht->D3D11_device_context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &buffer_mapped) == S_OK;
-	HT_ASSERT(ok && buffer_mapped.pData);
-	
-	memcpy(buffer_mapped.pData, data, size);
-	
-	ht->D3D11_device_context->Unmap(buffer, 0);
-	return buffer;
 }
 
 static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
@@ -278,9 +210,14 @@ static void Render(HT_API* ht) {
 			constants.ws_to_cs = ls_to_ws * ws_to_cs;
 			UpdateShaderConstants(dc, constants);
 
+				//if (DS_MapFind(&asset_manager.meshes, mesh_component->mesh, &mesh_data)) {
+				//bool found_texture = DS_MapFind(&asset_manager.textures, mesh_component->color_texture, &color_texture);
+				//if (found_texture) {
+
 			if (mesh_component) {
 				Mesh mesh_data;
-				if (DS_MapFind(&meshes, mesh_component->mesh, &mesh_data)) {
+				if (MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data)) {
+
 					for (int i = 0; i < mesh_data.parts.count; i++) {
 						MeshPart part = mesh_data.parts[i];
 						u32 vbo_offset = 0;
@@ -288,8 +225,7 @@ static void Render(HT_API* ht) {
 						dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
 
 						Texture color_texture;
-						bool found_texture = DS_MapFind(&textures, mesh_component->color_texture, &color_texture);
-						if (found_texture) {
+						if (MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture)) {
 							dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
 							dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 						}
@@ -329,42 +265,14 @@ static void Render(HT_API* ht) {
 	}
 }
 
-static void LoadScene(HT_API* ht, Scene__Scene* scene) {
-	for (HT_ItemGroupEach(&scene->entities, i)) {
-		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
-		Scene__MeshComponent* mesh_component = FIND_COMPONENT(ht, entity, Scene__MeshComponent);
-
-		if (mesh_component) {
-			
-			Mesh* mesh;
-			bool added_new_mesh = DS_MapGetOrAddPtr(&meshes, mesh_component->mesh, &mesh);
-			if (added_new_mesh) {
-				Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, ht, mesh_component->mesh);
-				HT_ASSERT(mesh_data);
-				HT_StringView mesh_source_file = ht->AssetGetFilepath(mesh_data->mesh_source);
-				*mesh = ImportMesh(ht, HEAP, mesh_source_file);
-			}
-			
-			Texture* texture;
-			bool added_new_texture = DS_MapGetOrAddPtr(&textures, mesh_component->color_texture, &texture);
-			if (added_new_texture) {
-				Scene__Texture* color_texture_data = HT_GetAssetData(Scene__Texture, ht, mesh_component->color_texture);
-				HT_ASSERT(color_texture_data);
-				HT_StringView color_texture_source_file = ht->AssetGetFilepath(color_texture_data->texture_source);
-				*texture = ImportTexture(ht, color_texture_source_file);
-			}
-		}
-	}
-}
-
 static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
 	
-	if (open_scene != scene) {
-		if (open_scene) HT_ASSERT(0); // TODO: unload scene
+	//if (open_scene != scene) {
+		//if (open_scene) HT_ASSERT(0); // TODO: unload scene
 		// load scene
-		LoadScene(ht, scene);
-	}
+		//LoadScene(ht, scene);
+	//}
 	
 	open_scene = scene;
 	open_scene_rect_min = update_info->rect_min;
@@ -422,20 +330,20 @@ static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path)
 	return shader;
 }
 
-static void InitAllocators(HT_API* ht) {
-	HT_TEMP_ALLOCATOR = {{TempAllocatorProc}, ht};
-	HT_HEAP_ALLOCATOR = {{HeapAllocatorProc}, ht};
+static void InitFG(HT_API* ht) {
+	FG.ht = ht;
+	FG.temp_allocator_wrapper = {{TempAllocatorProc}, ht};
+	FG.heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
 
-	DS_ArenaInit(&TEMP_ARENA, 0, (DS_Allocator*)&HT_TEMP_ALLOCATOR);
-	TEMP = &TEMP_ARENA;
-	HEAP = (DS_Allocator*)&HT_HEAP_ALLOCATOR;
+	DS_ArenaInit(&FG.temp_arena, 0, (DS_Allocator*)&FG.temp_allocator_wrapper);
+	FG.temp = &FG.temp_arena;
+	FG.heap = (DS_Allocator*)&FG.heap_allocator_wrapper;
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	InitAllocators(ht);
+	InitFG(ht);
 	
-	DS_MapInit(&meshes, HEAP);
-	DS_MapInit(&textures, HEAP);
+	MeshManager::Init();
 
 	//mesh_monkey = ImportMesh(ht, HEAP, "C:/dev/Hatch/demos/$FGCourse/Meshes/monkey.fbx");
 	//mesh_cube = LoadOBJ(ht, "C:/dev/Hatch/test_assets/cube.obj");
