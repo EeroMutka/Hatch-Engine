@@ -7,6 +7,7 @@ typedef struct HT_GeneratedTypeTable {
 	HT_Asset Scene__Mesh;
 	HT_Asset Scene__Scene;
 	HT_Asset Scene__SceneEntity;
+	HT_Asset Scene__Texture;
 	HT_Asset SceneEdit__EditorCamera;
 	HT_Asset SceneEdit__SceneEditParams;
 	HT_Asset FGCourse__fg_params_type;
@@ -17,6 +18,7 @@ typedef struct Scene__BoxComponent {
 } Scene__BoxComponent;
 typedef struct Scene__MeshComponent {
 	HT_Asset mesh;
+	HT_Asset color_texture;
 } Scene__MeshComponent;
 typedef struct Scene__Mesh {
 	HT_Asset mesh_source;
@@ -31,6 +33,9 @@ typedef struct Scene__SceneEntity {
 	vec3 scale;
 	HT_Array components;
 } Scene__SceneEntity;
+typedef struct Scene__Texture {
+	HT_Asset texture_source;
+} Scene__Texture;
 typedef struct SceneEdit__EditorCamera {
 	vec3 position;
 	float pitch;

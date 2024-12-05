@@ -1,6 +1,8 @@
 
 struct Vertex {
 	vec3 position;
+	vec2 uv;
+	vec3 normal;
 };
 
 struct MeshPart {
@@ -15,7 +17,52 @@ struct Mesh {
 	DS_DynArray(MeshPart) parts;
 };
 
-static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, const char* path) {
+struct Texture {
+	ID3D11Texture2D* texture;
+	ID3D11ShaderResourceView* texture_srv;
+};
+
+static char* TempCString(HT_StringView str) {
+	char* data = DS_ArenaPush(TEMP, str.size + 1);
+	memcpy(data, str.data, str.size);
+	data[str.size] = 0;
+	return data;
+}
+
+static Texture ImportTexture(HT_API* ht, HT_StringView file_path) {
+	ID3D11Texture2D* texture;
+	ID3D11ShaderResourceView* texture_srv;
+
+	const char* file_path_cstr = TempCString(file_path);
+	
+	int size_x, size_y, num_components;
+	u8* img_data = stbi_load(file_path_cstr, &size_x, &size_y, &num_components, 4);
+	
+	D3D11_SUBRESOURCE_DATA texture_initial_data = {};
+	texture_initial_data.pSysMem = img_data;
+	texture_initial_data.SysMemPitch = size_x * 4; // 4 bytes per pixel
+
+	D3D11_TEXTURE2D_DESC desc = {};
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.Width = size_x;
+	desc.Height = size_y;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.SampleDesc.Count = 1;
+	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	bool ok = ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
+	HT_ASSERT(ok);
+
+	ok = ht->D3D11_device->CreateShaderResourceView(texture, NULL, &texture_srv) == S_OK;
+	HT_ASSERT(ok);
+	
+	stbi_image_free(img_data);
+
+	return { texture, texture_srv };
+}
+
+static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_path) {
 	Mesh result = {};
 	DS_ArrInit(&result.parts, allocator);
 	
@@ -24,9 +71,9 @@ static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, const char* path) {
 	ufbx_load_opts opts = {0}; // Optional, pass NULL for defaults
 	opts.generate_missing_normals = true;
 	
-	ufbx_scene* fbx_scene = ufbx_load_file(path, &opts, &error);
+	const char* file_path_cstr = TempCString(file_path);
+	ufbx_scene* fbx_scene = ufbx_load_file(file_path_cstr, &opts, &error);
 	HT_ASSERT(fbx_scene);
-	
 	
 	struct TempMeshPart {
 		Vertex* vertices;
@@ -70,11 +117,11 @@ static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, const char* path) {
 						
 						Vertex* v = &vertices[num_vertices++];
 						ufbx_vec3 position = ufbx_get_vertex_vec3(&fbx_mesh->vertex_position, index);
-						// ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
-						// ufbx_vec2 uv = ufbx_get_vertex_vec2(&fbx_mesh->vertex_uv, index);
+						ufbx_vec3 normal = ufbx_get_vertex_vec3(&fbx_mesh->vertex_normal, index);
+						ufbx_vec2 uv = ufbx_get_vertex_vec2(&fbx_mesh->vertex_uv, index);
 						v->position = {(float)position.x, (float)position.y, (float)position.z};
-						// v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
-						// v->uv = {(float)uv.x, (float)uv.y};
+						v->uv = {(float)uv.x, (float)uv.y};
+						v->normal = {(float)normal.x, (float)normal.y, (float)normal.z};
 					}
 				}
 				

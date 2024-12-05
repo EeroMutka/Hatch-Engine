@@ -1124,16 +1124,18 @@ static void* HT_AllocatorProc(void* ptr, size_t size) {
 
 	PluginInstance* plugin = g_plugin_call_ctx->plugin;
 	if (size == 0) {
-		// Move last allocation to the place of the allocation we want to free in the allocations array
-		PluginAllocationHeader* header = (PluginAllocationHeader*)((char*)ptr - 16);
-		PluginAllocationHeader* last_allocation = plugin->allocations[plugin->allocations.count - 1];
+		if (ptr) {
+			// Move last allocation to the place of the allocation we want to free in the allocations array
+			PluginAllocationHeader* header = (PluginAllocationHeader*)((char*)ptr - 16);
+			PluginAllocationHeader* last_allocation = plugin->allocations[plugin->allocations.count - 1];
 		
-		last_allocation->allocation_index = header->allocation_index;
-		plugin->allocations[header->allocation_index] = last_allocation;
+			last_allocation->allocation_index = header->allocation_index;
+			plugin->allocations[header->allocation_index] = last_allocation;
 		
-		DS_ArrPop(&plugin->allocations);
+			DS_ArrPop(&plugin->allocations);
 
-		DS_MemFree(DS_HEAP, header);
+			DS_MemFree(DS_HEAP, header);
+		}
 		return NULL;
 	}
 	else {

@@ -32,6 +32,7 @@
 #include <iostream>
 
 #include "ufbx.h"
+#include "stb_image.h"
 
 // -----------------------------------------------------
 
@@ -62,8 +63,8 @@ struct VertexShader {
 
 // -----------------------------------------------------
 
-static Mesh mesh_monkey;
-//static Mesh mesh_cube;
+static DS_Map(HT_Asset, Mesh) meshes;
+static DS_Map(HT_Asset, Texture) textures;
 
 static ID3D11Buffer* cbo;
 static ID3D11SamplerState* sampler;
@@ -75,7 +76,6 @@ static VertexShader present_vs;
 static ID3D11PixelShader* present_ps;
 
 static ID3D11InputLayout* input_layout;
-
 
 static Scene__Scene* open_scene;
 static ivec2 open_scene_rect_min;
@@ -100,6 +100,21 @@ static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, si
 	return data;
 }
 
+#define FIND_COMPONENT(HT, ENTITY, T) FindComponent<T>(ENTITY, HT->types->T)
+
+template<typename T>
+static T* FindComponent(Scene__SceneEntity* entity, HT_Asset struct_type) {
+	T* result = NULL;
+	for (int i = 0; i < entity->components.count; i++) {
+		HT_Any component = ((HT_Any*)entity->components.data)[i];
+		if (component.type.handle == struct_type) {
+			result = (T*)component.data;
+			break;
+		}
+	}
+	return result;
+}
+
 // bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
 static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
 	HT_ASSERT(size > 0);
@@ -110,6 +125,7 @@ static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void*
 	desc.BindFlags = bind_flags;
 	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
+	// TODO: We can provide initial data by just passing it as the second arg to CreateBuffer!!!!
 	ID3D11Buffer* buffer;
 	bool ok = ht->D3D11_device->CreateBuffer(&desc, NULL, &buffer) == S_OK;
 	HT_ASSERT(ok);
@@ -139,6 +155,7 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		desc = {};
 		desc.Width = width;
 		desc.Height = height;
+		desc.MipLevels = 1;
 		desc.ArraySize = 1;
 		desc.SampleDesc.Count = 1;
 		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -155,6 +172,7 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		D3D11_TEXTURE2D_DESC depth_desc = {};
 		depth_desc.Width = width;
 		depth_desc.Height = height;
+		depth_desc.MipLevels = 1;
 		depth_desc.ArraySize = 1;
 		depth_desc.SampleDesc.Count = 1;
 		depth_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -208,8 +226,9 @@ static void Render(HT_API* ht) {
 		constants.ws_to_cs = ws_to_cs;
 		UpdateShaderConstants(dc, constants);
 
-		dc->ClearDepthStencilView(depth_target_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
-		
+		dc->PSSetSamplers(0, 1, &sampler);
+
+		dc->ClearDepthStencilView(depth_target_view, D3D11_CLEAR_DEPTH, 1.0f, 0);		
 
 		dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 		dc->IASetInputLayout(main_vs.input_layout);
@@ -237,19 +256,17 @@ static void Render(HT_API* ht) {
 
 		u32 vbo_stride = sizeof(Vertex);
 		
-		for (int i = 0; i < mesh_monkey.parts.count; i++) {
-			MeshPart part = mesh_monkey.parts[i];
-			u32 vbo_offset = 0;
-			dc->IASetVertexBuffers(0, 1, &mesh_monkey.vbo, &vbo_stride, &vbo_offset);
-			dc->IASetIndexBuffer(mesh_monkey.ibo, DXGI_FORMAT_R32_UINT, 0);
-			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-		}
+		//for (int i = 0; i < mesh_monkey.parts.count; i++) {
+		//	MeshPart part = mesh_monkey.parts[i];
+		//	u32 vbo_offset = 0;
+		//	dc->IASetVertexBuffers(0, 1, &mesh_monkey.vbo, &vbo_stride, &vbo_offset);
+		//	dc->IASetIndexBuffer(mesh_monkey.ibo, DXGI_FORMAT_R32_UINT, 0);
+		//	dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
+		//}
 		
-		for (HT_ItemGroupEach(&open_scene->entities, i)) {
-			Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &open_scene->entities, i);
-
-			// draw entity as cube
-			//Scene__BoxComponent
+		for (HT_ItemGroupEach(&open_scene->entities, entity_i)) {
+			Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &open_scene->entities, entity_i);
+			Scene__MeshComponent* mesh_component = FIND_COMPONENT(ht, entity, Scene__MeshComponent);
 			
 			mat4 ls_to_ws =
 				M_MatScale(entity->scale) *
@@ -261,12 +278,24 @@ static void Render(HT_API* ht) {
 			constants.ws_to_cs = ls_to_ws * ws_to_cs;
 			UpdateShaderConstants(dc, constants);
 
-			//{
-			//	u32 vbo_offset = 0;
-			//	dc->IASetVertexBuffers(0, 1, &mesh_cube.vbo, &vbo_stride, &vbo_offset);
-			//	dc->IASetIndexBuffer(mesh_cube.ibo, DXGI_FORMAT_R32_UINT, 0);
-			//	dc->DrawIndexed(mesh_cube.ibo_count, 0, 0);
-			//}
+			if (mesh_component) {
+				Mesh mesh_data;
+				if (DS_MapFind(&meshes, mesh_component->mesh, &mesh_data)) {
+					for (int i = 0; i < mesh_data.parts.count; i++) {
+						MeshPart part = mesh_data.parts[i];
+						u32 vbo_offset = 0;
+						dc->IASetVertexBuffers(0, 1, &mesh_data.vbo, &vbo_stride, &vbo_offset);
+						dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
+
+						Texture color_texture;
+						bool found_texture = DS_MapFind(&textures, mesh_component->color_texture, &color_texture);
+						if (found_texture) {
+							dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
+							dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
+						}
+					}
+				}
+			}
 
 			if (InputIsDown(ht->input_frame, HT_InputKey_Y)) {
 				entity->position.x += 0.1f;
@@ -293,7 +322,6 @@ static void Render(HT_API* ht) {
 			dc->PSSetShader(present_ps, NULL, 0);
 			dc->OMSetRenderTargets(1, &present_target, NULL);
 
-			dc->PSSetSamplers(0, 1, &sampler);
 			dc->PSSetShaderResources(0, 1, &color_target_srv);
 
 			dc->Draw(3, 0);
@@ -301,8 +329,43 @@ static void Render(HT_API* ht) {
 	}
 }
 
+static void LoadScene(HT_API* ht, Scene__Scene* scene) {
+	for (HT_ItemGroupEach(&scene->entities, i)) {
+		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
+		Scene__MeshComponent* mesh_component = FIND_COMPONENT(ht, entity, Scene__MeshComponent);
+
+		if (mesh_component) {
+			
+			Mesh* mesh;
+			bool added_new_mesh = DS_MapGetOrAddPtr(&meshes, mesh_component->mesh, &mesh);
+			if (added_new_mesh) {
+				Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, ht, mesh_component->mesh);
+				HT_ASSERT(mesh_data);
+				HT_StringView mesh_source_file = ht->AssetGetFilepath(mesh_data->mesh_source);
+				*mesh = ImportMesh(ht, HEAP, mesh_source_file);
+			}
+			
+			Texture* texture;
+			bool added_new_texture = DS_MapGetOrAddPtr(&textures, mesh_component->color_texture, &texture);
+			if (added_new_texture) {
+				Scene__Texture* color_texture_data = HT_GetAssetData(Scene__Texture, ht, mesh_component->color_texture);
+				HT_ASSERT(color_texture_data);
+				HT_StringView color_texture_source_file = ht->AssetGetFilepath(color_texture_data->texture_source);
+				*texture = ImportTexture(ht, color_texture_source_file);
+			}
+		}
+	}
+}
+
 static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
+	
+	if (open_scene != scene) {
+		if (open_scene) HT_ASSERT(0); // TODO: unload scene
+		// load scene
+		LoadScene(ht, scene);
+	}
+	
 	open_scene = scene;
 	open_scene_rect_min = update_info->rect_min;
 	open_scene_rect_max = update_info->rect_max;
@@ -359,19 +422,22 @@ static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path)
 	return shader;
 }
 
+static void InitAllocators(HT_API* ht) {
+	HT_TEMP_ALLOCATOR = {{TempAllocatorProc}, ht};
+	HT_HEAP_ALLOCATOR = {{HeapAllocatorProc}, ht};
+
+	DS_ArenaInit(&TEMP_ARENA, 0, (DS_Allocator*)&HT_TEMP_ALLOCATOR);
+	TEMP = &TEMP_ARENA;
+	HEAP = (DS_Allocator*)&HT_HEAP_ALLOCATOR;
+}
+
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
+	InitAllocators(ht);
 	
-	// Init fire-ds allocators
-	{
-		HT_TEMP_ALLOCATOR = {{TempAllocatorProc}, ht};
-		HT_HEAP_ALLOCATOR = {{HeapAllocatorProc}, ht};
+	DS_MapInit(&meshes, HEAP);
+	DS_MapInit(&textures, HEAP);
 
-		DS_ArenaInit(&TEMP_ARENA, 0, (DS_Allocator*)&HT_TEMP_ALLOCATOR);
-		TEMP = &TEMP_ARENA;
-		HEAP = (DS_Allocator*)&HT_HEAP_ALLOCATOR;
-	}
-
-	mesh_monkey = ImportMesh(ht, HEAP, "C:/dev/Hatch/demos/$FGCourse/Meshes/monkey.fbx");
+	//mesh_monkey = ImportMesh(ht, HEAP, "C:/dev/Hatch/demos/$FGCourse/Meshes/monkey.fbx");
 	//mesh_cube = LoadOBJ(ht, "C:/dev/Hatch/test_assets/cube.obj");
 	
 	// create cbo
@@ -395,7 +461,9 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	HT_StringView present_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/present_shader.hlsl";
 
 	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
-		{ "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{    "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{     "UV", 0,    DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
 	};
 	main_vs = LoadVertexShader(ht, main_shader_path, main_vs_inputs, _countof(main_vs_inputs));
 	main_ps = LoadPixelShader(ht, main_shader_path);
