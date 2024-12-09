@@ -268,74 +268,80 @@ static void UI_DX11_Deinit(void) {
 	memset(&UI_DX11_STATE, 0, sizeof(UI_DX11_STATE));
 }
 
-static void UI_DX11_Draw(UI_Outputs* outputs, UI_Vec2 window_size, ID3D11RenderTargetView* framebuffer_rtv) {
+static void UI_DX11_Draw(UI_Vec2 window_size, ID3D11RenderTargetView* framebuffer_rtv) {
 	UI_DX11_State* s = &UI_DX11_STATE;
 
-	if (s->atlas_mapped.pData) {
-		ID3D11Texture2D* staging = s->atlas_staging;
-		ID3D11Texture2D* dest = s->atlas;
-		s->dc->Unmap(staging, 0);
+	UI_FinalizeDrawBatch();
+	
+	if (UI_STATE.draw_commands.count > 0) {
+		if (s->atlas_mapped.pData) {
+			ID3D11Texture2D* staging = s->atlas_staging;
+			ID3D11Texture2D* dest = s->atlas;
+			s->dc->Unmap(staging, 0);
 
-		s->dc->CopyResource(dest, staging);
+			s->dc->CopyResource(dest, staging);
 
-		s->atlas_mapped.pData = NULL;
-	}
+			s->atlas_mapped.pData = NULL;
+		}
 
-	UI_DX11_Buffer* buffers[] = { &s->vertex_buffer, &s->index_buffer };
-	for (int i = 0; i < 2; i++) {
-		if (buffers[i]->mapped.pData != NULL) {
-			s->dc->Unmap(buffers[i]->handle, 0);
-			buffers[i]->mapped.pData = NULL;
+		UI_DX11_Buffer* buffers[] = { &s->vertex_buffer, &s->index_buffer };
+		for (int i = 0; i < 2; i++) {
+			if (buffers[i]->mapped.pData != NULL) {
+				s->dc->Unmap(buffers[i]->handle, 0);
+				buffers[i]->mapped.pData = NULL;
+			}
+		}
+	
+		UINT stride = 2 * sizeof(float) + 2 * sizeof(float) + 4; // pos, uv, color
+		UINT offset = 0;
+		D3D11_VIEWPORT viewport = { 0.0f, 0.0f, window_size.x, window_size.y, 0.0f, 1.0f };
+
+		D3D11_MAPPED_SUBRESOURCE constantbufferMSR;
+
+		s->dc->Map(s->constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &constantbufferMSR);
+		float* constants = (float*)constantbufferMSR.pData;
+		constants[0] = 1.f / window_size.x;
+		constants[1] = 1.f / window_size.y;
+		s->dc->Unmap(s->constant_buffer, 0);
+
+		s->dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		s->dc->IASetInputLayout(s->input_layout);
+
+		s->dc->VSSetShader(s->vertex_shader, NULL, 0);
+		s->dc->VSSetConstantBuffers(0, 1, &s->constant_buffer);
+
+		s->dc->RSSetViewports(1, &viewport);
+		s->dc->RSSetState(s->raster_state);
+
+		s->dc->PSSetShader(s->pixel_shader, NULL, 0);
+		s->dc->PSSetSamplers(0, 1, &s->sampler_state);
+
+		s->dc->OMSetRenderTargets(1, &framebuffer_rtv, NULL);
+
+		s->dc->OMSetBlendState(s->blend_state, NULL, 0xffffffff);
+
+		///////////////////////////////////////////////////////////////////////////////////////////
+
+		s->dc->IASetVertexBuffers(0, 1, &s->vertex_buffer.handle, &stride, &offset);
+		s->dc->IASetIndexBuffer(s->index_buffer.handle, DXGI_FORMAT_R32_UINT, 0);
+
+		for (int i = 0; i < UI_STATE.draw_commands.count; i++) {
+			UI_DrawCommand* cmd = &UI_STATE.draw_commands.data[i];
+
+			D3D11_RECT scissor_rect;
+			scissor_rect.left = (int)cmd->scissor_rect.min.x;
+			scissor_rect.right = (int)cmd->scissor_rect.max.x;
+			scissor_rect.top = (int)cmd->scissor_rect.min.y;
+			scissor_rect.bottom = (int)cmd->scissor_rect.max.y;
+			s->dc->RSSetScissorRects(1, &scissor_rect);
+		
+			ID3D11ShaderResourceView* texture_srv = (ID3D11ShaderResourceView*)cmd->texture;
+			if (!texture_srv) texture_srv = UI_DX11_STATE.atlas_srv;
+
+			s->dc->PSSetShaderResources(0, 1, &texture_srv);
+			s->dc->DrawIndexed(cmd->index_count, cmd->first_index, 0);
 		}
 	}
-	
-	UINT stride = 2 * sizeof(float) + 2 * sizeof(float) + 4; // pos, uv, color
-	UINT offset = 0;
-	D3D11_VIEWPORT viewport = { 0.0f, 0.0f, window_size.x, window_size.y, 0.0f, 1.0f };
 
-	D3D11_MAPPED_SUBRESOURCE constantbufferMSR;
-
-	s->dc->Map(s->constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &constantbufferMSR);
-	float* constants = (float*)constantbufferMSR.pData;
-	constants[0] = 1.f / window_size.x;
-	constants[1] = 1.f / window_size.y;
-	s->dc->Unmap(s->constant_buffer, 0);
-
-	s->dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	s->dc->IASetInputLayout(s->input_layout);
-
-	s->dc->VSSetShader(s->vertex_shader, NULL, 0);
-	s->dc->VSSetConstantBuffers(0, 1, &s->constant_buffer);
-
-	s->dc->RSSetViewports(1, &viewport);
-	s->dc->RSSetState(s->raster_state);
-
-	s->dc->PSSetShader(s->pixel_shader, NULL, 0);
-	s->dc->PSSetSamplers(0, 1, &s->sampler_state);
-
-	s->dc->OMSetRenderTargets(1, &framebuffer_rtv, NULL);
-
-	s->dc->OMSetBlendState(s->blend_state, NULL, 0xffffffff);
-
-	///////////////////////////////////////////////////////////////////////////////////////////
-
-	s->dc->IASetVertexBuffers(0, 1, &s->vertex_buffer.handle, &stride, &offset);
-	s->dc->IASetIndexBuffer(s->index_buffer.handle, DXGI_FORMAT_R32_UINT, 0);
-
-	for (int i = 0; i < outputs->draw_commands_count; i++) {
-		UI_DrawCommand* cmd = &outputs->draw_commands[i];
-
-		D3D11_RECT scissor_rect;
-		scissor_rect.left = (int)cmd->scissor_rect.min.x;
-		scissor_rect.right = (int)cmd->scissor_rect.max.x;
-		scissor_rect.top = (int)cmd->scissor_rect.min.y;
-		scissor_rect.bottom = (int)cmd->scissor_rect.max.y;
-		s->dc->RSSetScissorRects(1, &scissor_rect);
-		
-		ID3D11ShaderResourceView* texture_srv = (ID3D11ShaderResourceView*)cmd->texture;
-		if (!texture_srv) texture_srv = UI_DX11_STATE.atlas_srv;
-
-		s->dc->PSSetShaderResources(0, 1, &texture_srv);
-		s->dc->DrawIndexed(cmd->index_count, cmd->first_index, 0);
-	}
+	UI_ResetDrawState();
 }

@@ -48,11 +48,17 @@ EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window) {
 }
 
 // for now we need to pass editor state to call HT_D3D12_BuildPluginCommandList on all plugins. TODO: cleanup this!
-EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs) {
+EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s) {
 	FLOAT clear_color[4] = { 0.15f, 0.15f, 0.15f, 1.f };
 	s->dc->ClearRenderTargetView(s->framebuffer_rtv, clear_color);
 
-	UI_DX11_Draw(ui_outputs, UI_VEC2{(float)s->window_size.x, (float)s->window_size.y}, s->framebuffer_rtv);
+		// so we want to call UI_DX11_Draw multiple times during a frame and reset the drawing state after each time.
+		// ... or??
+		// it would seem cleaner to do all rendering at the end.
+		// so like...
+		// ok alternatively we can have a foreground and background UI render context.
+		// Foreground gets all dropdowns etc. Then it's 1. render background 2. render custom windows 3. render foreground
+	UI_DX11_Draw(UI_VEC2{(float)s->window_size.x, (float)s->window_size.y}, s->framebuffer_rtv);
 	
 	// Reset scissor state after fire-UI might have messed with it
 	D3D11_RECT scissor_rect = {};
@@ -61,6 +67,10 @@ EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs
 	s->dc->RSSetScissorRects(1, &scissor_rect);
 	
 	D3D11_RenderPlugins(editor_state);
+	
+	// Draw any new UI commands that might have been added in D3D11_RenderPlugins.
+	// Calling UI_DX11_Draw multiple times a frame is OK. After each time it clears all drawing buffers.
+	UI_DX11_Draw(UI_VEC2{(float)s->window_size.x, (float)s->window_size.y}, s->framebuffer_rtv);
 	
 	s->swapchain->Present(1, 0);
 }

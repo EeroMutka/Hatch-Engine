@@ -1,8 +1,18 @@
 #define HT_STATIC_PLUGIN_ID fg
 
+
 #include "common.h"
 #include "message_manager.h"
 #include "mesh_manager.h"
+
+#define UI_API static
+#define UI_CUSTOM_VEC2
+#define UI_Vec2 vec2
+#include <ht_utils/fire/fire_ui/fire_ui.c>
+#include <ht_utils/gizmos/gizmos.h>
+
+#include "../../$SceneEdit/src/camera.h"
+#include "../../$SceneEdit/src/scene_edit.h"
 
 // -----------------------------------------------------
 
@@ -13,6 +23,11 @@ struct ShaderConstants {
 struct VertexShader {
 	ID3D11VertexShader* shader;
 	ID3D11InputLayout* input_layout;
+};
+
+struct UIBackend {
+	DS_DynArray(UI_DrawVertex) vertex_buffer;
+	DS_DynArray(u32) index_buffer;
 };
 
 // -----------------------------------------------------
@@ -44,6 +59,25 @@ static ID3D11Texture2D* depth_target;
 static ID3D11ShaderResourceView* color_target_srv;
 static ID3D11RenderTargetView* color_target_view;
 static ID3D11DepthStencilView* depth_target_view;
+
+static UIBackend G_UI;
+
+// -----------------------------------------------------
+
+static UI_CachedGlyph UIGetCachedGlyph(u32 codepoint, UI_Font font) {
+	HT_CachedGlyph glyph = FG::ht->GetCachedGlyph(codepoint);
+	return *(UI_CachedGlyph*)&glyph;
+}
+
+static UI_DrawVertex* UIResizeAndMapVertexBuffer(int num_vertices) {
+	DS_ArrResizeUndef(&G_UI.vertex_buffer, num_vertices);
+	return G_UI.vertex_buffer.data;
+}
+
+static u32* UIResizeAndMapIndexBuffer(int num_indices) {
+	DS_ArrResizeUndef(&G_UI.index_buffer, num_indices);
+	return G_UI.index_buffer.data;
+}
 
 // -----------------------------------------------------
 
@@ -132,6 +166,21 @@ static void UpdateShaderConstants(ID3D11DeviceContext* dc, ShaderConstants val) 
 
 static void Render(HT_API* ht) {
 	if (open_scene) {
+		
+		// setup UI / gizmos rendering
+		{
+			DS_ArrInit(&G_UI.vertex_buffer, FG::temp);
+			DS_ArrInit(&G_UI.index_buffer, FG::temp);
+			UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
+			UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
+			
+			// setup UI text rendering backend
+			UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
+			
+			UI_TEMP = FG::temp;
+			UI_ResetDrawState();
+		}
+	
 		int width = open_scene_rect_max.x - open_scene_rect_min.x;
 		int height = open_scene_rect_max.y - open_scene_rect_min.y;
 		MaybeRecreateRenderTargets(ht, width, height);
@@ -149,14 +198,23 @@ static void Render(HT_API* ht) {
 					M_MatRotateZ(-camera->yaw) *
 					M_MatRotateY(-camera->pitch) *
 					mat4{
-					0.f,  0.f,  1.f, 0.f,
+						0.f,  0.f,  1.f, 0.f,
 						-1.f,  0.f,  0.f, 0.f,
 						0.f, -1.f,  0.f, 0.f,
 						0.f,  0.f,  0.f, 1.f,
-				};
+					};
 				ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 100.f);
 			}
 		}
+
+		vec2 rect_size = { width, height };
+		vec2 rect_middle = (vec2{(float)open_scene_rect_min.x, (float)open_scene_rect_min.y} + vec2{(float)open_scene_rect_max.x, (float)open_scene_rect_max.y}) * 0.5f;
+		mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
+
+		M_PerspectiveView view = {};
+		view.position = {0, 0, 0};
+		view.ws_to_ss = ws_to_cs * cs_to_ss;
+		SceneEditDrawGizmos(&view);
 
 		ID3D11DeviceContext* dc = ht->D3D11_device_context;
 
@@ -256,6 +314,23 @@ static void Render(HT_API* ht) {
 
 			dc->Draw(3, 0);
 		}
+
+		{
+			// Submit UI draw commands to hatch
+			UI_FinalizeDrawBatch();
+			
+			u32 first_vertex = ht->AddVertices((HT_DrawVertex*)G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count);
+			
+			int ib_count = G_UI.index_buffer.count;
+			for (int i = 0; i < ib_count; i++) {
+				G_UI.index_buffer.data[i] += first_vertex;
+			}
+			
+			for (int i = 0; i < UI_STATE.draw_commands.count; i++) {
+				UI_DrawCommand* draw_command = &UI_STATE.draw_commands[i];
+				ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
+			}
+		}
 	}
 }
 
@@ -321,32 +396,19 @@ void FG::Init(HT_API* ht_api) {
 	ht = ht_api;
 	temp_allocator_wrapper = {{TempAllocatorProc}, ht};
 	heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
-
-	DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
 	temp = &temp_arena;
 	heap = (DS_Allocator*)&heap_allocator_wrapper;
 }
 
-struct TestMessage : Message {
-	int x;
-	int y;
-};
+void FG::ResetTempArena() {
+	DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
+}
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	FG::Init(ht);
 	MessageManager::Init();
 	MeshManager::Init();
 	
-	TestMessage test_msg = {};
-	test_msg.x = 5;
-	test_msg.y = 6;
-	MessageManager::SendNewMessage(test_msg);
-	
-	TestMessage result_msg;
-	MessageManager::PeekNextMessage(&result_msg);
-	
-	uint64_t hash_code = typeid(test_msg).hash_code();
-
 	// create cbo
 	D3D11_BUFFER_DESC cbo_desc = {};
 	cbo_desc.ByteWidth      = sizeof(ShaderConstants) + 0xf & 0xfffffff0; // ensure constant buffer size is multiple of 16 bytes
@@ -388,6 +450,7 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
+	FG::ResetTempArena();
 	/*
 	int open_assets_count;
 	HT_Asset* open_assets = ht->GetAllOpenAssetsOfType(params->scene_type, &open_assets_count);

@@ -220,7 +220,7 @@ static void UpdateAndDraw(EditorState* s) {
 	
 	UI_OS_ApplyOutputs(&s->window, &ui_outputs);
 	
-	RenderEndFrame(s, s->render_state, &ui_outputs);
+	RenderEndFrame(s, s->render_state);
 }
 
 static void OnResizeWindow(u32 width, u32 height, void* user_ptr) {

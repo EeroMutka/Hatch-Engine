@@ -77,17 +77,19 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	UI_Init(temp_allocator);
 	
 	// setup UI render backend
-	G_UI.ht = ht;
-	DS_ArrInit(&G_UI.vertex_buffer, temp_allocator);
-	DS_ArrInit(&G_UI.index_buffer, temp_allocator);
-	UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
-	UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
-	
-	// setup UI text rendering backend
-	UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
-	
-	UI_Inputs ui_inputs = {};
-	UI_BeginFrame(&ui_inputs, {0, 18}, {0, 18});
+	{
+		G_UI.ht = ht;
+		DS_ArrInit(&G_UI.vertex_buffer, temp_allocator);
+		DS_ArrInit(&G_UI.index_buffer, temp_allocator);
+		UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
+		UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
+		
+		// setup UI text rendering backend
+		UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
+		
+		UI_Inputs ui_inputs = {};
+		UI_BeginFrame(&ui_inputs, {0, 18}, {0, 18});
+	}
 	
 	// -----------------------------------------------
 	
@@ -106,38 +108,38 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	mat4 ws_to_cs = camera.ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, rect_size.x / rect_size.y, 0.1f, 100.f);
 	mat4 ws_to_ss = ws_to_cs * cs_to_ss;
 	
-	GizmosViewport vp;
-	vp.camera.position = {0, 0, 0};
-	vp.camera.ws_to_ss = ws_to_ss;
+	M_PerspectiveView view = {};
+	view.position = {0, 0, 0};
+	view.ws_to_ss = ws_to_ss;
 	
-	DrawGrid3D(&vp, UI_GRAY);
-	DrawArrow3D(&vp, {}, vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-	DrawArrow3D(&vp, {}, vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-	DrawArrow3D(&vp, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-	
+	DrawGrid3D(&view, UI_GRAY);
+	DrawArrow3D(&view, {}, vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+	DrawArrow3D(&view, {}, vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+	DrawArrow3D(&view, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
-		
+
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
-			
+
 			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type.handle == ht->types->Scene__BoxComponent) {
 				Scene__BoxComponent* box_component = (Scene__BoxComponent*)comp_any->data;
-				
-				vp.camera.ws_to_ss =
+
+				view.ws_to_ss =
 					M_MatScale(entity->scale) *
 					M_MatRotateX(entity->rotation.x*M_DegToRad) *
 					M_MatRotateY(entity->rotation.y*M_DegToRad) *
 					M_MatRotateZ(entity->rotation.z*M_DegToRad) *
 					M_MatTranslate(entity->position) *
 					ws_to_ss;
-				
-				DrawCuboid3D(&vp,
+
+				DrawCuboid3D(&view,
 					box_component->half_extent * -1.f,
 					box_component->half_extent,
 					5.f,
 					UI_GOLD);
-				vp.camera.ws_to_ss = ws_to_ss;
+				view.ws_to_ss = ws_to_ss;
 			}
 		}
 	}
@@ -155,8 +157,8 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 		G_UI.index_buffer.data[i] += first_vertex;
 	}
 	
-	for (int i = 0; i < ui_outputs.draw_commands_count; i++) {
-		UI_DrawCommand* draw_command = &ui_outputs.draw_commands[i];
+	for (int i = 0; i < UI_STATE.draw_commands.count; i++) {
+		UI_DrawCommand* draw_command = &UI_STATE.draw_commands.data[i];
 		ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
 	}
 }

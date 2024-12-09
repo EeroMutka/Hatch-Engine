@@ -325,8 +325,8 @@ typedef struct UI_Outputs {
 	UI_MouseCursor cursor;
 	bool lock_and_hide_cursor;
 
-	UI_DrawCommand* draw_commands;
-	int draw_commands_count;
+	//UI_DrawCommand* draw_commands;
+	//int draw_commands_count;
 } UI_Outputs;
 
 typedef DS_Map(UI_Key, void*) UI_PtrFromKeyMap;
@@ -609,6 +609,9 @@ UI_API float UI_TextWidth(STR_View text, UI_Font font);
 // returns "true" if the rect is fully clipped, "false" if there is still some area left
 UI_API bool UI_ClipRect(UI_Rect* rect, const UI_Rect* scissor);
 UI_API bool UI_ClipRectEx(UI_Rect* rect, UI_Rect* uv_rect, const UI_Rect* scissor);
+
+UI_API void UI_ResetDrawState();
+UI_API void UI_FinalizeDrawBatch();
 
 // At the beginning of each frame, the scissor rect is reset such that it covers the entire screen.
 // Try to minimize calls to UI_SetActiveScissorRect, as calling it internally splits the current draw

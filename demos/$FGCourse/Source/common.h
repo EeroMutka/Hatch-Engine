@@ -17,9 +17,6 @@
 
 #include "../fg.inc.ht"
 
-#include "../../$SceneEdit/src/camera.h"
-#include "../../$SceneEdit/src/scene_edit.h"
-
 struct Allocator {
 	DS_AllocatorBase base;
 	HT_API* ht;
@@ -28,6 +25,7 @@ struct Allocator {
 class FG {
 public:
 	static void Init(HT_API* ht_api);
+	static void ResetTempArena();
 	static HT_API* ht;
 	static DS_Arena* temp;
 	static DS_Allocator* heap;

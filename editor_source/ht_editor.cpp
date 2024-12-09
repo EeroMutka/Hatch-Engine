@@ -80,7 +80,8 @@ static UI_DataTreeNode* AddAssetUITreeNode(UI_DataTreeNode* parent, Asset* asset
 	UI_DataTreeNode* node = DS_New(UI_DataTreeNode, UI_TEMP);
 	node->key = (UI_Key)asset->handle;
 	node->is_open_ptr = &asset->ui_state_is_open;
-	
+	node->allow_selection = true;
+
 	if (parent) {
 		if (parent->last_child) parent->last_child->next = node;
 		else parent->first_child = node;
@@ -299,7 +300,6 @@ EXPORT void UpdateAndDrawAssetsBrowserTab(EditorState* s, UI_Key key, UI_Rect ar
 	UI_PushScrollArea(scroll_area, UI_SizeFlex(1.f), UI_SizeFlex(1.f), 0, 0, 0);
 
 	UI_DataTree assets_tree = {0};
-	assets_tree.allow_selection = true;
 	assets_tree.root = AddAssetUITreeNode(NULL, s->asset_tree.root);
 	assets_tree.num_columns = 1; // 3
 	assets_tree.icons_font = s->icons_font;
@@ -664,12 +664,18 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		while (i) {
 			HT_ItemHeader* item = GetItemFromIndex(group, i);
 			
+			// This is for GetSelectedItemHandle, which is experimental.
+			HT_ItemHandleDecoded item_handle_decoded = {};
+			item_handle_decoded.index = i;
+			HT_ItemHandle item_handle = *(HT_ItemHandle*)&item_handle_decoded;
+			
 			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
 			node->name_rw = &item->name;
 			node->type = item_type;
 			node->data = (char*)item + group->item_offset;
-			node->base.key = UI_HashInt(parent->base.key, i);
-			
+			node->base.key = (UI_Key)item_handle; // for item groups, the key encodes the item handle.     UI_HashInt(parent->base.key, i);
+			node->base.allow_selection = true;
+
 			bool* is_open = NULL;
 			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
 			node->base.is_open_ptr = is_open;
@@ -692,7 +698,6 @@ static void UIAddStructValueEditTree(EditorState* s, UI_Key key, void* data, Ass
 
 	UI_DataTree members_tree = {0};
 	members_tree.root = &root.base;
-	members_tree.allow_selection = false;
 	members_tree.num_columns = 2;
 	members_tree.icons_font = s->icons_font;
 	members_tree.AddValueUI = UIAddStructDataNode;
@@ -735,7 +740,6 @@ EXPORT void UpdateAndDrawPropertiesTab(EditorState* s, UI_Key key, UI_Rect area)
 
 		UI_DataTree members_tree = {0};
 		members_tree.root = p;
-		members_tree.allow_selection = false;
 		members_tree.num_columns = 2;
 		members_tree.icons_font = s->icons_font;
 		members_tree.AddValueUI = UIStructMemberNodeAdd;
@@ -1421,6 +1425,11 @@ EXPORT void HT_LogError(const char* fmt, ...) {
 	va_end(args);
 }
 
+static HT_ItemHandle HT_GetSelectedItemHandle() {
+	EditorState* s = g_plugin_call_ctx->s;
+	return (HT_ItemHandle)s->properties_tree_data_ui_state.selection;
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	*(void**)&api.AddVertices = UI_AddVertices;
@@ -1459,6 +1468,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.LogInfo = HT_LogInfo;
 	api.LogWarning = HT_LogWarning;
 	api.LogError = HT_LogError;
+	api.GetSelectedItemHandle = HT_GetSelectedItemHandle;
 	*(void**)&api.AssetGetType = HT_AssetGetType;
 	*(void**)&api.AssetGetData = HT_AssetGetData;
 	*(void**)&api.AssetGetModtime = HT_AssetGetModtime;

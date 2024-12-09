@@ -5,13 +5,13 @@
 #pragma once
 #define MATH_EXTRAS_INCLUDED
 
-typedef struct M_PerspectiveCamera {
+typedef struct M_PerspectiveView {
 	vec3 position;
 	
 	// Screen-space Z is clipped at Z=0
 	mat4 ws_to_ss; // world-space to screen-space
 	mat4 ss_to_ws; // screen-space to world-space
-} M_PerspectiveCamera;
+} M_PerspectiveView;
 
 // Implicit plane; stores the coefficients A, B, C and D to the plane equation A*x + B*y + C*z + D = 0
 typedef vec4 M_Plane;
@@ -41,12 +41,12 @@ static vec3 M_ProjectPointOntoLine(vec3 p, vec3 line_p, vec3 line_dir);
 static bool M_RayTriangleIntersect(vec3 ro, vec3 rd, vec3 a, vec3 b, vec3 c, float* out_t, float* out_hit_dir);
 static bool M_RayPlaneIntersect(vec3 ro, vec3 rd, M_Plane plane, float* out_t, vec3* out_p);
 
-// static M_PerspectiveCamera M_MakePerspectiveCamera(vec3 position, quat rotation,
+// static M_PerspectiveView M_MakePerspectiveCamera(vec3 position, quat rotation,
 //	float FOV_radians, float aspect_ratio_x_over_y, float z_near, float z_far);
 
-static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss);
+static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveView* view, vec2 p_ss);
 
-static bool M_GetPointScreenSpaceScale(const M_PerspectiveCamera* camera, vec3 p_ws, float* out_scale);
+static bool M_GetPointScreenSpaceScale(const M_PerspectiveView* view, vec3 p_ws, float* out_scale);
 
 // Signed Distance Functions
 static float M_DistanceToLineSegment2D(vec2 p, vec2 a, vec2 b);
@@ -68,20 +68,20 @@ static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect, float near, float
 	return result;
 }
 
-static bool M_GetPointScreenSpaceScale(const M_PerspectiveCamera* camera, vec3 p, float* out_scale) {
+static bool M_GetPointScreenSpaceScale(const M_PerspectiveView* view, vec3 p, float* out_scale) {
 	vec4 p_w1 = {p, 1.f};
-	vec4 p_ss = p_w1 * camera->ws_to_ss;
+	vec4 p_ss = p_w1 * view->ws_to_ss;
 	*out_scale = p_ss.w;
 	return p_ss.z > 0;
 }
 
-static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveCamera* camera, vec2 p_ss) {
-	vec4 point_in_front = vec4{p_ss.x, p_ss.y, 0.f, 1.f} * camera->ss_to_ws;
+static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveView* view, vec2 p_ss) {
+	vec4 point_in_front = vec4{p_ss.x, p_ss.y, 0.f, 1.f} * view->ss_to_ws;
 	point_in_front = point_in_front / point_in_front.w;
 
-	// I guess we can derive position from the camera matrix...?
+	// I guess we can derive position from the view matrix...?
 	HT_ASSERT(0); // TODO
-	// vec3 dir = M_NormV3(M_SubV3(point_in_front.xyz, camera->position));
+	// vec3 dir = M_NormV3(M_SubV3(point_in_front.xyz, view->position));
 	// return dir;
 	return {0, 0, 0};
 }

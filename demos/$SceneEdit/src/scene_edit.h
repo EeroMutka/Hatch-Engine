@@ -21,3 +21,9 @@ static Camera SceneEditUpdate(HT_API* ht, Scene__Scene* scene) {
 	}
 	return camera;
 }
+
+// gizmo drawing requires fire-UI
+static void SceneEditDrawGizmos(const M_PerspectiveView* view) {
+	//UI_DrawCircle({100, 100}, 50, 12, UI_RED);
+	//DrawLine3D(view, vec3{0, 0, 0}, vec3{0, 0, 1}, 5.f, UI_BLUE);
+}

@@ -207,14 +207,21 @@ static void UI_AddDataTreeNode(UI_Key parent_key, UI_Box* root, UI_DataTree* tre
 		UI_AddBox(node_box, 0.f, UI_SizeFit(), UI_BoxFlag_Horizontal|UI_BoxFlag_NoAutoOffset);
 		node_box->offset.x = ARROW_AREA_WIDTH + (float)indent * ARROW_AREA_WIDTH;
 
+		bool arrow_is_hovered = false;
+
 		if (i == 0) { // store node state / draw data per row in the first box of each row
 			bool has_arrow_button = node->first_child != NULL;
-			if (has_arrow_button && UI_InputWasPressed(UI_Input_MouseLeft) && node_box->prev_frame) {
+			
+			if (has_arrow_button && node_box->prev_frame) {
 				UI_Rect arrow_rect = node_box->prev_frame->computed_rect;
 				arrow_rect.max.x = node_box->prev_frame->computed_rect.min.x;
 				arrow_rect.min.x = arrow_rect.max.x - ARROW_AREA_WIDTH;
 				if (UI_IsHoveredIdle(root) && UI_PointIsInRect(arrow_rect, UI_STATE.mouse_pos)) {
-					*node->is_open_ptr = !*node->is_open_ptr;
+					arrow_is_hovered = true;
+
+					if (UI_InputWasPressed(UI_Input_MouseLeft)) {
+						*node->is_open_ptr = !*node->is_open_ptr;
+					}
 				}
 			}
 			
@@ -230,8 +237,8 @@ static void UI_AddDataTreeNode(UI_Key parent_key, UI_Box* root, UI_DataTree* tre
 		UI_PopBox(node_box);
 
 		if (i == 0) {
-			if (tree->allow_selection) {
-				if (UI_InputWasPressed(UI_Input_MouseLeft)/* || UI_InputWasPressed(UI_Input_MouseRight)*/) {
+			if (node->allow_selection) {
+				if (UI_InputWasPressed(UI_Input_MouseLeft) && !arrow_is_hovered /* || UI_InputWasPressed(UI_Input_MouseRight)*/) {
 					UI_Rect first_node_rect = node_box->prev_frame ? node_box->prev_frame->computed_rect : UI_RECT{0};
 					UI_Rect row_rect = {{-10000000.f, first_node_rect.min.y}, {10000000.f, first_node_rect.max.y}};
 					if (UI_IsHoveredIdle(root) && UI_PointIsInRect(row_rect, UI_STATE.mouse_pos)) {

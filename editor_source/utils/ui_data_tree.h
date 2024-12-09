@@ -22,6 +22,7 @@ typedef struct UI_DataTreeNode {
 	struct UI_DataTreeNode* last_child;
 	
 	UI_Key key;
+	bool allow_selection;
 	bool* is_open_ptr;
 } UI_DataTreeNode;
 
@@ -41,8 +42,8 @@ typedef struct UI_DataTreeState {
 typedef struct UI_DataTree {
 	int num_columns;
 	UI_DataTreeNode* root;
-	bool allow_selection;
-	bool allow_drag_n_drop;
+	
+	bool allow_drag_n_drop; // TODO: make this a per-node parameter
 
 	UI_Font icons_font;
 	

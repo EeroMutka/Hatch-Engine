@@ -1341,25 +1341,10 @@ UI_API void UI_BeginFrame(const UI_Inputs* inputs, UI_Font default_font, UI_Font
 	DS_ArenaReset(&UI_STATE._frame_arena);
 	UI_TEMP = &UI_STATE._frame_arena;
 	
-	const int max_vertices_default = 4096;
-	const int max_indices_default = 4096*4;
-
 	UI_STATE.default_font = default_font;
 	UI_STATE.icons_font = icons_font;
 
-	UI_STATE.vertex_buffer_count = 0;
-	UI_STATE.vertex_buffer_capacity = max_vertices_default;
-	UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(max_vertices_default);
-	UI_ASSERT(UI_STATE.vertex_buffer != NULL);
-	
-	UI_STATE.index_buffer_count = 0;
-	UI_STATE.index_buffer_capacity = max_indices_default;
-	UI_STATE.index_buffer = UI_STATE.backend.ResizeAndMapIndexBuffer(max_indices_default);
-	UI_ASSERT(UI_STATE.index_buffer != NULL);
-	
-	UI_STATE.active_texture = NULL;
-	UI_STATE.active_scissor_rect = UI_RECT{{0.f, 0.f}, {10000000.f, 10000000.f}};
-	DS_ArrInit(&UI_STATE.draw_commands, UI_TEMP);
+	UI_ResetDrawState();
 	
 	UI_STATE.inputs = *inputs;
 	memset(&UI_STATE.outputs, 0, sizeof(UI_STATE.outputs));
@@ -1587,7 +1572,7 @@ UI_API void UI_BoxComputeRects(UI_Box* box, UI_Vec2 box_position) {
 	UI_ProfExit();
 }
 
-static void UI_FinalizeDrawBatch() {
+UI_API void UI_FinalizeDrawBatch() {
 	UI_ProfEnter();
 	uint32_t first_index = 0;
 	if (UI_STATE.draw_commands.count > 0) {
@@ -1630,10 +1615,6 @@ UI_API void UI_EndFrame(UI_Outputs* outputs) {
 		UI_STATE.time_since_pressed_lmb = 0.f;
 	}
 
-	UI_FinalizeDrawBatch();
-
-	UI_STATE.outputs.draw_commands = UI_STATE.draw_commands.data;
-	UI_STATE.outputs.draw_commands_count = UI_STATE.draw_commands.count;
 	*outputs = UI_STATE.outputs;
 
 	UI_ProfExit();
@@ -1781,6 +1762,25 @@ UI_API void UI_SetActiveScissorRect(UI_Rect rect) {
 
 UI_API UI_Rect UI_GetActiveScissorRect() {
 	return UI_STATE.active_scissor_rect;
+}
+
+UI_API void UI_ResetDrawState() {
+	const int max_vertices_default = 4096;
+	const int max_indices_default = 4096*4;
+
+	UI_STATE.vertex_buffer_count = 0;
+	UI_STATE.vertex_buffer_capacity = max_vertices_default;
+	UI_STATE.vertex_buffer = UI_STATE.backend.ResizeAndMapVertexBuffer(max_vertices_default);
+	UI_ASSERT(UI_STATE.vertex_buffer != NULL);
+
+	UI_STATE.index_buffer_count = 0;
+	UI_STATE.index_buffer_capacity = max_indices_default;
+	UI_STATE.index_buffer = UI_STATE.backend.ResizeAndMapIndexBuffer(max_indices_default);
+	UI_ASSERT(UI_STATE.index_buffer != NULL);
+
+	UI_STATE.active_texture = NULL;
+	UI_STATE.active_scissor_rect = UI_RECT{{0.f, 0.f}, {10000000.f, 10000000.f}};
+	DS_ArrInit(&UI_STATE.draw_commands, UI_TEMP);
 }
 
 UI_API uint32_t UI_AddVertices(UI_DrawVertex* vertices, int count) {

@@ -54,7 +54,7 @@ struct RenderState {
 EXPORT void RenderInit(RenderState* s, ivec2 window_size, OS_Window window);
 
 // for now we need to pass editor state to call HT_D3D12_BuildPluginCommandList on all plugins. TODO: cleanup this!
-EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s, UI_Outputs* ui_outputs);
+EXPORT void RenderEndFrame(EditorState* editor_state, RenderState* s);
 
 EXPORT void ResizeSwapchain(RenderState* s, ivec2 size);
 

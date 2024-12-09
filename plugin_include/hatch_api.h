@@ -513,6 +513,9 @@ struct HT_API {
 	
 	// -- Asset viewer -------------------------------
 	
+	// Returns the selected item handle in the properties panel for the selected asset or NULL if none
+	HT_ItemHandle (*GetSelectedItemHandle)();
+
 	bool (*RegisterAssetViewerForType)(HT_Asset struct_type_asset, TabUpdateProc update_proc);
 	void (*UnregisterAssetViewerForType)(HT_Asset struct_type_asset);
 	
