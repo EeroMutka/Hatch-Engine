@@ -66,17 +66,8 @@ EXPORT void RegenerateTypeTable(EditorState* s) {
 	s->api->types = (HT_GeneratedTypeTable*)s->type_table.data;
 }
 
-EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
-	ASSERT(OS_PathIsAbsolute(project_directory));
-
-	MD_Arena* md_arena = MD_ArenaAlloc();
-	
-	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
-	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
-	ASSERT(!MD_NodeIsNil(parse.node));
-	ASSERT(parse.errors.node_count == 0);
-	
-	MD_Node* packages = MD_ChildFromString(parse.node, MD_S8Lit("packages"), 0);
+static void LoadProjectFromParsedNode(AssetTree* tree, MD_Node* root) {
+	MD_Node* packages = MD_ChildFromString(root, MD_S8Lit("packages"), 0);
 	if (!MD_NodeIsNil(packages)) {
 		DS_DynArray(STR_View) package_paths = {TEMP};
 
@@ -87,18 +78,27 @@ EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 			}
 			DS_ArrPush(&package_paths, path);
 		}
-		
-		LoadPackages(s, package_paths);
-	}
-	
 
-	RegenerateTypeTable(s);
+		LoadPackages(tree, package_paths);
+	}
+}
+
+EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory) {
+	MD_Arena* md_arena = MD_ArenaAlloc();
+	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
+	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
+	ASSERT(!MD_NodeIsNil(parse.node));
+	ASSERT(parse.errors.node_count == 0);
+
+	LoadProjectFromParsedNode(&s->asset_tree, parse.node);
 
 	MD_Node* editor_layout = MD_ChildFromString(parse.node, MD_S8Lit("editor_layout"), 0);
 	if (!MD_NodeIsNil(editor_layout)) {
 		ASSERT(editor_layout->first_child == editor_layout->last_child && !MD_NodeIsNil(editor_layout->first_child));
 		LoadEditorPanel(s, editor_layout->first_child, s->panel_tree.root);
 	}
+	
+	RegenerateTypeTable(s);
 
 	MD_Node* run_plugins = MD_ChildFromString(parse.node, MD_S8Lit("run_plugins"), 0);
 	if (!MD_NodeIsNil(run_plugins)) {
@@ -111,6 +111,20 @@ EXPORT void LoadProject(EditorState* s, STR_View project_directory) {
 			RunPlugin(s, plugin_asset);
 		}
 	}
+	
+	MD_ArenaRelease(md_arena);
+}
+
+EXPORT void LoadProject(AssetTree* tree, STR_View project_directory) {
+	ASSERT(OS_PathIsAbsolute(project_directory));
+
+	MD_Arena* md_arena = MD_ArenaAlloc();
+	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
+	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
+	ASSERT(!MD_NodeIsNil(parse.node));
+	ASSERT(parse.errors.node_count == 0);
+	
+	LoadProjectFromParsedNode(tree, parse.node);
 
 	MD_ArenaRelease(md_arena);
 }
@@ -683,7 +697,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 	}
 }
 
-static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
+static void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages) {
 	// We do loading in two passes.
 	// 1. pass: delete assets which don't exist in the filesystem and make empty assets for those which do exist and we don't have as assets yet
 	// 2. pass: per each asset, fully reload its contents from disk.
@@ -693,14 +707,14 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 	// 3. pass: load struct data assets. This needs to be done as a separate pass AFTER all struct types have been loaded.
 
 	ReloadAssetsContext ctx = {0};
-	ctx.tree = &s->asset_tree;
+	ctx.tree = tree;
 	ctx.md_arena = MD_ArenaAlloc();
 	DS_ArrInit(&ctx.queue_recompile_plugins, TEMP);
 
 	for (int i = 0; i < packages.count; i++) {
 		Asset* package = packages[i];
 		OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
-		ReloadAssetsPass1(&s->asset_tree, package, package->package.filesys_path);
+		ReloadAssetsPass1(tree, package, package->package.filesys_path);
 	}
 
 	for (int i = 0; i < packages.count; i++) {
@@ -716,7 +730,7 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 	}
 
 #ifdef HT_DYNAMIC
-	for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
+	/*for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
 		Asset* plugin_asset = ctx.queue_recompile_plugins[i];
 
 		if (plugin_asset->plugin.active_instance != NULL) {
@@ -733,21 +747,21 @@ static void ReloadPackages(EditorState* s, DS_ArrayView<Asset*> packages) {
 	}
 	if (ctx.queue_recompile_plugins.count > 0) {
 		RegenerateTypeTable(s);
-	}
+	}*/
 #endif
 
 	MD_ArenaRelease(ctx.md_arena);
 	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }
 
-EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths) {
+EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 	DS_DynArray(Asset*) packages = {TEMP};
 
 	for (int i = 0; i < paths.count; i++) {
 		STR_View path = paths[i];
 		ASSERT(OS_PathIsAbsolute(path));
 
-		Asset* package = MakeNewAsset(&s->asset_tree, AssetKind_Package);
+		Asset* package = MakeNewAsset(tree, AssetKind_Package);
 		package->ui_state_is_open = true;
 
 		STR_View package_name = STR_AfterLast(path, '/');
@@ -755,10 +769,10 @@ EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths) {
 		ASSERT(has_dollar);
 
 		u64 name_hash = DS_MurmurHash64A(package_name.data, package_name.size, 0);
-		bool newly_added = DS_MapInsert(&s->asset_tree.package_from_name, name_hash, package);
+		bool newly_added = DS_MapInsert(&tree->package_from_name, name_hash, package);
 		ASSERT(newly_added);
 
-		MoveAssetToInside(&s->asset_tree, package, s->asset_tree.root);
+		MoveAssetToInside(tree, package, tree->root);
 
 		package->package.filesys_path = STR_Clone(DS_HEAP, path);
 
@@ -768,16 +782,16 @@ EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths) {
 		DS_ArrPush(&packages, package);
 	}
 	
-	ReloadPackages(s, packages);
+	ReloadPackages(tree, packages);
 }
 
-EXPORT void HotreloadPackages(EditorState* s) {
-	for (Asset* asset = s->asset_tree.root->first_child; asset; asset = asset->next) {
+EXPORT void HotreloadPackages(AssetTree* tree) {
+	for (Asset* asset = tree->root->first_child; asset; asset = asset->next) {
 		if (asset->kind != AssetKind_Package) continue;
 
 		if (OS_DirectoryWatchHasChanges(&asset->package.dir_watch)) {
 			printf("RELOADING PACKAGE!\n");
-			ReloadPackages(s, {&asset, 1});
+			ReloadPackages(tree, {&asset, 1});
 		}
 	}
 }

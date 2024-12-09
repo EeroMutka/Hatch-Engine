@@ -207,7 +207,7 @@ static void Render(HT_API* ht) {
 			}
 		}
 
-		vec2 rect_size = { width, height };
+		vec2 rect_size = { (float)width, (float)height };
 		vec2 rect_middle = (vec2{(float)open_scene_rect_min.x, (float)open_scene_rect_min.y} + vec2{(float)open_scene_rect_max.x, (float)open_scene_rect_max.y}) * 0.5f;
 		mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
 
@@ -356,10 +356,11 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 }
 
 static VertexShader LoadVertexShader(HT_API* ht, HT_StringView shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
-	ID3DBlob* errors;
+	ID3DBlob* errors = NULL;
 
-	ID3DBlob* vs_blob;
-	bool ok = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, &errors) == S_OK;
+	ID3DBlob* vs_blob = NULL;
+	HRESULT vs_res = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, &errors);
+	bool ok = vs_res == S_OK;
 	if (!ok) {
 		char* err = (char*)errors->GetBufferPointer();
 		HT_ASSERT(0);
@@ -426,8 +427,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 	ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
 
-	HT_StringView main_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/main_shader.hlsl";
-	HT_StringView present_shader_path = "C:/dev/Hatch/demos/$FGCourse/Shaders/present_shader.hlsl";
+	HT_StringView main_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/main_shader.hlsl";
+	HT_StringView present_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/present_shader.hlsl";
 
 	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
 		{    "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
@@ -449,29 +450,33 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
+struct MyMessage : Message {
+	int x;
+	int y;
+};
+
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	FG::ResetTempArena();
-	/*
-	int open_assets_count;
-	HT_Asset* open_assets = ht->GetAllOpenAssetsOfType(params->scene_type, &open_assets_count);
-	
-	open_scene = NULL;
+	MessageManager::Reset();
 
-	for (int asset_i = 0; asset_i < open_assets_count; asset_i++) {
-		HT_Asset scene_asset = open_assets[asset_i];
-		Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, scene_asset);
-		open_scene = scene;
+	MyMessage send_1;
+	send_1.x = 50;
+	send_1.y = 40;
+	MessageManager::SendNewMessage(send_1);
 
-		for (HT_ItemGroupEach(&scene->entities, i)) {
-			Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
-			
-			if (InputIsDown(ht->input_frame, HT_InputKey_Y)) {
-				entity->position.x += 0.1f;
-			}
-			
-			if (InputIsDown(ht->input_frame, HT_InputKey_T)) {
-				entity->position.x -= 0.1f;
-			}
-		}
-	}*/
+	MyMessage send_2;
+	send_2.x = 400;
+	send_2.y = 900;
+	MessageManager::SendNewMessage(send_2);
+
+	MyMessage receive_1;
+	if (MessageManager::PopNextMessage(&receive_1)) {
+		__debugbreak();
+	}
+
+	MyMessage receive_2;
+	if (MessageManager::PopNextMessage(&receive_2)) {
+		__debugbreak();
+	}
+	__debugbreak();
 }

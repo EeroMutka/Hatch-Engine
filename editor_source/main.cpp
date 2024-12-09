@@ -38,10 +38,46 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 	return tab->name;
 }
 
-static void AppInit(EditorState* s) {
-	DS_ArenaInit(&s->persistent_arena, 4096, DS_HEAP);
-	DS_ArenaInit(&s->temporary_arena, 4096, DS_HEAP);
+static void InitAssetTree(AssetTree* tree) {
+	DS_BkArrInit(&tree->assets, DS_HEAP, 32);
+	tree->root = MakeNewAsset(tree, AssetKind_Root);
+	DS_MapInit(&tree->package_from_name, DS_HEAP);
 
+	tree->name_and_type_struct_type = MakeNewAsset(tree, AssetKind_StructType);
+
+	StructMember name_member = {0};
+	StringInit(&name_member.name, "Name");
+	name_member.type.kind = HT_TypeKind_String;
+	DS_ArrPush(&tree->name_and_type_struct_type->struct_type.members, name_member);
+
+	StructMember type_member = {0};
+	StringInit(&type_member.name, "HT_Type");
+	type_member.type.kind = HT_TypeKind_Type;
+	DS_ArrPush(&tree->name_and_type_struct_type->struct_type.members, type_member);
+
+	ComputeStructLayout(tree, tree->name_and_type_struct_type);
+
+	tree->plugin_options_struct_type = MakeNewAsset(tree, AssetKind_StructType);
+
+	StructMember member_source_files = {0};
+	StringInit(&member_source_files.name, "Code Files");
+	member_source_files.type.kind = HT_TypeKind_Array;
+	member_source_files.type.subkind = HT_TypeKind_AssetRef;
+	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_source_files);
+
+	StructMember member_data = {0};
+	StringInit(&member_data.name, "Data Asset");
+	member_data.type.kind = HT_TypeKind_AssetRef;
+	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_data);
+
+	ComputeStructLayout(tree, tree->plugin_options_struct_type);
+}
+
+static void EditorInit(EditorState* s) {
+	InitAssetTree(&s->asset_tree);
+
+	DS_ArenaInit(&s->persistent_arena, 4096, DS_HEAP);
+	
 	DS_Arena* persist = &s->persistent_arena;
 	DS_MemScope mem_scope_persist = MEM_SCOPE(persist);
 
@@ -57,7 +93,6 @@ static void AppInit(EditorState* s) {
 	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");
 	
 	RenderInit(s->render_state, s->window_size, s->window);
-
 
 	UI_Init(DS_HEAP);
 #ifdef HT_EDITOR_DX12
@@ -105,77 +140,11 @@ static void AppInit(EditorState* s) {
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
-	DS_BkArrInit(&s->asset_tree.assets, DS_HEAP, 32);
-	s->asset_tree.root = MakeNewAsset(&s->asset_tree, AssetKind_Root);
-
 	DS_ArrInit(&s->type_table, DS_HEAP);
-
-	DS_MapInit(&s->asset_tree.package_from_name, DS_HEAP);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
 	
-		/*UI_Panel* root_left_panel = NewUIPanel(&s->panel_tree);
-		UI_Panel* log_panel = NewUIPanel(&s->panel_tree);
-		UI_Panel* asset_browser_panel = NewUIPanel(&s->panel_tree);
-		UI_Panel* properties_panel = NewUIPanel(&s->panel_tree);
-
-		DS_ArrPush(&asset_browser_panel->tabs, s->assets_tab_class);
-		DS_ArrPush(&log_panel->tabs, s->asset_viewer_tab_class);
-		DS_ArrPush(&log_panel->tabs, s->log_tab_class);
-		DS_ArrPush(&log_panel->tabs, s->errors_tab_class);
-		DS_ArrPush(&properties_panel->tabs, s->properties_tab_class);
-	
-		s->panel_tree.root->split_along = UI_Axis_Y;
-		s->panel_tree.root->end_child[0] = root_left_panel;
-		s->panel_tree.root->end_child[1] = properties_panel;
-		root_left_panel->parent = s->panel_tree.root;
-		properties_panel->parent = s->panel_tree.root;
-		root_left_panel->link[1] = properties_panel;
-		properties_panel->link[0] = root_left_panel;
-
-		root_left_panel->split_along = UI_Axis_X;
-		root_left_panel->end_child[0] = asset_browser_panel;
-		root_left_panel->end_child[1] = log_panel;
-		asset_browser_panel->parent = root_left_panel;
-		log_panel->parent = root_left_panel;
-		asset_browser_panel->link[1] = log_panel;
-		log_panel->link[0] = asset_browser_panel;*/
-
-	{
-		s->asset_tree.name_and_type_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
-		
-		StructMember name_member = {0};
-		StringInit(&name_member.name, "Name");
-		name_member.type.kind = HT_TypeKind_String;
-		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, name_member);
-
-		StructMember type_member = {0};
-		StringInit(&type_member.name, "HT_Type");
-		type_member.type.kind = HT_TypeKind_Type;
-		DS_ArrPush(&s->asset_tree.name_and_type_struct_type->struct_type.members, type_member);
-		
-		ComputeStructLayout(&s->asset_tree, s->asset_tree.name_and_type_struct_type);
-
-		s->asset_tree.plugin_options_struct_type = MakeNewAsset(&s->asset_tree, AssetKind_StructType);
-
-		StructMember member_source_files = {0};
-		StringInit(&member_source_files.name, "Code Files");
-		member_source_files.type.kind = HT_TypeKind_Array;
-		member_source_files.type.subkind = HT_TypeKind_AssetRef;
-		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_source_files);
-
-		StructMember member_data = {0};
-		StringInit(&member_data.name, "Data Asset");
-		member_data.type.kind = HT_TypeKind_AssetRef;
-		DS_ArrPush(&s->asset_tree.plugin_options_struct_type->struct_type.members, member_data);
-		
-		ComputeStructLayout(&s->asset_tree, s->asset_tree.plugin_options_struct_type);
-	}
-
 	InitAPI(s);
-
-	s->project_directory = STR_Form(DS_HEAP, "%s/user_startup_project", HATCH_DIR);
-	LoadProject(s, s->project_directory);
 }
 
 static void UpdateAndDraw(EditorState* s) {
@@ -189,7 +158,7 @@ static void UpdateAndDraw(EditorState* s) {
 	
 	//if (UI_InputIsDown(UI_Input_Shift)) __debugbreak();
 
-	HotreloadPackages(s);
+	HotreloadPackages(&s->asset_tree);
 
 	UI_Rect panel_area_rect = {0};
 	panel_area_rect.min.y = TOP_BAR_HEIGHT;
@@ -287,37 +256,55 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 	}
 }
 
-int main() {
-
-	RenderState render_state = {};
-
-	EditorState editor_state = {};
-	editor_state.window_size = {1280, 720};
-	editor_state.render_state = &render_state;
+int main(int argc, char** argv) {
+	STR_View project_directory = STR_Form(DS_HEAP, "%s/user_startup_project", HATCH_DIR);
 	
-	TEMP = &editor_state.temporary_arena;
+	DS_Arena temp_arena;
+	DS_ArenaInit(&temp_arena, 4096, DS_HEAP);
+
+	TEMP = &temp_arena;
 	MEM_SCOPE_NONE_ = {TEMP};
 	MEM_SCOPE_TEMP_ = {TEMP, TEMP};
 	CPU_FREQUENCY = OS_GetCPUFrequency();
 
-	AppInit(&editor_state);
-	HT_StringView my_test = "Hellope";
+	bool generate_vs_project = false;
+	for (int i = 0; i < argc; i++) {
+		if (strcmp(argv[i], "-vs") == 0) generate_vs_project = true;
+	}
 
-	for (;;) {
-		DS_ArenaReset(&editor_state.temporary_arena);
-		UI_OS_ResetFrameInputs(&editor_state.window, &editor_state.ui_inputs);
+	if (generate_vs_project) {
+		AssetTree tree = {};
+		InitAssetTree(&tree);
+		LoadProject(&tree, project_directory);
+		GeneratePremakeAndVSProjects(&tree, project_directory);
+	}
+	else {
+		RenderState render_state = {};
+		EditorState editor_state = {};
+		editor_state.window_size = {1280, 720};
+		editor_state.render_state = &render_state;
 
-		OS_Event event;
-		HT_OS_Events input_events;
-		HT_OS_BeginEvents(&input_events, &editor_state.input_frame);
-		while (OS_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
-			UI_OS_RegisterInputEvent(&editor_state.ui_inputs, &event);
-			HT_OS_AddEvent(&input_events, &event);
+		EditorInit(&editor_state);
+		
+		editor_state.project_directory = project_directory;
+		LoadProjectIncludingEditorLayout(&editor_state, project_directory);
+
+		for (;;) {
+			DS_ArenaReset(TEMP);
+			UI_OS_ResetFrameInputs(&editor_state.window, &editor_state.ui_inputs);
+
+			OS_Event event;
+			HT_OS_Events input_events;
+			HT_OS_BeginEvents(&input_events, &editor_state.input_frame);
+			while (OS_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
+				UI_OS_RegisterInputEvent(&editor_state.ui_inputs, &event);
+				HT_OS_AddEvent(&input_events, &event);
+			}
+			HT_OS_EndEvents(&input_events);
+			if (OS_WindowShouldClose(&editor_state.window)) break;
+
+			UpdateAndDraw(&editor_state);
 		}
-		HT_OS_EndEvents(&input_events);
-		if (OS_WindowShouldClose(&editor_state.window)) break;
-
-		UpdateAndDraw(&editor_state);
 	}
 
 	return 0;

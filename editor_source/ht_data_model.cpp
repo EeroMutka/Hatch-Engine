@@ -544,3 +544,4 @@ EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type) {
 		}
 	}
 }
+

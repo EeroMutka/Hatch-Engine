@@ -432,7 +432,6 @@ struct PerFrameState {
 	UI_Box* type_dropdown;
 	UI_Box* type_dropdown_button;
 
-	// DS_DynArray(HT_AssetViewerTabUpdate) queued_asset_viewer_tab_updates;
 	DS_DynArray(HT_CustomTabUpdate) queued_custom_tab_updates;
 };
 
@@ -440,8 +439,7 @@ struct EditorState {
 	HT_API* api;
 
 	DS_Arena persistent_arena;
-	DS_Arena temporary_arena;
-
+	
 	ivec2 window_size;
 	OS_Window window;
 
@@ -534,7 +532,7 @@ EXPORT void RemoveErrorsByAsset(ErrorList* error_list, HT_Asset asset);
 EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
 EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
 
-EXPORT void HotreloadPackages(EditorState* s);
+EXPORT void HotreloadPackages(AssetTree* tree);
 
 EXPORT STR_View GetAssetFileExtension(Asset* asset);
 
@@ -542,8 +540,9 @@ EXPORT void SavePackageToDisk(Asset* package);
 
 EXPORT void RegenerateTypeTable(EditorState* s);
 
-EXPORT void LoadProject(EditorState* s, STR_View project_file);
-EXPORT void LoadPackages(EditorState* s, DS_ArrayView<STR_View> paths);
+EXPORT void LoadProject(AssetTree* tree, STR_View project_directory);
+EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory);
+EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
 
@@ -553,6 +552,8 @@ EXPORT void LogVArgs(Log* log, LogMessageKind kind, const char* fmt, va_list arg
 EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
+
+EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project_directory);
 
 #ifdef HT_DYNAMIC
 EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath);

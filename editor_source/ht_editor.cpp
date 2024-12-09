@@ -140,85 +140,7 @@ EXPORT void AddTopBar(EditorState* s) {
 		UI_AddLabel(gen_premake, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Generate Project (Premake5/VS2022)");
 
 		if (UI_Clicked(gen_premake)) {
-			OS_SetWorkingDir(MEM_SCOPE_NONE, s->project_directory);
-
-			FILE* f = NULL;
-			fopen_s(&f, "premake5.lua", "wb");
-			ASSERT(f);
-			
-			STR_View project_name = STR_AfterLast(s->project_directory, '/');
-
-			fprintf(f, "HATCH_DIR = \"%s\"\n\n", HATCH_DIR);
-
-			fprintf(f, "%s",
-				"function specify_warnings()\n"
-				"\tflags \"FatalWarnings\" -- treat all warnings as errors\n"
-				"\tbuildoptions \"/w14062\" -- error on unhandled enum members in switch cases\n"
-				"\tbuildoptions \"/w14456\" -- error on shadowed locals\n"
-				"\tbuildoptions \"/wd4101\" -- allow unused locals\n"
-				"\tlinkoptions \"-IGNORE:4099\" -- disable linker warning: \"PDB was not found ...; linking object as if no debug info\"\n"
-				"end\n\n");
-
-			fprintf(f, "workspace \"%.*s\"\n", StrArg(project_name));
-			fprintf(f, "\tarchitecture \"x64\"\n");
-			fprintf(f, "\tconfigurations { \"Debug\", \"Release\" }\n");
-			fprintf(f, "\tlocation \"%%{_ACTION}\"\n\n");
-			
-			fprintf(f, "project \"%.*s\"\n", StrArg(project_name));
-			fprintf(f, "\tkind \"ConsoleApp\"\n");
-			fprintf(f, "\tlanguage \"C++\"\n");
-			fprintf(f, "\ttargetdir \"build\"\n\n");
-			
-			fprintf(f, "\tspecify_warnings()\n\n");
-			
-			fprintf(f, "\tincludedirs \"%%{HATCH_DIR}/plugin_include\"\n\n");
-
-			fprintf(f, "\tdefines \"HT_EDITOR_DX11\"\n");
-			fprintf(f, "\tdefines { \"HATCH_DIR=\\\"\" .. HATCH_DIR .. \"\\\"\" }\n");
-			fprintf(f, "\tdefines \"HT_EXPORT=static\"\n\n");
-
-			fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
-			fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/**\"\n\n");
-
-			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
-				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
-				
-				// should packages be able to contain C code that isn't built? maybe...
-				// for now, just include ALL files within each package
-				if (asset->kind == AssetKind_Package) {
-					fprintf(f, "\tfiles \"%.*s/**\"\n", StrArg(asset->package.filesys_path));
-				}
-			}
-			fprintf(f, "\n");
-
-			fprintf(f, "\tdefines { \"HT_ALL_STATIC_EXPORTS=\"\n");
-			for (DS_BkArrEach(&s->asset_tree.assets, asset_i)) {
-				Asset* asset = DS_BkArrGet(&s->asset_tree.assets, asset_i);
-				if (asset->kind == AssetKind_Plugin) {
-					fprintf(f, "\t\t..\",HT_STATIC_EXPORTS__%.*s\"\n", StrArg(asset->name));
-				}
-			}
-			fprintf(f, "\t\t}\n\n");
-
-			fprintf(f, "\tlinks { \"d3d11\", \"d3dcompiler.lib\" } \n\n");
-			
-			fprintf(f, "\tfilter \"configurations:Debug\"\n");
-			fprintf(f, "\t\tsymbols \"On\"\n\n");
-
-			fprintf(f, "\tfilter \"configurations:Release\"\n");
-			fprintf(f, "\t\toptimize \"On\"\n\n");
-
-			fprintf(f, "\tfilter \"files:**.hlsl\"\n");
-			fprintf(f, "\t\tbuildaction \"None\" -- do not use Visual Studio's built-in HLSL compiler\n\n");
-
-			fclose(f);
-
-			// also want to run the command now.
-			u32 exit_code;
-			bool ok = OS_RunProcess(MEM_SCOPE_NONE, "premake5 vs2022", &exit_code);
-			
-			OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
-
+			GeneratePremakeAndVSProjects(&s->asset_tree, s->project_directory);
 			s->file_dropdown_open = false;
 		}
 
@@ -945,7 +867,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				STR_View load_package_path;
 				if (OS_FolderPicker(MEM_SCOPE_TEMP, &load_package_path)) {
 					//s->assets_tree_ui_state.selection = (UI_Key)...->handle
-					LoadPackages(s, { &load_package_path, 1 });
+					LoadPackages(&s->asset_tree, { &load_package_path, 1 });
 				}
 				s->rmb_menu_open = false;
 			}
@@ -1565,7 +1487,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 #ifdef HT_DYNAMIC
 	OS_UnloadDLL(plugin->dll_handle);
 	
-	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", UI_TextToStr(plugin_asset->name));
+	STR_View pdb_filepath = STR_Form(TEMP, ".plugin_binaries/%v.pdb", plugin_asset->name.view);
 	ForceVisualStudioToClosePDBFileHandle(pdb_filepath);
 #endif
 
