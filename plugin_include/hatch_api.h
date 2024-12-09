@@ -432,6 +432,7 @@ typedef struct HT_InputFrame {
 	bool key_is_down[HT_InputKey_COUNT]; // This is the key down state after the events for this frame have been applied
 	float mouse_wheel_input[2]; // +1.0 means the wheel was rotated forward by one detent (scroll step)
 	float raw_mouse_input[2];
+	vec2 mouse_position;
 } HT_InputFrame;
 
 // Helpers

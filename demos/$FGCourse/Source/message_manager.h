@@ -36,5 +36,7 @@ private:
 
 	static MessageManager instance;
 	
+	// Optimization idea: instead of having one array, make a map of arrays (one per message type) and increment the starting index when popping a message
+
 	DS_DynArray<StoredMessage> messages;
 };

@@ -71,6 +71,7 @@ static u32* UIResizeAndMapIndexBuffer(int num_indices) {
 // -----------------------------------------------------
 
 static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
+#if 0
 	Allocator _temp_allocator = {{TempAllocatorProc}, ht};
 	DS_Allocator* temp_allocator = (DS_Allocator*)&_temp_allocator;
 	
@@ -112,18 +113,15 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	view.position = {0, 0, 0};
 	view.ws_to_ss = ws_to_ss;
 	
-	DrawGrid3D(&view, UI_GRAY);
-	DrawArrow3D(&view, {}, vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-	DrawArrow3D(&view, {}, vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-	DrawArrow3D(&view, {}, vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
+	SceneEditDrawGizmos(ht, &view, scene);
 
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
 
 		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
 			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
-
-			if (comp_any->type.kind == HT_TypeKind_Struct && comp_any->type.handle == ht->types->Scene__BoxComponent) {
+			
+			if (comp_any->type.handle == ht->types->Scene__BoxComponent) {
 				Scene__BoxComponent* box_component = (Scene__BoxComponent*)comp_any->data;
 
 				view.ws_to_ss =
@@ -147,8 +145,7 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 	// -----------------------------------------------
 	
 	// Submit UI render commands to hatch
-	UI_Outputs ui_outputs;
-	UI_EndFrame(&ui_outputs);
+	UI_FinalizeDrawBatch();
 	
 	u32 first_vertex = ht->AddVertices((HT_DrawVertex*)G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count);
 	
@@ -161,6 +158,7 @@ static void DebugSceneTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* updat
 		UI_DrawCommand* draw_command = &UI_STATE.draw_commands.data[i];
 		ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
 	}
+#endif
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {

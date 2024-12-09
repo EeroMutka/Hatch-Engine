@@ -36,15 +36,15 @@ typedef struct TranslationGizmo {
 	vec2 plane_gizmo_quads[3][4];
 
 	// linear movement
-	//vec2 moving_axis_arrow_end_screen;
+	//vec2 moving_axis_arrow_end_ss;
 	vec2 moving_begin_mouse_pos;
-	vec2 moving_begin_origin_screen;
+	vec2 moving_begin_origin_ss;
 	vec3 moving_begin_translation;
 	vec3 moving_axis_arrow_end;
 	
 	// planar movement
 	vec2 planar_moving_begin_mouse_pos;
-	vec2 planar_moving_begin_origin_screen;
+	vec2 planar_moving_begin_origin_ss;
 	vec3 planar_moving_begin_translation;
 } TranslationGizmo;
 
@@ -77,47 +77,42 @@ GIZMOS_API void DrawQuad3D(const M_PerspectiveView* view, vec3 a, vec3 b, vec3 c
 GIZMOS_API void DrawQuadFrame3D(const M_PerspectiveView* view, vec3 a, vec3 b, vec3 c, vec3 d, float thickness, UI_Color color);
 
 //GIZMOS_API bool TranslationGizmoShouldApply(const TranslationGizmo* gizmo);
-GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, TranslationGizmo* gizmo, vec3* translation, float snap_size);
+GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_PerspectiveView* view, TranslationGizmo* gizmo, vec2 mouse_pos, vec3* translation, float snap_size);
 GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const TranslationGizmo* gizmo);
 
 // GIZMOS_API bool RotationGizmoShouldApply(const RotationGizmo* gizmo);
 // GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo* gizmo, vec3 origin, quat* rotation);
 // GIZMOS_API void RotationGizmoDraw(const M_PerspectiveView* view, const RotationGizmo* gizmo);
 
-
 typedef struct LineTranslation {
 	vec3 line_dir;
 	vec2 moving_begin_mouse_pos;
-	vec2 moving_begin_origin_screen;
+	vec2 moving_begin_origin_ss;
 	vec3 moving_begin_translation;
 	vec3 moving_axis_arrow_end;
 } LineTranslation;
 
-
 GIZMOS_API void LineTranslationBegin(LineTranslation* translation, const M_PerspectiveView* view, vec2 mouse_pos, vec3 line_p, vec3 line_dir);
 
-GIZMOS_API void LineTranslationUpdate(LineTranslation* translation, const M_PerspectiveView* view, vec3* point, vec2 mouse_pos, float snap_size);
-
+GIZMOS_API void LineTranslationUpdate(const HT_InputFrame* in, LineTranslation* translation, const M_PerspectiveView* view, vec3* point, vec2 mouse_pos, float snap_size);
 
 // ----------------------------------------------------------
 
 //GIZMOS_API bool TranslationGizmoShouldApply(const TranslationGizmo* gizmo) {
-//	return gizmo->moving_axis_ != 0 && !UI_InputIsDown(UI_Input_MouseLeft);
+//	return gizmo->moving_axis_ != 0 && !InputIsDown(in, HT_InputKey_MouseLeft);
 //}
-
-#if 0
 
 static void LineTranslationBegin(LineTranslation* translation, const M_PerspectiveView* view, vec2 mouse_pos, vec3 point, vec3 line_dir)
 {
-	vec4 origin_clip = M_MulM4V4(view->cs_from_ws, M_V4V(point, 1.f));
-	vec2 origin_screen = M_CSToSS(origin_clip, view->window_size);
+	vec4 origin_ss = vec4{point, 1.f} * view->ws_to_ss;
+	origin_ss.xy /= origin_ss.w;
 
 	translation->line_dir = line_dir;
 	translation->moving_begin_mouse_pos = mouse_pos;
 	translation->moving_begin_translation = point;
-	translation->moving_begin_origin_screen = origin_screen;
-	//gizmo->moving_axis_arrow_end_screen = arrow_end_point_screen[min_distance_axis];
-	translation->moving_axis_arrow_end = M_AddV3(point, M_MulV3F(line_dir, 0.001f));
+	translation->moving_begin_origin_ss = origin_ss.xy;
+	//gizmo->moving_axis_arrow_end_ss = arrow_end_point_ss[min_distance_axis];
+	translation->moving_axis_arrow_end = point + line_dir * 0.001f;
 }
 
 static void SnapPointToGrid(vec3* point, vec3 grid_origin, float snap_size, int axis) {
@@ -127,74 +122,75 @@ static void SnapPointToGrid(vec3* point, vec3 grid_origin, float snap_size, int 
 }
 
 static void SnapPointToGrid2(vec3* point, vec3 grid_origin, float snap_size, vec3 axis) {
-	float p_relative = M_DotV3(M_SubV3(*point, grid_origin), axis);
+	float p_relative = M_Dot3(*point - grid_origin, axis);
 	float p_relative_delta = roundf(p_relative / snap_size) * snap_size - p_relative;
-	*point = M_AddV3(*point, M_MulV3F(axis, p_relative_delta));
+	*point += axis * p_relative_delta;
 }
 
-GIZMOS_API void LineTranslationUpdate(LineTranslation* translation, const M_PerspectiveView* view, vec3* point, vec2 mouse_pos, float snap_size)
+GIZMOS_API void LineTranslationUpdate(const HT_InputFrame* in, LineTranslation* translation, const M_PerspectiveView* view, vec3* point, vec2 mouse_pos, float snap_size)
 {
-	vec2 movement_delta = M_SubV2(mouse_pos, translation->moving_begin_mouse_pos);
+	vec2 movement_delta = mouse_pos - translation->moving_begin_mouse_pos;
 
-	vec4 moving_begin_origin_clip = M_MulM4V4(view->cs_from_ws, M_V4V(translation->moving_begin_translation, 1.f));
-	vec2 moving_begin_origin_screen = M_CSToSS(moving_begin_origin_clip, view->window_size);
+	vec4 moving_begin_origin_ss = vec4{translation->moving_begin_translation, 1.f} * view->ws_to_ss;
+	moving_begin_origin_ss.xy /= moving_begin_origin_ss.w;
+	
+	vec4 moving_begin_arrow_end_ss = vec4{translation->moving_axis_arrow_end, 1.f} * view->ws_to_ss;
+	moving_begin_arrow_end_ss.xy /= moving_begin_arrow_end_ss.w;
 
-	vec4 moving_begin_arrow_end_clip = M_MulM4V4(view->cs_from_ws, M_V4V(translation->moving_axis_arrow_end, 1.f));
-	vec2 moving_begin_arrow_end_screen = M_CSToSS(moving_begin_arrow_end_clip, view->window_size);
-
-	vec2 arrow_direction = M_SubV2(moving_begin_arrow_end_screen, moving_begin_origin_screen);
-	float arrow_direction_len = M_LenV2(arrow_direction);
+	vec2 arrow_direction = moving_begin_arrow_end_ss.xy - moving_begin_origin_ss.xy;
+	float arrow_direction_len = M_Len2(arrow_direction);
 	arrow_direction = arrow_direction_len == 0.f ?
-		M_V2(1, 0) :
-		M_MulV2F(arrow_direction, 1.f / arrow_direction_len);
+		vec2{1, 0} :
+		arrow_direction / arrow_direction_len;
 
-	float t = M_DotV2(arrow_direction, movement_delta);
-	t -= M_DotV2(arrow_direction, M_SubV2(moving_begin_origin_screen, translation->moving_begin_origin_screen)); // account for camera movement
+	float t = M_Dot2(arrow_direction, movement_delta);
+	t -= M_Dot2(arrow_direction, moving_begin_origin_ss.xy - translation->moving_begin_origin_ss); // account for camera movement
 
-	vec2 movement_delta_projected = M_MulV2F(arrow_direction, t);
-	vec2 moved_pos_screen = M_AddV2(moving_begin_origin_screen, movement_delta_projected);
+	vec2 movement_delta_projected = arrow_direction * t;
+	vec2 moved_pos_ss = moving_begin_origin_ss.xy + movement_delta_projected;
 
-	vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(&view->camera, moved_pos_screen, view->window_size_inv);
+	vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(view, moved_pos_ss);
 
-	vec3 plane_tangent = M_Cross(moved_pos_ray_dir, translation->line_dir);
-	vec3 plane_normal = M_Cross(plane_tangent, translation->line_dir);
+	vec3 plane_tangent = M_Cross3(moved_pos_ray_dir, translation->line_dir);
+	vec3 plane_normal = M_Cross3(plane_tangent, translation->line_dir);
 
 	// Make a plane perpendicular to the line axis
 	vec4 plane;
 	plane.xyz = plane_normal;
-	plane.w = -M_DotV3(plane_normal, translation->moving_begin_translation);
+	plane.w = -M_Dot3(plane_normal, translation->moving_begin_translation);
 	vec3 intersection_pos;
-	M_RayPlaneIntersect(view->position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
+
+	HT_ASSERT(view->has_camera_position);
+	M_RayPlaneIntersect(view->camera_position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
 
 	// The intersection position is roughly correct, but may not be entirely accurate. For accuracy, let's project the intersection pos onto the translation line.
 	intersection_pos = M_ProjectPointOntoLine(intersection_pos, translation->moving_begin_translation, translation->line_dir);
 
 	if (snap_size > 0) {
-		vec3 snap_grid_origin = UI_InputIsDown(UI_Input_Alt) ? M_V3(0, 0, 0) : translation->moving_begin_translation;
+		vec3 snap_grid_origin = InputIsDown(in, HT_InputKey_Alt) ? vec3{} : translation->moving_begin_translation;
 		SnapPointToGrid2(&intersection_pos, snap_grid_origin, snap_size, translation->line_dir);
 	}
 
 	*point = intersection_pos;
 }
 
+GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_PerspectiveView* view, TranslationGizmo* gizmo, vec2 mouse_pos, vec3* translation, float snap_size) {
+	HT_ASSERT(view->has_camera_position);
 
-GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, TranslationGizmo* gizmo, vec3* translation, float snap_size) {
 	gizmo->hovered_axis_ = TranslationAxis_None;
 	gizmo->plane_gizmo_is_implicitly_hovered = false;
-
-	vec2 mouse_pos = {UI_STATE.mouse_pos.x, UI_STATE.mouse_pos.y};
 	
-	vec4 origin = M_V4V(*translation, 1.f);
+	vec4 origin = vec4{*translation, 1.f};
 	
 	// Update planar movement
 	if (gizmo->moving_axis_ >= TranslationAxis_YZ && gizmo->moving_axis_ <= TranslationAxis_XY) {
 		// For planar movement, we want to calculate the movement delta in 2D, then add that to the screen-space origin to find the 3D ray direction,
 		// then find the ray-plane intersection and that's the final position
 
-		vec2 movement_delta = M_SubV2(mouse_pos, gizmo->planar_moving_begin_mouse_pos);
-		vec2 moved_pos_screen = M_AddV2(gizmo->planar_moving_begin_origin_screen, movement_delta);
+		vec2 movement_delta = mouse_pos - gizmo->planar_moving_begin_mouse_pos;
+		vec2 moved_pos_ss = gizmo->planar_moving_begin_origin_ss + movement_delta;
 
-		vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(&view->camera, moved_pos_screen, view->window_size_inv);
+		vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(view, moved_pos_ss);
 
 		vec3 plane_normal = {0};
 		plane_normal._[gizmo->moving_axis_ - TranslationAxis_YZ] = 1.f;
@@ -202,12 +198,14 @@ GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, Translatio
 		// Make a plane perpendicular to the line axis
 		vec4 plane;
 		plane.xyz = plane_normal;
-		plane.w = -M_DotV3(plane_normal, gizmo->planar_moving_begin_translation);
+		plane.w = -M_Dot3(plane_normal, gizmo->planar_moving_begin_translation);
 		vec3 intersection_pos;
-		M_RayPlaneIntersect(view->position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
 
-		if (!UI_InputIsDown(UI_Input_Control)) {
-			vec3 snap_grid_origin = UI_InputIsDown(UI_Input_Alt) ? M_V3(0, 0, 0) : gizmo->planar_moving_begin_translation;
+		HT_ASSERT(view->has_camera_position);
+		M_RayPlaneIntersect(view->camera_position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
+
+		if (!InputIsDown(in, HT_InputKey_Control)) {
+			vec3 snap_grid_origin = InputIsDown(in, HT_InputKey_Alt) ? vec3{} : gizmo->planar_moving_begin_translation;
 			for (int i = 1; i <= 2; i++) {
 				SnapPointToGrid(&intersection_pos, snap_grid_origin, snap_size, (gizmo->moving_axis_ - TranslationAxis_YZ + i) % 3);
 			}
@@ -219,68 +217,72 @@ GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, Translatio
 	// Update linear movement
 	// TODO: use LineTranslation API
 	if (gizmo->moving_axis_ >= TranslationAxis_X && gizmo->moving_axis_ <= TranslationAxis_Z) {
-		vec2 movement_delta = M_SubV2(mouse_pos, gizmo->moving_begin_mouse_pos);
 
-		vec4 moving_begin_origin_clip = M_MulM4V4(view->cs_from_ws, M_V4V(gizmo->moving_begin_translation, 1.f));
-		vec2 moving_begin_origin_screen = M_CSToSS(moving_begin_origin_clip, view->window_size);
+		vec2 movement_delta = mouse_pos - gizmo->moving_begin_mouse_pos;
 
-		vec4 moving_begin_arrow_end_clip = M_MulM4V4(view->cs_from_ws, M_V4V(gizmo->moving_axis_arrow_end, 1.f));
-		vec2 moving_begin_arrow_end_screen = M_CSToSS(moving_begin_arrow_end_clip, view->window_size);
+		vec4 moving_begin_origin_ss = vec4{gizmo->moving_begin_translation, 1.f} * view->ws_to_ss;
+		moving_begin_origin_ss.xy /= moving_begin_origin_ss.w;
 
-		vec2 arrow_direction = M_SubV2(moving_begin_arrow_end_screen, moving_begin_origin_screen);
-		arrow_direction = M_NormV2(arrow_direction);
+		vec4 moving_begin_arrow_end_ss = vec4{gizmo->moving_axis_arrow_end, 1.f} * view->ws_to_ss;
+		moving_begin_arrow_end_ss.xy /= moving_begin_arrow_end_ss.w;
 
-		float t = M_DotV2(arrow_direction, movement_delta);
-		t -= M_DotV2(arrow_direction, M_SubV2(moving_begin_origin_screen, gizmo->moving_begin_origin_screen)); // account for camera movement
+		vec2 arrow_direction = moving_begin_arrow_end_ss.xy - moving_begin_origin_ss.xy;
+		arrow_direction = M_Norm2(arrow_direction);
+
+		float t = M_Dot2(arrow_direction, movement_delta);
+		t -= M_Dot2(arrow_direction, moving_begin_origin_ss.xy - gizmo->moving_begin_origin_ss); // account for camera movement
 		
-		vec2 movement_delta_projected = M_MulV2F(arrow_direction, t);
-		vec2 moved_pos_screen = M_AddV2(moving_begin_origin_screen, movement_delta_projected);
+		vec2 movement_delta_projected = arrow_direction * t;
+		vec2 moved_pos_ss = moving_begin_origin_ss.xy + movement_delta_projected;
 
 		vec3 axis = {0.f, 0.f, 0.f};
 		axis._[gizmo->moving_axis_ - TranslationAxis_X] = 1.f;
 
-		vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(&view->camera, moved_pos_screen, view->window_size_inv);
+		vec3 moved_pos_ray_dir = M_RayDirectionFromSSPoint(view, moved_pos_ss);
 
-		vec3 plane_tangent = M_Cross(moved_pos_ray_dir, axis);
-		vec3 plane_normal = M_Cross(plane_tangent, axis);
+		vec3 plane_tangent = M_Cross3(moved_pos_ray_dir, axis);
+		vec3 plane_normal = M_Cross3(plane_tangent, axis);
 
 		// Make a plane perpendicular to the line axis
 		vec4 plane;
 		plane.xyz = plane_normal;
-		plane.w = -M_DotV3(plane_normal, gizmo->moving_begin_translation);
+		plane.w = -M_Dot3(plane_normal, gizmo->moving_begin_translation);
 		vec3 intersection_pos;
-		M_RayPlaneIntersect(view->position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
+		M_RayPlaneIntersect(view->camera_position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
 		
-		if (!UI_InputIsDown(UI_Input_Control)) {
-			vec3 snap_grid_origin = UI_InputIsDown(UI_Input_Alt) ? M_V3(0, 0, 0) : gizmo->moving_begin_translation;
+		if (snap_size > 0.f && !InputIsDown(in, HT_InputKey_Control)) {
+			vec3 snap_grid_origin = InputIsDown(in, HT_InputKey_Alt) ? vec3{} : gizmo->moving_begin_translation;
 			SnapPointToGrid(&intersection_pos, snap_grid_origin, snap_size, gizmo->moving_axis_ - TranslationAxis_X);
 		}
-
+		
 		origin.xyz = intersection_pos;
 	}
 
-	vec3 origin_dir_from_camera = M_Norm3(M_SubV3(origin.xyz, view->position));
+	vec3 origin_dir_from_camera = M_Norm3(origin.xyz - view->camera_position);
 
-	M_GetPointScreenSpaceScale(&view->camera, origin.xyz, &gizmo->arrow_scale);
+	M_GetPointScreenSpaceScale(view, origin.xyz, &gizmo->arrow_scale);
 	gizmo->arrow_scale *= 0.15f;
 	
-	vec4 origin_clip = M_MulM4V4(view->cs_from_ws, origin);
-	vec2 origin_screen = M_CSToSS(origin_clip, view->window_size);
+	vec4 origin_ss = origin * view->ws_to_ss;
+	origin_ss.xy /= origin_ss.w;
 	
 	float min_distance = 10000000.f;
 	int min_distance_axis = -1;
-	vec2 arrow_end_point_screen[3];
+	vec2 arrow_end_point_ss[3];
 	vec3 arrow_end_point[3];
 
+	//mouse_pos = {920.f, 306.f};
 	for (int i = 0; i < 3; i++) {
 		vec3 arrow_end = origin.xyz;
 		arrow_end._[i] += gizmo->arrow_scale;
 		arrow_end_point[i] = arrow_end;
 
-		vec4 b_clip = M_MulM4V4(view->cs_from_ws, M_V4V(arrow_end, 1.f));
-		if (b_clip.z > 0.f) {
-			arrow_end_point_screen[i] = M_CSToSS(b_clip, view->window_size);
-			float d = M_DistanceToLineSegment2D(mouse_pos, origin_screen, arrow_end_point_screen[i]);
+		vec4 b_ss = vec4{arrow_end, 1.f} * view->ws_to_ss;
+
+		if (b_ss.z > 0.f) {
+			b_ss.xy /= b_ss.w;
+			arrow_end_point_ss[i] = b_ss.xy;
+			float d = M_DistanceToLineSegment2D(mouse_pos, origin_ss.xy, arrow_end_point_ss[i]);
 			if (d < min_distance) {
 				min_distance = d;
 				min_distance_axis = i;
@@ -304,28 +306,28 @@ GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, Translatio
 		};
 
 		for (int i = 0; i < 3; i++) {
-			vec4 quad_clip[4] = {
-				M_MulM4V4(view->cs_from_ws, quads[i][0]),
-				M_MulM4V4(view->cs_from_ws, quads[i][1]),
-				M_MulM4V4(view->cs_from_ws, quads[i][2]),
-				M_MulM4V4(view->cs_from_ws, quads[i][3]),
+			vec4 quad_ss[4] = {
+				quads[i][0] * view->ws_to_ss,
+				quads[i][1] * view->ws_to_ss,
+				quads[i][2] * view->ws_to_ss,
+				quads[i][3] * view->ws_to_ss,
 			};
 			
 			vec3 plane_normal = {0};
 			plane_normal._[i] = 1.f;
-			float view_dot = M_DotV3(origin_dir_from_camera, plane_normal);
+			float view_dot = M_Dot3(origin_dir_from_camera, plane_normal);
 			
-			float visibility = M_Clamp(M_ABS(view_dot)*8.f - 1.f, 0.f, 1.f);
+			float visibility = M_Clamp(fabsf(view_dot)*8.f - 1.f, 0.f, 1.f);
 			
-			bool in_view = quad_clip[0].z > 0.f && quad_clip[1].z > 0.f && quad_clip[2].z > 0.f && quad_clip[3].z > 0.f;
+			bool in_view = quad_ss[0].z > 0.f && quad_ss[1].z > 0.f && quad_ss[2].z > 0.f && quad_ss[3].z > 0.f;
 			if (!in_view) visibility = 0.f;
 			
 			gizmo->plane_gizmo_visibility[i] = visibility;
 			if (in_view) {
-				gizmo->plane_gizmo_quads[i][0] = M_CSToSS(quad_clip[0], view->window_size);
-				gizmo->plane_gizmo_quads[i][1] = M_CSToSS(quad_clip[1], view->window_size);
-				gizmo->plane_gizmo_quads[i][2] = M_CSToSS(quad_clip[2], view->window_size);
-				gizmo->plane_gizmo_quads[i][3] = M_CSToSS(quad_clip[3], view->window_size);
+				gizmo->plane_gizmo_quads[i][0] = quad_ss[0].xy / quad_ss[0].w;
+				gizmo->plane_gizmo_quads[i][1] = quad_ss[1].xy / quad_ss[1].w;
+				gizmo->plane_gizmo_quads[i][2] = quad_ss[2].xy / quad_ss[2].w;
+				gizmo->plane_gizmo_quads[i][3] = quad_ss[3].xy / quad_ss[3].w;
 				
 				float dist = M_DistanceToPolygon2D(mouse_pos, gizmo->plane_gizmo_quads[i], 4);
 				if (dist < plane_gizmos_min_distance) {
@@ -339,17 +341,16 @@ GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, Translatio
 	if (min_distance < 10.f) {
 		gizmo->hovered_axis_ = (TranslationAxis)(TranslationAxis_X + min_distance_axis);
 
-		if (UI_InputWasPressed(UI_Input_MouseLeft)) { // Begin press?
+		if (InputWentDown(in, HT_InputKey_MouseLeft)) { // Begin press?
 			gizmo->moving_axis_ = gizmo->hovered_axis_;
 			gizmo->moving_begin_mouse_pos = mouse_pos;
 			gizmo->moving_begin_translation = origin.xyz;
-			gizmo->moving_begin_origin_screen = origin_screen;
-			//gizmo->moving_axis_arrow_end_screen = arrow_end_point_screen[min_distance_axis];
+			gizmo->moving_begin_origin_ss = origin_ss.xy;
+			//gizmo->moving_axis_arrow_end_ss = arrow_end_point_ss[min_distance_axis];
 			gizmo->moving_axis_arrow_end = arrow_end_point[min_distance_axis];
 		}
 	}
 	else {
-		
 		if (plane_gizmos_min_distance < 10.f) {
 			gizmo->hovered_axis_ = (TranslationAxis)(TranslationAxis_YZ + plane_gizmos_min_dist_axis);
 		}
@@ -371,15 +372,15 @@ GIZMOS_API void TranslationGizmoUpdate(const M_PerspectiveView* view, Translatio
 			gizmo->plane_gizmo_is_implicitly_hovered = true;*/
 		}
 		
-		if (UI_InputWasPressed(UI_Input_MouseLeft)) { // Begin press?
+		if (InputWentDown(in, HT_InputKey_MouseLeft)) { // Begin press?
 			gizmo->moving_axis_ = gizmo->hovered_axis_;
 			gizmo->planar_moving_begin_mouse_pos = mouse_pos;
 			gizmo->planar_moving_begin_translation = origin.xyz;
-			gizmo->planar_moving_begin_origin_screen = origin_screen;
+			gizmo->planar_moving_begin_origin_ss = origin_ss.xy;
 		}
 	}
 	
-	if (!UI_InputIsDown(UI_Input_MouseLeft)) {
+	if (!InputIsDown(in, HT_InputKey_MouseLeft)) {
 		gizmo->moving_axis_ = TranslationAxis_None;
 	}
 	
@@ -394,9 +395,9 @@ GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const Transl
 	bool z_active = active_axis == TranslationAxis_Z;
 	
 	UI_Color nonhovered_colors[] = {UI_COLOR{225, 50, 10, 255}, UI_COLOR{50, 225, 10, 255}, UI_COLOR{10, 120, 225, 255}};
-	DrawArrow3D(view, gizmo->origin, M_AddV3(gizmo->origin, M_V3(gizmo->arrow_scale, 0.f, 0.f)), 0.03f, 0.012f, 12, x_active ? 3.f : 3.f, x_active ? UI_YELLOW : nonhovered_colors[0]);
-	DrawArrow3D(view, gizmo->origin, M_AddV3(gizmo->origin, M_V3(0.f, gizmo->arrow_scale, 0.f)), 0.03f, 0.012f, 12, y_active ? 3.f : 3.f, y_active ? UI_YELLOW : nonhovered_colors[1]);
-	DrawArrow3D(view, gizmo->origin, M_AddV3(gizmo->origin, M_V3(0.f, 0.f, gizmo->arrow_scale)), 0.03f, 0.012f, 12, z_active ? 3.f : 3.f, z_active ? UI_YELLOW : nonhovered_colors[2]);
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{gizmo->arrow_scale, 0.f, 0.f}, 0.03f, 0.012f, 12, x_active ? 3.f : 3.f, x_active ? UI_YELLOW : nonhovered_colors[0]);
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, gizmo->arrow_scale, 0.f}, 0.03f, 0.012f, 12, y_active ? 3.f : 3.f, y_active ? UI_YELLOW : nonhovered_colors[1]);
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, 0.f, gizmo->arrow_scale}, 0.03f, 0.012f, 12, z_active ? 3.f : 3.f, z_active ? UI_YELLOW : nonhovered_colors[2]);
 
 	UI_Color inner_colors[] = {{255, 30, 30, 130+50}, {30, 255, 30, 130+50}, {60, 60, 255, 180+50}};
 
@@ -431,8 +432,10 @@ GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const Transl
 	}
 }
 
+#if 0
+
 GIZMOS_API bool RotationGizmoShouldApply(const RotationGizmo* gizmo) {
-	return gizmo->dragging_axis != 0 && !UI_InputIsDown(UI_Input_MouseLeft);
+	return gizmo->dragging_axis != 0 && !InputIsDown(in, HT_InputKey_MouseLeft);
 }
 
 GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo* gizmo, vec3 origin, quat* rotation) {
@@ -449,7 +452,7 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 		vec3 camera_to_origin = M_Norm3(M_SubV3(origin, view->position));
 		vec4 sphere_half_plane;
 		sphere_half_plane.xyz = camera_to_origin;
-		sphere_half_plane.w = -M_DotV3(camera_to_origin, origin);
+		sphere_half_plane.w = -M_Dot3(camera_to_origin, origin);
 
 		float min_dist = 10000000.f;
 		int min_dist_axis = 0;
@@ -465,13 +468,13 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 
 			// Find the intersecting line between the axis plane and the sphere_half_plane, then to get the start/end points
 			// of the half-circle, just move forward one unit along that line direction.
-			vec3 intersecting_line_dir = M_Norm3(M_Cross(z_axis_dir, camera_to_origin));
-			float p0_x = M_DotV3(intersecting_line_dir, x_axis_dir);
-			float p0_y = M_DotV3(intersecting_line_dir, y_axis_dir);
+			vec3 intersecting_line_dir = M_Norm3(M_Cross3(z_axis_dir, camera_to_origin));
+			float p0_x = M_Dot3(intersecting_line_dir, x_axis_dir);
+			float p0_y = M_Dot3(intersecting_line_dir, y_axis_dir);
 			float p0_theta = atan2f(p0_y, p0_x);
 			if (isnan(p0_theta)) p0_theta = 0.f;
 
-			float dot = M_DotV3(camera_to_origin, z_axis_dir);
+			float dot = M_Dot3(camera_to_origin, z_axis_dir);
 			float dot2 = dot*dot;
 			float dot4 = dot2*dot2;
 			float dot8 = dot4*dot4;
@@ -488,7 +491,7 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 				p_world._[x_axis_i] = scale * cosf(theta);
 				p_world._[y_axis_i] = scale * sinf(theta);
 
-				float side = M_DotV3(p_world.xyz, sphere_half_plane.xyz) + sphere_half_plane.w;
+				float side = M_Dot3(p_world.xyz, sphere_half_plane.xyz) + sphere_half_plane.w;
 				vec4 p_clip = M_MulM4V4(view->cs_from_ws, p_world);
 				vec2 p = M_CSToSS(p_clip, view->window_size);
 				points[i] = UI_VEC2{p.x, p.y};
@@ -513,7 +516,7 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 		if (min_dist < 10.f) {
 			gizmo->hovered_axis = min_dist_axis+1;
 			
-			if (UI_InputWasPressed(UI_Input_MouseLeft)) {
+			if (InputWentDown(HT_InputKey_MouseLeft)) {
 				gizmo->dragging_axis = gizmo->hovered_axis;
 				gizmo->drag_start_mouse_pos = UI_STATE.mouse_pos;
 				gizmo->drag_start_rotation = *rotation;
@@ -521,7 +524,7 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 			}
 		}
 		
-		if (!UI_InputIsDown(UI_Input_MouseLeft)) {
+		if (!InputIsDown(in, HT_InputKey_MouseLeft)) {
 			gizmo->dragging_axis = 0;
 		}
 		
@@ -529,11 +532,11 @@ GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo
 			// so... we want to figure out the rotation about the point
 
 			vec4 origin_clip = M_MulM4V4(view->cs_from_ws, M_V4V(origin, 1.f));
-			vec2 origin_screen = M_CSToSS(origin_clip, view->window_size);
+			vec2 origin_ss = M_CSToSS(origin_clip, view->window_size);
 			
 			// hmm... we can't just, or can we? Do we care about winding?
-			float start_mouse_angle = atan2f(gizmo->drag_start_mouse_pos.y - origin_screen.y, gizmo->drag_start_mouse_pos.x - origin_screen.x);
-			float new_mouse_angle = atan2f(UI_STATE.mouse_pos.y - origin_screen.y, UI_STATE.mouse_pos.x - origin_screen.x);
+			float start_mouse_angle = atan2f(gizmo->drag_start_mouse_pos.y - origin_ss.y, gizmo->drag_start_mouse_pos.x - origin_ss.x);
+			float new_mouse_angle = atan2f(UI_STATE.mouse_pos.y - origin_ss.y, UI_STATE.mouse_pos.x - origin_ss.x);
 			// get the projected origin
 			
 			vec3 axis_dir = {0};
@@ -566,6 +569,7 @@ GIZMOS_API void RotationGizmoDraw(const M_PerspectiveView* view, const RotationG
 		}
 	}
 }
+
 #endif
 
 // ----------------------------------------------------------
@@ -724,26 +728,26 @@ GIZMOS_API void DrawQuadFrame3D(const M_PerspectiveView* view, vec3 a, vec3 b, v
 		vec3 c_inner = M_LerpV3(c, inset, midpoint);
 		vec3 d_inner = M_LerpV3(d, inset, midpoint);
 
-		vec2 a_screen = ClipSpaceToScreen(view, a_clip);
-		vec2 b_screen = ClipSpaceToScreen(view, b_clip);
-		vec2 c_screen = ClipSpaceToScreen(view, c_clip);
-		vec2 d_screen = ClipSpaceToScreen(view, d_clip);
+		vec2 a_ss = ClipSpaceToScreen(view, a_clip);
+		vec2 b_ss = ClipSpaceToScreen(view, b_clip);
+		vec2 c_ss = ClipSpaceToScreen(view, c_clip);
+		vec2 d_ss = ClipSpaceToScreen(view, d_clip);
 		
-		vec2 a_inner_screen = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(a_inner, 1.f)));
-		vec2 b_inner_screen = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(b_inner, 1.f)));
-		vec2 c_inner_screen = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(c_inner, 1.f)));
-		vec2 d_inner_screen = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(d_inner, 1.f)));
+		vec2 a_inner_ss = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(a_inner, 1.f)));
+		vec2 b_inner_ss = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(b_inner, 1.f)));
+		vec2 c_inner_ss = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(c_inner, 1.f)));
+		vec2 d_inner_ss = ClipSpaceToScreen(view, M_MulM4V4(view->cs_from_ws, M_V4V(d_inner, 1.f)));
 
 		uint32_t first_vertex;
 		UI_DrawVertex* verts = UI_AddVertices(8, &first_vertex);
-		verts[0] = UI_DRAW_VERTEX{{a_screen.x, a_screen.y}, {0, 0}, color};
-		verts[1] = UI_DRAW_VERTEX{{a_inner_screen.x, a_inner_screen.y}, {0, 0}, color};
-		verts[2] = UI_DRAW_VERTEX{{b_screen.x, b_screen.y}, {0, 0}, color};
-		verts[3] = UI_DRAW_VERTEX{{b_inner_screen.x, b_inner_screen.y}, {0, 0}, color};
-		verts[4] = UI_DRAW_VERTEX{{c_screen.x, c_screen.y}, {0, 0}, color};
-		verts[5] = UI_DRAW_VERTEX{{c_inner_screen.x, c_inner_screen.y}, {0, 0}, color};
-		verts[6] = UI_DRAW_VERTEX{{d_screen.x, d_screen.y}, {0, 0}, color};
-		verts[7] = UI_DRAW_VERTEX{{d_inner_screen.x, d_inner_screen.y}, {0, 0}, color};
+		verts[0] = UI_DRAW_VERTEX{{a_ss.x, a_ss.y}, {0, 0}, color};
+		verts[1] = UI_DRAW_VERTEX{{a_inner_ss.x, a_inner_ss.y}, {0, 0}, color};
+		verts[2] = UI_DRAW_VERTEX{{b_ss.x, b_ss.y}, {0, 0}, color};
+		verts[3] = UI_DRAW_VERTEX{{b_inner_ss.x, b_inner_ss.y}, {0, 0}, color};
+		verts[4] = UI_DRAW_VERTEX{{c_ss.x, c_ss.y}, {0, 0}, color};
+		verts[5] = UI_DRAW_VERTEX{{c_inner_ss.x, c_inner_ss.y}, {0, 0}, color};
+		verts[6] = UI_DRAW_VERTEX{{d_ss.x, d_ss.y}, {0, 0}, color};
+		verts[7] = UI_DRAW_VERTEX{{d_inner_ss.x, d_inner_ss.y}, {0, 0}, color};
 		UI_AddQuadIndices(first_vertex+1, first_vertex+0, first_vertex+2, first_vertex+3, UI_TEXTURE_ID_NIL);
 		UI_AddQuadIndices(first_vertex+3, first_vertex+2, first_vertex+4, first_vertex+5, UI_TEXTURE_ID_NIL);
 		UI_AddQuadIndices(first_vertex+5, first_vertex+4, first_vertex+6, first_vertex+7, UI_TEXTURE_ID_NIL);
@@ -755,6 +759,7 @@ GIZMOS_API void DrawArrow3D(const M_PerspectiveView* view, vec3 from, vec3 to,
 	float head_length, float head_radius, int vertices, float thickness, UI_Color color)
 {
 	vec4 to_ss = vec4{to, 1.f} * view->ws_to_ss;
+
 	head_radius *= to_ss.w;
 	head_length *= to_ss.w;
 

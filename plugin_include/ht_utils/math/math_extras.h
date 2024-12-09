@@ -6,11 +6,12 @@
 #define MATH_EXTRAS_INCLUDED
 
 typedef struct M_PerspectiveView {
-	vec3 position;
-	
 	// Screen-space Z is clipped at Z=0
 	mat4 ws_to_ss; // world-space to screen-space
 	mat4 ss_to_ws; // screen-space to world-space
+	
+	bool has_camera_position;
+	vec3 camera_position; // camera position: this is where mouse rays begin
 } M_PerspectiveView;
 
 // Implicit plane; stores the coefficients A, B, C and D to the plane equation A*x + B*y + C*z + D = 0
@@ -61,9 +62,9 @@ static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect, float near, float
 	float f = 1.0f / tanf(fov_y * 0.5f);
 	mat4 result = {
 		f/aspect,  0.f,                   0.f,  0.f,
-		     0.f,    f,                   0.f,  0.f,
-		     0.f,  0.f,        far/(far-near),  1.f,
-		     0.f,  0.f, (near*far)/(near-far),  0.f,
+		0.f,    f,                   0.f,  0.f,
+		0.f,  0.f,        far/(far-near),  1.f,
+		0.f,  0.f, (near*far)/(near-far),  0.f,
 	};
 	return result;
 }
@@ -79,11 +80,9 @@ static vec3 M_RayDirectionFromSSPoint(const M_PerspectiveView* view, vec2 p_ss) 
 	vec4 point_in_front = vec4{p_ss.x, p_ss.y, 0.f, 1.f} * view->ss_to_ws;
 	point_in_front = point_in_front / point_in_front.w;
 
-	// I guess we can derive position from the view matrix...?
-	HT_ASSERT(0); // TODO
-	// vec3 dir = M_NormV3(M_SubV3(point_in_front.xyz, view->position));
-	// return dir;
-	return {0, 0, 0};
+	HT_ASSERT(view->has_camera_position);
+	vec3 dir = M_Norm3(point_in_front.xyz - view->camera_position);
+	return dir;
 }
 
 static float M_DistanceToLineSegment2D(vec2 p, vec2 a, vec2 b) {

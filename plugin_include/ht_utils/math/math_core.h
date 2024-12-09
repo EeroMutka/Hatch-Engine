@@ -255,6 +255,198 @@ static inline vec4 operator*(const vec4& a, const mat4& b) {
 }
 static inline void operator*=(vec4& a, const mat4& b) { a = a * b; }
 
+static inline mat4 M_Transpose4x4(mat4 M) {
+	return {
+		M.coef[0], M.coef[4], M.coef[8], M.coef[12],
+		M.coef[1], M.coef[5], M.coef[9], M.coef[13],
+		M.coef[2], M.coef[6], M.coef[10], M.coef[14],
+		M.coef[3], M.coef[7], M.coef[11], M.coef[15],
+	};
+}
+
+static inline void invert4x4(const float * src, float * dst) { // https://github.com/niswegmann/small-matrix-inverse/blob/master/invert4x4_c.h
+	float det;
+
+	/* Compute adjoint: */
+
+	dst[0] =
+		+ src[ 5] * src[10] * src[15]
+		- src[ 5] * src[11] * src[14]
+		- src[ 9] * src[ 6] * src[15]
+		+ src[ 9] * src[ 7] * src[14]
+		+ src[13] * src[ 6] * src[11]
+		- src[13] * src[ 7] * src[10];
+
+	dst[1] =
+		- src[ 1] * src[10] * src[15]
+		+ src[ 1] * src[11] * src[14]
+		+ src[ 9] * src[ 2] * src[15]
+		- src[ 9] * src[ 3] * src[14]
+		- src[13] * src[ 2] * src[11]
+		+ src[13] * src[ 3] * src[10];
+
+	dst[2] =
+		+ src[ 1] * src[ 6] * src[15]
+		- src[ 1] * src[ 7] * src[14]
+		- src[ 5] * src[ 2] * src[15]
+		+ src[ 5] * src[ 3] * src[14]
+		+ src[13] * src[ 2] * src[ 7]
+		- src[13] * src[ 3] * src[ 6];
+
+	dst[3] =
+		- src[ 1] * src[ 6] * src[11]
+		+ src[ 1] * src[ 7] * src[10]
+		+ src[ 5] * src[ 2] * src[11]
+		- src[ 5] * src[ 3] * src[10]
+		- src[ 9] * src[ 2] * src[ 7]
+		+ src[ 9] * src[ 3] * src[ 6];
+
+	dst[4] =
+		- src[ 4] * src[10] * src[15]
+		+ src[ 4] * src[11] * src[14]
+		+ src[ 8] * src[ 6] * src[15]
+		- src[ 8] * src[ 7] * src[14]
+		- src[12] * src[ 6] * src[11]
+		+ src[12] * src[ 7] * src[10];
+
+	dst[5] =
+		+ src[ 0] * src[10] * src[15]
+		- src[ 0] * src[11] * src[14]
+		- src[ 8] * src[ 2] * src[15]
+		+ src[ 8] * src[ 3] * src[14]
+		+ src[12] * src[ 2] * src[11]
+		- src[12] * src[ 3] * src[10];
+
+	dst[6] =
+		- src[ 0] * src[ 6] * src[15]
+		+ src[ 0] * src[ 7] * src[14]
+		+ src[ 4] * src[ 2] * src[15]
+		- src[ 4] * src[ 3] * src[14]
+		- src[12] * src[ 2] * src[ 7]
+		+ src[12] * src[ 3] * src[ 6];
+
+	dst[7] =
+		+ src[ 0] * src[ 6] * src[11]
+		- src[ 0] * src[ 7] * src[10]
+		- src[ 4] * src[ 2] * src[11]
+		+ src[ 4] * src[ 3] * src[10]
+		+ src[ 8] * src[ 2] * src[ 7]
+		- src[ 8] * src[ 3] * src[ 6];
+
+	dst[8] =
+		+ src[ 4] * src[ 9] * src[15]
+		- src[ 4] * src[11] * src[13]
+		- src[ 8] * src[ 5] * src[15]
+		+ src[ 8] * src[ 7] * src[13]
+		+ src[12] * src[ 5] * src[11]
+		- src[12] * src[ 7] * src[ 9];
+
+	dst[9] =
+		- src[ 0] * src[ 9] * src[15]
+		+ src[ 0] * src[11] * src[13]
+		+ src[ 8] * src[ 1] * src[15]
+		- src[ 8] * src[ 3] * src[13]
+		- src[12] * src[ 1] * src[11]
+		+ src[12] * src[ 3] * src[ 9];
+
+	dst[10] =
+		+ src[ 0] * src[ 5] * src[15]
+		- src[ 0] * src[ 7] * src[13]
+		- src[ 4] * src[ 1] * src[15]
+		+ src[ 4] * src[ 3] * src[13]
+		+ src[12] * src[ 1] * src[ 7]
+		- src[12] * src[ 3] * src[ 5];
+
+	dst[11] =
+		- src[ 0] * src[ 5] * src[11]
+		+ src[ 0] * src[ 7] * src[ 9]
+		+ src[ 4] * src[ 1] * src[11]
+		- src[ 4] * src[ 3] * src[ 9]
+		- src[ 8] * src[ 1] * src[ 7]
+		+ src[ 8] * src[ 3] * src[ 5];
+
+	dst[12] =
+		- src[ 4] * src[ 9] * src[14]
+		+ src[ 4] * src[10] * src[13]
+		+ src[ 8] * src[ 5] * src[14]
+		- src[ 8] * src[ 6] * src[13]
+		- src[12] * src[ 5] * src[10]
+		+ src[12] * src[ 6] * src[ 9];
+
+	dst[13] =
+		+ src[ 0] * src[ 9] * src[14]
+		- src[ 0] * src[10] * src[13]
+		- src[ 8] * src[ 1] * src[14]
+		+ src[ 8] * src[ 2] * src[13]
+		+ src[12] * src[ 1] * src[10]
+		- src[12] * src[ 2] * src[ 9];
+
+	dst[14] =
+		- src[ 0] * src[ 5] * src[14]
+		+ src[ 0] * src[ 6] * src[13]
+		+ src[ 4] * src[ 1] * src[14]
+		- src[ 4] * src[ 2] * src[13]
+		- src[12] * src[ 1] * src[ 6]
+		+ src[12] * src[ 2] * src[ 5];
+
+	dst[15] =
+		+ src[ 0] * src[ 5] * src[10]
+		- src[ 0] * src[ 6] * src[ 9]
+		- src[ 4] * src[ 1] * src[10]
+		+ src[ 4] * src[ 2] * src[ 9]
+		+ src[ 8] * src[ 1] * src[ 6]
+		- src[ 8] * src[ 2] * src[ 5];
+
+	/* Compute determinant: */
+
+	det = + src[0] * dst[0] + src[1] * dst[4] + src[2] * dst[8] + src[3] * dst[12];
+
+	/* Multiply adjoint with reciprocal of determinant: */
+
+	det = 1.0f / det;
+
+	dst[ 0] *= det;
+	dst[ 1] *= det;
+	dst[ 2] *= det;
+	dst[ 3] *= det;
+	dst[ 4] *= det;
+	dst[ 5] *= det;
+	dst[ 6] *= det;
+	dst[ 7] *= det;
+	dst[ 8] *= det;
+	dst[ 9] *= det;
+	dst[10] *= det;
+	dst[11] *= det;
+	dst[12] *= det;
+	dst[13] *= det;
+	dst[14] *= det;
+	dst[15] *= det;
+}
+/*static inline mat4 M_Inverse4x4(mat4 M) {
+	// https://github.com/HandmadeMath/HandmadeMath/blob/bdc7dd2a516b08715a56f8b8eecefe44c9d68f40/HandmadeMath.h#L1699C1-L1699C8
+	M = M_Transpose4x4(M);
+
+	vec3 C01 = M_Cross3(M.row[0].xyz, M.row[1].xyz);
+	vec3 C23 = M_Cross3(M.row[2].xyz, M.row[3].xyz);
+	vec3 B10 = M.row[0].xyz * M.row[1].w - M.row[1].xyz * M.row[0].w;
+	vec3 B32 = M.row[2].xyz * M.row[3].w - M.row[3].xyz * M.row[2].w;
+
+	float InvDeterminant = 1.0f / (M_Dot3(C01, B32) + M_Dot3(C23, B10));
+	C01 = C01 * InvDeterminant;
+	C23 = C23 * InvDeterminant;
+	B10 = B10 * InvDeterminant;
+	B32 = B32 * InvDeterminant;
+
+	mat4 Result;
+	Result.row[0] = vec4{ M_Cross3(M.row[1].xyz, B32) + C23 * M.row[1].w, -M_Dot3(M.row[1].xyz, C23) };
+	Result.row[1] = vec4{ M_Cross3(B32, M.row[0].xyz) + C23 * M.row[0].w, +M_Dot3(M.row[0].xyz, C23) };
+	Result.row[2] = vec4{ M_Cross3(M.row[3].xyz, B10) + C01 * M.row[3].w, -M_Dot3(M.row[3].xyz, C01) };
+	Result.row[3] = vec4{ M_Cross3(B10, M.row[2].xyz) + C01 * M.row[2].w, +M_Dot3(M.row[2].xyz, C01) };
+
+	//return M_Transpose4x4(Result);
+	return Result; //return M_Transpose4x4(Result);
+}*/
+
 // ---------------------------------------------------------
 
 // Assumes row-vectors and right-handed rotation

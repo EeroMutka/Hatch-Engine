@@ -51,8 +51,11 @@ static ID3D11PixelShader* present_ps;
 static ID3D11InputLayout* input_layout;
 
 static Scene__Scene* open_scene;
+static M_PerspectiveView open_scene_view;
+static mat4 open_scene_ws_to_cs;
 static ivec2 open_scene_rect_min;
 static ivec2 open_scene_rect_max;
+static SceneEditState scene_edit_state;
 
 static ID3D11Texture2D* color_target;
 static ID3D11Texture2D* depth_target;
@@ -185,41 +188,12 @@ static void Render(HT_API* ht) {
 		int height = open_scene_rect_max.y - open_scene_rect_min.y;
 		MaybeRecreateRenderTargets(ht, width, height);
 
-		mat4 ws_to_cs = {};
-		for (int i = 0; i < open_scene->extended_data.count; i++) {
-			HT_Any any = ((HT_Any*)open_scene->extended_data.data)[i];
-			if (any.type.handle == ht->types->SceneEdit__EditorCamera) {
-				SceneEdit__EditorCamera* camera = (SceneEdit__EditorCamera*)any.data;
-
-				//ws_to_cs = M_MatScale({0.1f, 0.1f, 0.1f});
-				// TODO: I think we should encode the FOV and the `ws_to_vs` matrix and the near/far values in SceneEdit__EditorCamera
-				mat4 ws_to_vs =
-					M_MatTranslate(-1.f*camera->position) *
-					M_MatRotateZ(-camera->yaw) *
-					M_MatRotateY(-camera->pitch) *
-					mat4{
-						0.f,  0.f,  1.f, 0.f,
-						-1.f,  0.f,  0.f, 0.f,
-						0.f, -1.f,  0.f, 0.f,
-						0.f,  0.f,  0.f, 1.f,
-					};
-				ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 100.f);
-			}
-		}
-
-		vec2 rect_size = { (float)width, (float)height };
-		vec2 rect_middle = (vec2{(float)open_scene_rect_min.x, (float)open_scene_rect_min.y} + vec2{(float)open_scene_rect_max.x, (float)open_scene_rect_max.y}) * 0.5f;
-		mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
-
-		M_PerspectiveView view = {};
-		view.position = {0, 0, 0};
-		view.ws_to_ss = ws_to_cs * cs_to_ss;
-		SceneEditDrawGizmos(&view);
+		SceneEditDrawGizmos(ht, &scene_edit_state, open_scene);
 
 		ID3D11DeviceContext* dc = ht->D3D11_device_context;
 
 		ShaderConstants constants = {};
-		constants.ws_to_cs = ws_to_cs;
+		constants.ws_to_cs = open_scene_ws_to_cs;
 		UpdateShaderConstants(dc, constants);
 
 		dc->PSSetSamplers(0, 1, &sampler);
@@ -261,7 +235,7 @@ static void Render(HT_API* ht) {
 				M_MatRotateZ(entity->rotation.z * M_DegToRad) *
 				M_MatTranslate(entity->position);
 
-			constants.ws_to_cs = ls_to_ws * ws_to_cs;
+			constants.ws_to_cs = ls_to_ws * open_scene_ws_to_cs;
 			UpdateShaderConstants(dc, constants);
 
 			if (mesh_component) {
@@ -340,7 +314,51 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	open_scene_rect_min = update_info->rect_min;
 	open_scene_rect_max = update_info->rect_max;
 
-	SceneEditUpdate(ht, scene);
+	vec2 mouse_pos = ht->input_frame->mouse_position;// - vec2{(float)open_scene_rect_min.x, (float)open_scene_rect_min.y};
+
+	int width = open_scene_rect_max.x - open_scene_rect_min.x;
+	int height = open_scene_rect_max.y - open_scene_rect_min.y;
+
+	open_scene_ws_to_cs = {};
+
+	SceneEdit__EditorCamera* camera = NULL;
+	for (int i = 0; i < open_scene->extended_data.count; i++) {
+		HT_Any any = ((HT_Any*)open_scene->extended_data.data)[i];
+		if (any.type.handle == ht->types->SceneEdit__EditorCamera) {
+			camera = (SceneEdit__EditorCamera*)any.data;
+
+			//open_scene_ws_to_cs = M_MatScale({0.1f, 0.1f, 0.1f});
+			// TODO: I think we should encode the FOV and the `ws_to_vs` matrix and the near/far values in SceneEdit__EditorCamera
+			mat4 ws_to_vs =
+				M_MatTranslate(-1.f*camera->position) *
+				M_MatRotateZ(-camera->yaw) *
+				M_MatRotateY(-camera->pitch) *
+				mat4{
+					0.f,  0.f,  1.f, 0.f,
+					-1.f,  0.f,  0.f, 0.f,
+					0.f, -1.f,  0.f, 0.f,
+					0.f,  0.f,  0.f, 1.f,
+				};
+			open_scene_ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 100.f);
+			break;
+		}
+	}
+
+	vec2 rect_size = { (float)width, (float)height };
+	vec2 rect_middle = (vec2{(float)open_scene_rect_min.x, (float)open_scene_rect_min.y} + vec2{(float)open_scene_rect_max.x, (float)open_scene_rect_max.y}) * 0.5f;
+	mat4 cs_to_ss = M_MatScale(vec3{0.5f*rect_size.x, 0.5f*rect_size.y, 1.f}) * M_MatTranslate(vec3{rect_middle.x, rect_middle.y, 0});
+
+	open_scene_view = {};
+	open_scene_view.has_camera_position = true;
+	open_scene_view.camera_position = camera->position;
+	open_scene_view.ws_to_ss = open_scene_ws_to_cs * cs_to_ss;
+	invert4x4((float*)&open_scene_view.ws_to_ss, (float*)&open_scene_view.ss_to_ws);
+	
+	//open_scene_view.ss_to_ws = M_Inverse4x4(open_scene_view.ws_to_ss);
+
+	//ht->LogInfo("mouse_pos %f %f\n", mouse_pos.x, mouse_pos.y);
+
+	SceneEditUpdate(ht, &scene_edit_state, &open_scene_view, mouse_pos, scene);
 
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
@@ -450,33 +468,54 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 }
 
-struct MyMessage : Message {
+struct MyMessageA : Message {
 	int x;
 	int y;
+};
+
+struct MyMessageB : Message {
+	float number;
 };
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	FG::ResetTempArena();
 	MessageManager::Reset();
 
-	MyMessage send_1;
+	/*
+	MyMessageA send_1;
 	send_1.x = 50;
 	send_1.y = 40;
 	MessageManager::SendNewMessage(send_1);
 
-	MyMessage send_2;
-	send_2.x = 400;
-	send_2.y = 900;
+	MyMessageB send_2;
+	send_2.number = 54321.f;
 	MessageManager::SendNewMessage(send_2);
 
-	MyMessage receive_1;
-	if (MessageManager::PopNextMessage(&receive_1)) {
+	MyMessageA send_3;
+	send_3.x = 400;
+	send_3.y = 900;
+	MessageManager::SendNewMessage(send_3);
+
+	// -----
+
+	MyMessageB get_b1;
+	if (MessageManager::PopNextMessage(&get_b1)) {
 		__debugbreak();
 	}
 
-	MyMessage receive_2;
-	if (MessageManager::PopNextMessage(&receive_2)) {
+	MyMessageB get_b2;
+	if (MessageManager::PopNextMessage(&get_b2)) {
 		__debugbreak();
 	}
-	__debugbreak();
+
+	MyMessageA get_a1;
+	if (MessageManager::PopNextMessage(&get_a1)) {
+		__debugbreak();
+	}
+
+	MyMessageA get_a2;
+	if (MessageManager::PopNextMessage(&get_a2)) {
+		__debugbreak();
+	}
+	__debugbreak();*/
 }

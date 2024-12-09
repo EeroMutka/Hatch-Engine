@@ -301,6 +301,11 @@ int main(int argc, char** argv) {
 				HT_OS_AddEvent(&input_events, &event);
 			}
 			HT_OS_EndEvents(&input_events);
+			
+			float mouse_x, mouse_y;
+			OS_GetMousePosition(&editor_state.window, &mouse_x, &mouse_y);
+			editor_state.input_frame.mouse_position = vec2{mouse_x, mouse_y};
+
 			if (OS_WindowShouldClose(&editor_state.window)) break;
 
 			UpdateAndDraw(&editor_state);
