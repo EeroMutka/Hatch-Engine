@@ -22,6 +22,32 @@ EXPORT STR_View AssetGetFilename(DS_Arena* arena, Asset* asset) {
 	return result;
 }
 
+struct MDParser {
+	MD_Node* node;
+};
+
+static bool ParseMetadeskFloat(MDParser* p, float *out_value) {
+	float sign = 1.f;
+	if (p->node->flags & MD_NodeFlag_Symbol && MD_S8Match(p->node->string, MD_S8Lit("-"), 0)) {
+		p->node = p->node->next;
+		sign = -1.f;
+	}
+	if (MD_NodeIsNil(p->node)) return false;
+	if (!(p->node->flags & MD_NodeFlag_Numeric)) return false;
+
+	if (MD_StringIsCStyleInt(p->node->string)) {
+		*out_value = sign * (float)MD_CStyleIntFromString(p->node->string);
+	}
+	else {
+		double value;
+		if (!STR_ParseFloat(StrFromMD(p->node->string), &value)) return false;
+		*out_value = sign * (float)value;
+	}
+
+	p->node = p->node->next;
+	return true;
+}
+
 static void LoadEditorPanel(EditorState* s, MD_Node* node, UI_Panel* panel) {
 	UI_Axis split_along = -1;
 	if (MD_S8Match(node->string, MD_S8Lit("split_h"), 0)) split_along = UI_Axis_X;
@@ -33,6 +59,13 @@ static void LoadEditorPanel(EditorState* s, MD_Node* node, UI_Panel* panel) {
 		for (MD_Node* child = node->first_child; !MD_NodeIsNil(child); child = child->next) {
 			UI_Panel* new_panel = NewUIPanel(&s->panel_tree);
 			
+			MD_Node* size_node = MD_TagFromString(child, MD_S8Lit("size"), 0);
+			if (!MD_NodeIsNil(size_node)) {
+				MDParser p = {size_node->first_child};
+				bool ok = ParseMetadeskFloat(&p, &new_panel->size);
+				ASSERT(ok);
+			}
+
 			LoadEditorPanel(s, child, new_panel);
 
 			UI_Panel* prev = panel->end_child[1];
@@ -380,10 +413,6 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 	}
 }
 
-struct MDParser {
-	MD_Node* node;
-};
-
 static bool ParseMetadeskInt(MDParser* p, int *out_value) {
 	int sign = 1;
 	if (p->node->flags & MD_NodeFlag_Symbol && MD_S8Match(p->node->string, MD_S8Lit("-"), 0)) {
@@ -395,28 +424,6 @@ static bool ParseMetadeskInt(MDParser* p, int *out_value) {
 	if (!MD_StringIsCStyleInt(p->node->string)) return false;
 
 	*out_value = sign * (int)MD_CStyleIntFromString(p->node->string);
-
-	p->node = p->node->next;
-	return true;
-}
-
-static bool ParseMetadeskFloat(MDParser* p, float *out_value) {
-	float sign = 1.f;
-	if (p->node->flags & MD_NodeFlag_Symbol && MD_S8Match(p->node->string, MD_S8Lit("-"), 0)) {
-		p->node = p->node->next;
-		sign = -1.f;
-	}
-	if (MD_NodeIsNil(p->node)) return false;
-	if (!(p->node->flags & MD_NodeFlag_Numeric)) return false;
-
-	if (MD_StringIsCStyleInt(p->node->string)) {
-		*out_value = sign * (float)MD_CStyleIntFromString(p->node->string);
-	}
-	else {
-		double value;
-		if (!STR_ParseFloat(StrFromMD(p->node->string), &value)) return false;
-		*out_value = sign * (float)value;
-	}
 
 	p->node = p->node->next;
 	return true;

@@ -102,7 +102,7 @@ static void UI_DataTreeComputeUnexpandedSize(UI_Box* box, UI_Axis axis, int pass
 			float x = child->offset.x; // we store indentation temporarily in the first child offset
 
 			float row_height = 0.f;
-			for (int column = 0; column < splitters->panel_count; column++) {
+			for (int column = 0; column < splitters->panel_end_offsets_count; column++) {
 				UI_ASSERT(child);
 
 				float column_width = splitters->panel_end_offsets[column] - x;
@@ -137,7 +137,7 @@ static void UI_DataTreeDraw(UI_Box* box) {
 	while (child) {
 		float row_h = 0.f;
 		UI_Box* iter = child;
-		for (int col = 0; col < splitters->panel_count; col++) {
+		for (int col = 0; col < splitters->panel_end_offsets_count; col++) {
 			row_h = UI_Max(row_h, iter->computed_unexpanded_size.y);
 			iter = iter->next;
 		}
@@ -185,7 +185,7 @@ static void UI_DataTreeDraw(UI_Box* box) {
 	UI_DrawBoxDefault(box);
 	
 	// Draw vertical lines
-	for (int i = 1; i < splitters->panel_count; i++) {
+	for (int i = 1; i < splitters->panel_end_offsets_count; i++) {
 		float x = splitters->panel_end_offsets[i - 1];
 		UI_Rect line_rect = {
 			{box->computed_rect.min.x + x - 1.f, box->computed_rect.min.y},
@@ -297,7 +297,8 @@ UI_API void UI_AddDataTree(UI_Box* box, UI_Size w, UI_Size h, UI_DataTree* tree,
 	UI_AddBox(box, w, h, 0);
 
 	UI_Rect inputs_rect = box->prev_frame ? box->prev_frame->computed_rect : UI_RECT{0};
-	UI_SplittersState* splitters = UI_Splitters(UI_BKEY(box), inputs_rect, UI_Axis_X, tree->num_columns, 6.f);
+	UI_SplittersState* splitters = UI_SplittersGetState(UI_BKEY(box), tree->num_columns);
+	UI_Splitters(splitters, inputs_rect, UI_Axis_X, 6.f);
 	
 	//for (int i = 1; i < tree->num_columns; i++) {
 	//	float offset = splitters->panel_end_offsets[i-1];

@@ -8,6 +8,17 @@ data: {
 	
 	// entities: @ItemList "$Scene/types/SceneEntity"
 	entities: {
+		"Terrain": {
+			position: { 0, 0, 0 }
+			rotation: { 0, 0, 0 }
+			scale:    { 1, 1, 1 }
+			components: {
+				@Type("$Scene/components/MeshComponent") {
+					mesh: "Meshes/Terrain"
+					color_texture: "Textures/Grass_01"
+				}
+			}
+		}
 		"Monkey": {
 			position: { 0, 0, 10}
 			rotation: { 0, 0, 0 }

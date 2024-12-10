@@ -214,7 +214,6 @@ GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_Perspect
 		origin.xyz = intersection_pos;
 	}
 
-
 	// Update linear movement
 	// TODO: use LineTranslation API
 	if (gizmo->moving_axis_ >= TranslationAxis_X && gizmo->moving_axis_ <= TranslationAxis_Z) {

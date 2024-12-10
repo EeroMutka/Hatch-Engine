@@ -211,20 +211,24 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 		ASSERT(panel->tabs.count == 0); // only leaf panels can have tabs
 		ASSERT(panel->end_child[0] != panel->end_child[1]); // a panel may not have only one child
 
-		//DS_DynArray(float) panel_end_offsets = {UI_TEMP};
-		//
-		//float offset = 0.f;
-		int panel_count = 0;
-		for (UI_Panel* child = panel->end_child[0]; child; child = child->link[1]) {
-			panel_count++;
-			//offset += child->size;
-			//DS_ArrPush(&panel_end_offsets, offset);
-		}
-
 		UI_Axis X = 1 - panel->split_along;
 		UI_Key splitters_key = UI_HashPtr(UI_KEY(), panel);
-		UI_SplittersState* splitters_state = UI_Splitters(splitters_key, area_rect, X, panel_count, 6.f);
+		
+		int panel_i = 0;
+		for (UI_Panel* child = panel->end_child[0]; child; child = child->link[1]) panel_i++;
+		
+		UI_SplittersState* splitters_state = UI_SplittersGetState(splitters_key, panel_i);
+		
+		float offset = 0.f;
+		panel_i = 0;
+		for (UI_Panel* child = panel->end_child[0]; child; child = child->link[1]) {
+			offset += child->size;
+			splitters_state->panel_end_offsets[panel_i] = offset;
+			panel_i++;
+		}
 
+		UI_Splitters(splitters_state, area_rect, X, 6.f);
+		
 		splitter_is_hovered = splitter_is_hovered || splitters_state->hovering_splitter;
 
 		float start = 0.f;
@@ -234,10 +238,8 @@ EXPORT void UI_PanelTreeUpdateAndDraw(UIDropdownState* s, UI_PanelTree* tree, UI
 			ASSERT(prev == child->link[0]); // tree validation
 			ASSERT(child->parent == panel); // tree validation
 
-			// hmm... how can you click a rectangle but also splitter?
 			float end = splitters_state->panel_end_offsets[i];
-
-			//child->size = end - start; // write back the new panel size
+			child->size = end - start; // write back the new panel size
 
 			UI_Rect rect = area_rect;
 			rect.min._[X] = area_rect.min._[X] + start + 1.f;

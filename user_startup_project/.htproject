@@ -19,12 +19,12 @@ run_plugins: {
 
 editor_layout: {
 	split_h: {
-		split_v: {
-			assets
-			asset_viewer
-			properties
+		@size(400) split_v: {
+			@size(100) assets
+			@size(350) asset_viewer
+			@size(100) properties
 		}
-		split_v: {
+		@size(150) split_v: {
 			errors
 			log
 		}

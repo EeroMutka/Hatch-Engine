@@ -281,7 +281,7 @@ int main(int argc, char** argv) {
 	else {
 		RenderState render_state = {};
 		EditorState editor_state = {};
-		editor_state.window_size = {1280, 720};
+		editor_state.window_size = { 1920, 1080 };
 		editor_state.render_state = &render_state;
 
 		EditorInit(&editor_state);

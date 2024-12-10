@@ -452,7 +452,7 @@ typedef struct UI_SplittersState {
 	int holding_splitter;  // one-based index
 	int hovering_splitter; // one-based index
 	float* panel_end_offsets;
-	int panel_count;
+	int panel_end_offsets_count;
 } UI_SplittersState;
 
 static const UI_Vec2 UI_DEFAULT_TEXT_PADDING = { 10.f, 5.f };
@@ -598,7 +598,8 @@ UI_API bool UI_IsClickingDownAndHovered(UI_Box* box);
 
 UI_API void UI_EditTextSelectAll(const UI_Text* text, UI_Selection* selection);
 
-UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int panel_count, float panel_min_size);
+UI_API UI_SplittersState* UI_SplittersGetState(UI_Key key, int panel_count);
+UI_API void UI_Splitters(UI_SplittersState* state, UI_Rect area, UI_Axis X, float panel_min_width);
 UI_API void UI_SplittersNormalizeToTotalSize(UI_SplittersState* splitters, float total_size);
 
 UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font);

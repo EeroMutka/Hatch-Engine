@@ -339,7 +339,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 					0.f, -1.f,  0.f, 0.f,
 					0.f,  0.f,  0.f, 1.f,
 				};
-			open_scene_ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 100.f);
+			open_scene_ws_to_cs = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)width / (float)height, 0.1f, 1000.f);
 			break;
 		}
 	}

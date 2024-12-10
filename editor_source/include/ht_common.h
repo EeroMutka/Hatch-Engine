@@ -303,7 +303,7 @@ struct UI_Panel {
 	UI_Panel* end_child[2]; // 0 is first, 1 is last
 	UI_Panel* link[2];      // 0 is prev, 1 is next
 
-	float size; // not currently used
+	float size;
 	UI_Axis split_along;
 
 	int active_tab;

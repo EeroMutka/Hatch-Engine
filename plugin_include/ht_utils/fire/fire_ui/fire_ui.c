@@ -1621,101 +1621,102 @@ UI_API void UI_EndFrame(UI_Outputs* outputs) {
 }
 
 UI_API void UI_SplittersNormalizeToTotalSize(UI_SplittersState* splitters, float total_size) {
-	float normalize_factor = total_size / splitters->panel_end_offsets[splitters->panel_count - 1];
-	for (int i = 0; i < splitters->panel_count; i++) {
+	float normalize_factor = total_size / splitters->panel_end_offsets[splitters->panel_end_offsets_count - 1];
+	for (int i = 0; i < splitters->panel_end_offsets_count; i++) {
 		splitters->panel_end_offsets[i] = splitters->panel_end_offsets[i] * normalize_factor;
 	}
 }
 
-UI_API UI_SplittersState* UI_Splitters(UI_Key key, UI_Rect area, UI_Axis X, int panel_count, float panel_min_width)
-{
-	UI_ProfEnter();
+UI_API UI_SplittersState* UI_SplittersGetState(UI_Key key, int panel_count) {
 	UI_ASSERT(panel_count > 0);
 
-	UI_SplittersState* data;
-	UI_BoxGetRetainedVar(UI_KBOX(key), 0, &data); // TODO: go directly from key to data and not through a box
-
-	float* panel_end_offsets = (float*)DS_ArenaPushZero(UI_TEMP, sizeof(float) * panel_count);
-	if (data->panel_end_offsets) {
-		int panel_copy_count = UI_Min(data->panel_count, panel_count);
-		for (int i = 0; i < panel_copy_count; i++) {
-			panel_end_offsets[i] = data->panel_end_offsets[i]; // Copy over from the previous frame
-		}
+	UI_SplittersState* retained;
+	UI_BoxGetRetainedVar(UI_KBOX(key), 0, &retained);
+	
+	float* new_panel_end_offsets = (float*)DS_ArenaPushZero(UI_TEMP, sizeof(float) * panel_count);
+	int copy_count = UI_Min(retained->panel_end_offsets_count, panel_count);
+	for (int i = 0; i < copy_count; i++) {
+		new_panel_end_offsets[i] = retained->panel_end_offsets[i];
 	}
-	data->panel_end_offsets = panel_end_offsets;
-	data->panel_count = panel_count;
+	retained->panel_end_offsets = new_panel_end_offsets;
+	retained->panel_end_offsets_count = panel_count;
+	
+	return retained;
+}
+
+UI_API void UI_Splitters(UI_SplittersState* state, UI_Rect area, UI_Axis X, float panel_min_width) {
+	UI_ProfEnter();
 
 	// Sanitize positions
 	float offset = 0.f;
-	for (int i = 0; i < panel_count; i++) {
-		panel_end_offsets[i] = UI_Max(panel_end_offsets[i], offset + panel_min_width);
-		offset = panel_end_offsets[i];
+	for (int i = 0; i < state->panel_end_offsets_count; i++) {
+		state->panel_end_offsets[i] = UI_Max(state->panel_end_offsets[i], offset + panel_min_width);
+		offset = state->panel_end_offsets[i];
 	}
 
 	float rect_width = area.max._[X] - area.min._[X];
-	UI_SplittersNormalizeToTotalSize(data, rect_width);
+	UI_SplittersNormalizeToTotalSize(state, rect_width);
 	
-	if (data->holding_splitter && !UI_InputIsDown(UI_Input_MouseLeft)) {
-		data->holding_splitter = 0;
+	if (state->holding_splitter && !UI_InputIsDown(UI_Input_MouseLeft)) {
+		state->holding_splitter = 0;
 	}
 
-	if (data->holding_splitter) {
-		int holding_splitter = data->holding_splitter - 1; // zero-based index
+	if (state->holding_splitter) {
+		int holding_splitter = state->holding_splitter - 1; // zero-based index
 		float split_position = UI_STATE.mouse_pos._[X] - area.min._[X];
 
 		if (UI_InputIsDown(UI_Input_Alt)) {
 			// Reset position to default.
-			split_position = (float)(holding_splitter + 1) * (rect_width / (float)panel_count);
+			split_position = (float)(holding_splitter + 1) * (rect_width / (float)state->panel_end_offsets_count);
 		}
 
 		int panels_left = holding_splitter + 1;
-		int panels_right = panel_count - 1 - holding_splitter;
+		int panels_right = state->panel_end_offsets_count - 1 - holding_splitter;
 
 		float clamped_split_position = UI_Max(split_position, panel_min_width * (float)panels_left);
 		clamped_split_position = UI_Min(clamped_split_position, rect_width - (float)panels_right * panel_min_width);
-		panel_end_offsets[holding_splitter] = clamped_split_position;
+		state->panel_end_offsets[holding_splitter] = clamped_split_position;
 
 		float head = clamped_split_position;
-		for (int i = holding_splitter + 1; i < panel_count; i++) {
-			if (panel_end_offsets[i] < head + panel_min_width) {
-				panel_end_offsets[i] = head + panel_min_width;
-				head = panel_end_offsets[i];
+		for (int i = holding_splitter + 1; i < state->panel_end_offsets_count; i++) {
+			if (state->panel_end_offsets[i] < head + panel_min_width) {
+				state->panel_end_offsets[i] = head + panel_min_width;
+				head = state->panel_end_offsets[i];
 			}
 		}
 
 		head = clamped_split_position;
 		for (int i = holding_splitter - 1; i >= 0; i--) {
-			if (panel_end_offsets[i] > head - panel_min_width) {
-				panel_end_offsets[i] = head - panel_min_width;
-				head = panel_end_offsets[i];
+			if (state->panel_end_offsets[i] > head - panel_min_width) {
+				state->panel_end_offsets[i] = head - panel_min_width;
+				head = state->panel_end_offsets[i];
 			}
 		}
 	}
 
-	data->hovering_splitter = 0;
-	for (int i = 0; i < panel_count - 1; i++) {
+	state->hovering_splitter = 0;
+	for (int i = 0; i < state->panel_end_offsets_count - 1; i++) {
 		const float SPLITTER_HALF_WIDTH = 2.f; // this could use the current DPI
-		float end_x = area.min._[X] + panel_end_offsets[i];
+		float end_x = area.min._[X] + state->panel_end_offsets[i];
 		UI_Rect end_splitter_rect = area;
 		end_splitter_rect.min._[X] = end_x - SPLITTER_HALF_WIDTH;
 		end_splitter_rect.max._[X] = end_x + SPLITTER_HALF_WIDTH;
 
 		if (UI_PointIsInRect(end_splitter_rect, UI_STATE.mouse_pos)) {
-			data->hovering_splitter = i + 1;
+			state->hovering_splitter = i + 1;
 			break;
 		}
 	}
 	
-	if (data->hovering_splitter) {
+	if (state->hovering_splitter) {
 		UI_STATE.outputs.cursor = X == UI_Axis_X ? UI_MouseCursor_ResizeH : UI_MouseCursor_ResizeV;
 
 		if (UI_InputWasPressed(UI_Input_MouseLeft)) {
-			data->holding_splitter = data->hovering_splitter;
+			state->holding_splitter = state->hovering_splitter;
 		}
 	}
 
 	UI_ProfExit();
-	return data;
 }
 
 UI_API float UI_GlyphAdvance(uint32_t codepoint, UI_Font font) {
