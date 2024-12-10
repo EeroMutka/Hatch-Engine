@@ -1,5 +1,10 @@
 
 #define HT_NO_STATIC_PLUGIN_EXPORTS
+
+#ifdef HT_DYNAMIC
+#define HT_IMPORT extern "C" __declspec(dllexport)
+#endif // otherwise HT_IMPORT is defined to be empty in the project file defines list
+
 #include "../plugin_include/hatch_api.h"
 
 // Convention for marking non-static / exported symbols

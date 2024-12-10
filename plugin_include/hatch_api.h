@@ -242,6 +242,14 @@ HT_StaticExports HT__Concat(HT_STATIC_EXPORTS__, HT_STATIC_PLUGIN_ID) = { HT__St
 #endif
 #endif
 
+#ifndef HT_IMPORT
+#ifdef __cplusplus
+#define HT_IMPORT extern "C" __declspec(dllimport)
+#else
+#define HT_IMPORT __declspec(dllimport)
+#endif
+#endif
+
 typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 
 typedef struct HT_AssetViewerTabUpdate {
@@ -506,12 +514,6 @@ struct HT_API {
 	// The returned memory is uninitialized.
 	void* (*TempArenaPush)(size_t size, size_t align);
 	
-	// -- Log ----------------------------------------
-	
-	void (*LogInfo)(const char* fmt, ...);
-	void (*LogWarning)(const char* fmt, ...);
-	void (*LogError)(const char* fmt, ...);
-	
 	// -- Asset viewer -------------------------------
 	
 	// Returns the selected item handle in the properties panel for the selected asset or NULL if none
@@ -596,3 +598,10 @@ struct HT_API {
 	
 	// ------------------------------------------------
 };
+
+// Hatch debug API - the idea is that you can access this from anywhere without requiring access to the HT_API.
+
+HT_IMPORT void HT_LogInfo(const char* fmt, ...);
+HT_IMPORT void HT_LogWarning(const char* fmt, ...);
+HT_IMPORT void HT_LogError(const char* fmt, ...);
+

@@ -203,8 +203,8 @@ GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_Perspect
 
 		HT_ASSERT(view->has_camera_position);
 		M_RayPlaneIntersect(view->camera_position, moved_pos_ray_dir, plane, NULL, &intersection_pos);
-
-		if (!InputIsDown(in, HT_InputKey_Control)) {
+		
+		if (snap_size > 0 && !InputIsDown(in, HT_InputKey_Control)) {
 			vec3 snap_grid_origin = InputIsDown(in, HT_InputKey_Alt) ? vec3{} : gizmo->planar_moving_begin_translation;
 			for (int i = 1; i <= 2; i++) {
 				SnapPointToGrid(&intersection_pos, snap_grid_origin, snap_size, (gizmo->moving_axis_ - TranslationAxis_YZ + i) % 3);
@@ -214,10 +214,10 @@ GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_Perspect
 		origin.xyz = intersection_pos;
 	}
 
+
 	// Update linear movement
 	// TODO: use LineTranslation API
 	if (gizmo->moving_axis_ >= TranslationAxis_X && gizmo->moving_axis_ <= TranslationAxis_Z) {
-
 		vec2 movement_delta = mouse_pos - gizmo->moving_begin_mouse_pos;
 
 		vec4 moving_begin_origin_ss = vec4{gizmo->moving_begin_translation, 1.f} * view->ws_to_ss;

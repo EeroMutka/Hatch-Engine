@@ -381,7 +381,8 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 	fprintf(f, "\tdefines \"HT_EDITOR_DX11\"\n");
 	fprintf(f, "\tdefines { \"HATCH_DIR=\\\"\" .. HATCH_DIR .. \"\\\"\" }\n");
 	fprintf(f, "\tdefines \"HT_EXPORT=static\"\n\n");
-
+	fprintf(f, "\tdefines \"HT_IMPORT=\"\n\n");
+	
 	fprintf(f, "\tfiles \"%%{HATCH_DIR}/editor_source/**\"\n");
 	fprintf(f, "\tfiles \"%%{HATCH_DIR}/plugin_include/**\"\n\n");
 

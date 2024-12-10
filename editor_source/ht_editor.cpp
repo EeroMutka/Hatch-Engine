@@ -1329,19 +1329,19 @@ static ID3D11RenderTargetView* HT_D3D11_GetHatchRenderTargetView() {
 }
 #endif
 
-EXPORT void HT_LogInfo(const char* fmt, ...) {
+HT_IMPORT void HT_LogInfo(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
 	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Info, fmt, args);
 	va_end(args);
 }
 
-EXPORT void HT_LogWarning(const char* fmt, ...) {
+HT_IMPORT void HT_LogWarning(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
 	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Warning, fmt, args);
 	va_end(args);
 }
 
-EXPORT void HT_LogError(const char* fmt, ...) {
+HT_IMPORT void HT_LogError(const char* fmt, ...) {
 	va_list args; va_start(args, fmt);
 	LogVArgs(&g_plugin_call_ctx->s->log, LogMessageKind_Error, fmt, args);
 	va_end(args);
@@ -1387,9 +1387,6 @@ EXPORT void InitAPI(EditorState* s) {
 	api.D3D11_GetHatchRenderTargetView = HT_D3D11_GetHatchRenderTargetView;
 #endif
 
-	api.LogInfo = HT_LogInfo;
-	api.LogWarning = HT_LogWarning;
-	api.LogError = HT_LogError;
 	api.GetSelectedItemHandle = HT_GetSelectedItemHandle;
 	*(void**)&api.AssetGetType = HT_AssetGetType;
 	*(void**)&api.AssetGetData = HT_AssetGetData;
