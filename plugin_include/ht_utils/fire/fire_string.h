@@ -158,6 +158,8 @@ STR_API STR_View STR_BeforeFirst(STR_View str, uint32_t codepoint); // returns `
 STR_API STR_View STR_BeforeLast(STR_View str, uint32_t codepoint);  // returns `str` if no codepoint is found
 STR_API STR_View STR_AfterFirst(STR_View str, uint32_t codepoint);  // returns `str` if no codepoint is found
 STR_API STR_View STR_AfterLast(STR_View str, uint32_t codepoint);   // returns `str` if no codepoint is found
+STR_API bool STR_SplitByFirst(STR_View str, uint32_t codepoint, STR_View* out_before, STR_View* out_after);
+STR_API bool STR_SplitByLast(STR_View str, uint32_t codepoint, STR_View* out_before, STR_View* out_after);
 
 STR_API bool STR_Find(STR_View str, STR_View substr, size_t* out_offset);
 STR_API bool STR_ParseToAndSkip(STR_View* remaining, uint32_t codepoint, STR_View* result); // parses forward until codepoint is reached and jumps over it
@@ -279,6 +281,28 @@ STR_API STR_View STR_AfterFirst(STR_View str, uint32_t codepoint) {
 		result = STR_SliceAfter(str, offset + STR_CodepointSizeAsUTF8(codepoint));
 	}
 	return result;
+}
+
+STR_API bool STR_SplitByFirst(STR_View str, uint32_t codepoint, STR_View* out_before, STR_View* out_after) {
+	size_t offset = str.size;
+	if (STR_FindFirst(str, codepoint, &offset)) {
+		out_before->data = str.data;
+		out_before->size = offset;
+		*out_after = STR_SliceAfter(str, offset + STR_CodepointSizeAsUTF8(codepoint));
+		return true;
+	}
+	return false;
+}
+
+STR_API bool STR_SplitByLast(STR_View str, uint32_t codepoint, STR_View* out_before, STR_View* out_after) {
+	size_t offset = str.size;
+	if (STR_FindLast(str, codepoint, &offset)) {
+		out_before->data = str.data;
+		out_before->size = offset;
+		*out_after = STR_SliceAfter(str, offset + STR_CodepointSizeAsUTF8(codepoint));
+		return true;
+	}
+	return false;
 }
 
 STR_API STR_View STR_AfterLast(STR_View str, uint32_t codepoint) {

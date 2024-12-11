@@ -160,6 +160,7 @@ struct Asset_StructType {
 struct Asset_Package {
 	STR_View filesys_path;
 	OS_DirectoryWatch dir_watch;
+	bool dir_watch_will_have_hatch_written_changes;
 };
 
 struct PluginOptions {

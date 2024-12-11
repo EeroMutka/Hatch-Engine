@@ -197,10 +197,7 @@ struct ReloadAssetsContext {
 	DS_DynArray(Asset*) queue_recompile_plugins;
 };
 
-// While we go, we also generate and update filesys_paths.
 static void SaveAsset(Asset* asset, STR_View filesys_path) {
-	ASSERT(!STR_ContainsU(filesys_path, '\\'));
-
 	if (asset->kind == AssetKind_Folder || asset->kind == AssetKind_Package) {
 		bool ok = OS_MakeDirectory(MEM_SCOPE_NONE, filesys_path);
 		ASSERT(ok);
@@ -212,17 +209,20 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 		DS_MapInit(&asset_from_name, TEMP);
 
 		for (Asset* child = asset->first_child; child; child = child->next) {
-			//STR_View filesys_name = STR_AfterLast(child->filesys_path, '/');
 			uint64_t hash = DS_MurmurHash64A(child->name.data, child->name.size, 0);
 			DS_MapInsert(&asset_from_name, hash, child);
 		}
 
-		// Delete files which exist in the filesystem, but aren't part of the assets
+		// Delete files which exist in the filesystem, but aren't part of the asset tree
 		for (int i = 0; i < files.count; i++) {
 			OS_FileInfo* info = &files.data[i];
-			if (info->is_directory && STR_MatchCaseInsensitive(info->name, ".plugin_binaries")) continue;
+			if (info->is_directory && STR_Match(info->name, ".plugin_binaries")) continue;
 
-			STR_View stem = STR_BeforeFirst(info->name, '.');
+			STR_View stem = info->name, ext = "";
+			STR_SplitByFirst(info->name, '.', &stem, &ext);
+
+			if (STR_Match(ext, "inc.ht")) continue;
+
 			uint64_t hash = DS_MurmurHash64A(stem.data, stem.size, 0);
 
 			if (DS_MapFindPtr(&asset_from_name, hash) == NULL) {
@@ -255,7 +255,6 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructType) {
 				fprintf(file, "struct: {\n");
 				for (int i = 0; i < asset->struct_type.members.count; i++) {
-					TODO();
 					//StructMember* member = &asset->struct_type.members.data[i];
 					//STR_View type_str = PluginVarTypeToString(member->type);
 					//fprintf(file, "\t%.*s: %.*s,\n", StrArg(member->name.str), StrArg(type_str));
@@ -265,9 +264,8 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 			}
 
 			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructData) {
-				//fprintf(file, "data_asset: {\n");
-				TODO();
-				//fprintf(file, "\tTODO,\n");
+				fprintf(file, "data: {\n");
+				fprintf(file, "\tTODO,\n");
 				//DataBuffer *data_buffer = DS_ArrGetPtr(g_data_buffers, asset->data_buffer_index);
 				//char *data = data_buffer->base;
 				//uint32_t offset = sizeof(DataBufferHeader) + 8;
@@ -293,7 +291,6 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 			if (asset->kind == AssetKind_Plugin) {
 				fprintf(file, "code_files: {\n");
 				fprintf(file, "\tTODO,\n");
-				TODO();
 				//for (int i = 0; i < asset->plugin_source_files.count; i++) {
 				//	AssetHandle source_file_handle = asset->plugin_source_files.data[i];
 				//	STR_View source_file_path = AssetHandleIsValid(source_file_handle) ? ComputeAssetPath(TEMP, source_file_handle.ptr) : STR_("");
@@ -321,6 +318,8 @@ EXPORT void SavePackageToDisk(Asset* package) {
 		}
 		package->package.filesys_path = STR_Clone(DS_HEAP, filesys_path);
 	}
+
+	package->package.dir_watch_will_have_hatch_written_changes = true;
 
 	OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 
@@ -368,22 +367,24 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 	// Then add assets that don't exist in the asset system
 	for (int i = 0; i < files.count; i++) {
 		OS_FileInfo info = files.data[i];
-		if (info.is_directory && STR_MatchCaseInsensitive(info.name, ".plugin_binaries")) continue;
+		if (info.is_directory && STR_Match(info.name, ".plugin_binaries")) continue;
 
 		STR_View file_name = {info.name.data, info.name.size};
 
 		Asset* asset = DS_ArrGet(asset_from_file_idx, i);
 		if (asset == NULL) {
 			STR_View name = STR_AfterLast(file_name, '/');
-			STR_View stem = STR_BeforeFirst(name, '.');
-			STR_View ext = STR_AfterFirst(name, '.');
-			if (STR_MatchCaseInsensitive(ext, "inc.ht")) continue;
+			
+			STR_View stem = name, ext = "";
+			STR_SplitByFirst(name, '.', &stem, &ext);
+
+			if (STR_Match(ext, "inc.ht")) continue;
 
 			AssetKind asset_kind = AssetKind_Folder;
 			if (!info.is_directory) {
-				/**/ if (STR_MatchCaseInsensitive(ext, "plugin.ht")) asset_kind = AssetKind_Plugin;
-				else if (STR_MatchCaseInsensitive(ext, "struct.ht")) asset_kind = AssetKind_StructType;
-				else if (STR_MatchCaseInsensitive(ext, "data.ht"))   asset_kind = AssetKind_StructData;
+				/**/ if (STR_Match(ext, "plugin.ht")) asset_kind = AssetKind_Plugin;
+				else if (STR_Match(ext, "struct.ht")) asset_kind = AssetKind_StructType;
+				else if (STR_Match(ext, "data.ht"))   asset_kind = AssetKind_StructData;
 				else asset_kind = AssetKind_File;
 			}
 
@@ -797,12 +798,18 @@ EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 }
 
 EXPORT void HotreloadPackages(AssetTree* tree) {
-	for (Asset* asset = tree->root->first_child; asset; asset = asset->next) {
+	/*for (Asset* asset = tree->root->first_child; asset; asset = asset->next) {
 		if (asset->kind != AssetKind_Package) continue;
 
 		if (OS_DirectoryWatchHasChanges(&asset->package.dir_watch)) {
-			printf("RELOADING PACKAGE!\n");
-			ReloadPackages(tree, {&asset, 1}, false);
+			if (asset->package.dir_watch_will_have_hatch_written_changes) {
+				asset->package.dir_watch_will_have_hatch_written_changes = false;
+				printf("SKIP reloading PACKAGE!\n");
+			}
+			else {
+				printf("RELOADING PACKAGE!\n");
+				ReloadPackages(tree, {&asset, 1}, false);
+			}
 		}
-	}
+	}*/
 }
