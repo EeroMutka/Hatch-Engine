@@ -869,7 +869,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 				UI_Box* save_package = UI_BOX();
 				UI_AddLabel(save_package, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Save Package");
 				if (UI_Clicked(save_package)) {
-					SavePackageToDisk(selected_asset);
+					SavePackageToDisk(&s->asset_tree, selected_asset);
 					s->rmb_menu_open = false;
 				}
 			}

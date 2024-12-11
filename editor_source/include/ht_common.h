@@ -291,6 +291,8 @@ EXPORT void StringSetValue(HT_String* x, STR_View value);
 // - returns NULL if not found
 EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path);
 
+EXPORT STR_View GetPackageName(Asset* package); // cleanup: remove this
+
 // -- ui.cpp ----------------------------------------------------------
 
 struct UI_Tab; // Placeholder for the user
@@ -540,14 +542,18 @@ EXPORT void RemoveErrorsByAsset(ErrorList* error_list, HT_Asset asset);
 
 // -- ht_serialize.cpp ------------------------------------------------
 
-EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset);
+// Returns an empty string if `asset` is null
+EXPORT STR_View AssetGetTextPath(DS_Arena* arena, Asset* current_package, Asset* asset);
+
+EXPORT STR_View AssetGetPackageRelativeFilepath(DS_Arena* arena, Asset* asset);
+
 EXPORT STR_View AssetGetAbsoluteFilepath(DS_Arena* arena, Asset* asset);
 
 EXPORT void HotreloadPackages(AssetTree* tree);
 
 EXPORT STR_View GetAssetFileExtension(Asset* asset);
 
-EXPORT void SavePackageToDisk(Asset* package);
+EXPORT void SavePackageToDisk(AssetTree* tree, Asset* package);
 
 EXPORT void RegenerateTypeTable(EditorState* s);
 

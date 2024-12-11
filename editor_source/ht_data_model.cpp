@@ -471,6 +471,10 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	tree->first_free_asset = DS_EncodeBucketArrayIndex(asset_handle.bucket_index, asset_handle.elem_index);
 }
 
+EXPORT STR_View GetPackageName(Asset* package) {
+	return STR_AfterLast(package->package.filesys_path, '/');
+}
+
 EXPORT Asset* FindAssetFromPath(AssetTree* tree, Asset* package, STR_View path) {
 	Asset* parent = package;
 	Asset* result = NULL;

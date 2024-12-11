@@ -162,7 +162,24 @@ EXPORT void LoadProject(AssetTree* tree, STR_View project_directory) {
 	MD_ArenaRelease(md_arena);
 }
 
-EXPORT STR_View AssetGetPackageRelativePath(DS_Arena* arena, Asset* asset) {
+EXPORT STR_View AssetGetTextPath(DS_Arena* arena, Asset* current_package, Asset* asset) {
+	if (asset == NULL) return "";
+
+	STR_View result = asset->name;
+	for (Asset* p = asset->parent;; p = p->parent) {
+		STR_View p_name = p->kind == AssetKind_Package ? GetPackageName(p) : p->name; // @cleanup
+
+		if (p->kind == AssetKind_Package && p == current_package) break; // local paths don't need the package prefix
+
+		result = STR_Form(TEMP, "%v/%v", p_name, result);
+		
+		if (p->kind == AssetKind_Package) break;
+	}
+
+	return result;
+}
+
+EXPORT STR_View AssetGetPackageRelativeFilepath(DS_Arena* arena, Asset* asset) {
 	if (asset->kind == AssetKind_Package) return "";
 
 	STR_View result = AssetGetFilename(TEMP, asset);
@@ -197,7 +214,7 @@ struct ReloadAssetsContext {
 	DS_DynArray(Asset*) queue_recompile_plugins;
 };
 
-static void SaveAsset(Asset* asset, STR_View filesys_path) {
+static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View filesys_path) {
 	if (asset->kind == AssetKind_Folder || asset->kind == AssetKind_Package) {
 		bool ok = OS_MakeDirectory(MEM_SCOPE_NONE, filesys_path);
 		ASSERT(ok);
@@ -236,7 +253,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 
 		for (Asset* child = asset->first_child; child; child = child->next) {
 			STR_View child_filesys_path = AssetGetFilepathUsingParentDirectory(TEMP, filesys_path, child);
-			SaveAsset(child, child_filesys_path);
+			SaveAsset(tree, package, child, child_filesys_path);
 		}
 	}
 	else {
@@ -252,7 +269,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 		if (write) file = fopen(STR_ToC(TEMP, filesys_path), "wb");
 		if (file) {
 			// Serialize file
-			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructType) {
+			if (asset->kind == AssetKind_StructType) {
 				fprintf(file, "struct: {\n");
 				for (int i = 0; i < asset->struct_type.members.count; i++) {
 					//StructMember* member = &asset->struct_type.members.data[i];
@@ -263,41 +280,48 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 				fprintf(file, "}\n\n");
 			}
 
-			if (asset->kind == AssetKind_Plugin || asset->kind == AssetKind_StructData) {
-				fprintf(file, "data: {\n");
-				fprintf(file, "\tTODO,\n");
-				//DataBuffer *data_buffer = DS_ArrGetPtr(g_data_buffers, asset->data_buffer_index);
-				//char *data = data_buffer->base;
-				//uint32_t offset = sizeof(DataBufferHeader) + 8;
-				//
-				//for (int i = 0; i < asset->struct_members.count; i++) {
-				//	StructMember* member = &asset->struct_members.data[i];
-				//	switch (member->type) {
-				//	case Type_Float: {
-				//		fprintf(file, "\t%.*s: %f,\n", StrArg(member->name.str), *(float*)(data + offset));
-				//	}break;
-				//	case Type_Int: {
-				//		fprintf(file, "\t%.*s: %d,\n", StrArg(member->name.str), *(int*)(data + offset));
-				//	}break;
-				//	case Type_Bool: {
-				//		fprintf(file, "\t%.*s: %s,\n", StrArg(member->name.str), *(int*)(data + offset) ? "true" : "false");
-				//	}break;
-				//	}
-				//	offset += 4;
-				//}
-				fprintf(file, "}\n\n");
+			if (asset->kind == AssetKind_Plugin) {
+				STR_View data_asset_path = AssetGetTextPath(TEMP, package, GetAsset(tree, asset->plugin.options.data));
+				fprintf(file, "data_asset: \"%.*s\"\n", StrArg(data_asset_path));
+				fprintf(file, "code_files: {\n");
+				for (int i = 0; i < asset->plugin.options.code_files.count; i++) {
+					HT_Asset code_file_handle = ((HT_Asset*)asset->plugin.options.code_files.data)[i];
+					STR_View code_file_path = AssetGetTextPath(TEMP, package, GetAsset(tree, code_file_handle));
+					fprintf(file, "\t\"%.*s\",\n", StrArg(code_file_path));
+				}
+				fprintf(file, "}\n");
 			}
 
-			if (asset->kind == AssetKind_Plugin) {
-				fprintf(file, "code_files: {\n");
-				fprintf(file, "\tTODO,\n");
-				//for (int i = 0; i < asset->plugin_source_files.count; i++) {
-				//	AssetHandle source_file_handle = asset->plugin_source_files.data[i];
-				//	STR_View source_file_path = AssetHandleIsValid(source_file_handle) ? ComputeAssetPath(TEMP, source_file_handle.ptr) : STR_("");
-				//
-				//	fprintf(file, "\t\"%.*s\",\n", StrArg(source_file_path));
-				//}
+			if (asset->kind == AssetKind_StructData) {
+				Asset* type = GetAsset(tree, asset->struct_data.struct_type);
+				STR_View type_asset_path = AssetGetTextPath(TEMP, package, type);
+				fprintf(file, "type: \"%.*s\"\n", StrArg(type_asset_path));
+				fprintf(file, "data: {\n");
+				
+				char* data = (char*)asset->struct_data.data;
 
+				for (int i = 0; i < type->struct_type.members.count; i++) {
+					StructMember* member = &type->struct_type.members.data[i];
+					switch (member->type.kind) {
+					case HT_TypeKind_AssetRef: {
+						HT_Asset val = *(HT_Asset*)(data + member->offset);
+						STR_View val_path = AssetGetTextPath(TEMP, package, GetAsset(tree, val));
+						fprintf(file, "\t%.*s: \"%.*s\",\n", StrArg(member->name), StrArg(val_path));
+					} break;
+					case HT_TypeKind_Float: {
+						fprintf(file, "\t%.*s: %f,\n", StrArg(member->name), *(float*)(data + member->offset));
+					}break;
+					case HT_TypeKind_Int: {
+						fprintf(file, "\t%.*s: %d,\n", StrArg(member->name), *(int*)(data + member->offset));
+					}break;
+					case HT_TypeKind_Bool: {
+						fprintf(file, "\t%.*s: %s,\n", StrArg(member->name), *(bool*)(data + member->offset) ? "true" : "false");
+					}break;
+					default: {
+						fprintf(file, "\t%.*s: TODO,\n", StrArg(member->name));
+					}break;
+					}
+				}
 				fprintf(file, "}\n");
 			}
 
@@ -306,7 +330,7 @@ static void SaveAsset(Asset* asset, STR_View filesys_path) {
 	}
 }
 
-EXPORT void SavePackageToDisk(Asset* package) {
+EXPORT void SavePackageToDisk(AssetTree* tree, Asset* package) {
 	ASSERT(package->kind == AssetKind_Package);
 
 	if (package->package.filesys_path.size == 0) {
@@ -323,7 +347,7 @@ EXPORT void SavePackageToDisk(Asset* package) {
 
 	OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
 
-	SaveAsset(package, package->package.filesys_path);
+	SaveAsset(tree, package, package, package->package.filesys_path);
 
 	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }

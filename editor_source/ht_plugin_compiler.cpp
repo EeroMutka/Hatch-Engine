@@ -54,7 +54,7 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 			Asset* asset_package = asset;
 			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
 
-			STR_View asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
+			STR_View asset_package_name = GetPackageName(asset_package);
 			STR_CutStart(&asset_package_name, "$");
 
 			fprintf(header, "\tHT_Asset %.*s__%.*s;\n", StrArg(asset_package_name), StrArg(name));
@@ -72,7 +72,7 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 			Asset* asset_package = asset;
 			for (;asset_package->kind != AssetKind_Package; asset_package = asset_package->parent) {}
 
-			STR_View asset_package_name = STR_AfterLast(asset_package->package.filesys_path, '/');
+			STR_View asset_package_name = GetPackageName(asset_package);
 			STR_CutStart(&asset_package_name, "$");
 
 			fprintf(header, "typedef struct %.*s__%.*s {\n", StrArg(asset_package_name), StrArg(name));
