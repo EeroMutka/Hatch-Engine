@@ -77,7 +77,7 @@ typedef union ivec4 {
 	int _[4];
 } ivec4;
 
-typedef struct HT_StringView { // utf8-encoded string view, NOT null-terminated
+typedef struct HT_StringView { // utf8-encoded string view, not null-terminated
 	char* data;
 	size_t size;
 #ifdef __cplusplus
@@ -88,7 +88,7 @@ typedef struct HT_StringView { // utf8-encoded string view, NOT null-terminated
 #endif
 } HT_StringView;
 
-typedef struct HT_String { // utf8-encoded string, NOT null-terminated. TODO: we might as well include null-terminator?
+typedef struct HT_String { // utf8-encoded string, not null-terminated. TODO: we might as well include a null-terminator?
 	union {
 		struct { char* data; size_t size; };
 		HT_StringView view;

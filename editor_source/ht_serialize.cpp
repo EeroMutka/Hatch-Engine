@@ -214,6 +214,91 @@ struct ReloadAssetsContext {
 	DS_DynArray(Asset*) queue_recompile_plugins;
 };
 
+static void SerializeType(FILE* file, AssetTree* tree, Asset* package, HT_Type type) {
+	if (type.kind == HT_TypeKind_Array) {
+		TODO();
+	}
+	else if (type.kind == HT_TypeKind_Struct) {
+		Asset* struct_type = GetAsset(tree, type.handle);
+		STR_View struct_type_path = AssetGetTextPath(TEMP, package, struct_type);
+		fprintf(file, "\"%.*s\"", StrArg(struct_type_path));
+	}
+	else if (type.kind == HT_TypeKind_ItemGroup) {
+		TODO();
+	}
+	else {
+		STR_View type_string = HT_TypeKindToString(type.kind);
+		fprintf(file, "%.*s", StrArg(type_string));
+	}
+}
+
+static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* data, HT_Type type, int indent_level) {
+	switch (type.kind) {
+	case HT_TypeKind_Array: {
+		HT_Array val = *(HT_Array*)(data);
+
+		HT_Type elem_type = type;
+		elem_type.kind = elem_type.subkind;
+
+		i32 elem_size, elem_align;
+		GetTypeSizeAndAlignment(tree, &elem_type, &elem_size, &elem_align);
+
+		fprintf(file, "{\n");
+
+		for (int i = 0; i < val.count; i++) {
+			for (int j = 0; j < indent_level + 1; j++) fprintf(file, "\t");
+			
+			SerializeValue(file, tree, package, (char*)val.data + elem_size*i, elem_type, indent_level + 1);
+			
+			fprintf(file, "\n");
+		}
+		
+		for (int i = 0; i < indent_level; i++) fprintf(file, "\t");
+		fprintf(file, "}");
+	}break;
+	case HT_TypeKind_Struct: {
+		fprintf(file, "{\n");
+		
+		Asset* type_asset = GetAsset(tree, type.handle);
+		for (int i = 0; i < type_asset->struct_type.members.count; i++) {
+			for (int j = 0; j < indent_level + 1; j++) fprintf(file, "\t");
+			
+			StructMember* member = &type_asset->struct_type.members.data[i];
+			fprintf(file, "%.*s: ", StrArg(member->name));
+			SerializeValue(file, tree, package, (char*)data + member->offset, member->type, indent_level + 1);
+			fprintf(file, "\n");
+		}
+		
+		for (int j = 0; j < indent_level; j++) fprintf(file, "\t");
+		fprintf(file, "}");
+	}break;
+	case HT_TypeKind_Any: {
+		HT_Any val = *(HT_Any*)(data);
+		fprintf(file, "@Type(");
+		SerializeType(file, tree, package, val.type);
+		fprintf(file, ") ");
+		SerializeValue(file, tree, package, val.data, val.type, indent_level);
+	}break;
+	case HT_TypeKind_AssetRef: {
+		HT_Asset val = *(HT_Asset*)(data);
+		STR_View val_path = AssetGetTextPath(TEMP, package, GetAsset(tree, val));
+		fprintf(file, "\"%.*s\"", StrArg(val_path));
+	} break;
+	case HT_TypeKind_Float: {
+		fprintf(file, "%f", *(float*)(data));
+	}break;
+	case HT_TypeKind_Int: {
+		fprintf(file, "%d", *(int*)(data));
+	}break;
+	case HT_TypeKind_Bool: {
+		fprintf(file, "%s", *(bool*)(data) ? "true" : "false");
+	}break;
+	default: {
+		fprintf(file, "TODO");
+	}break;
+	}
+}
+
 static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View filesys_path) {
 	if (asset->kind == AssetKind_Folder || asset->kind == AssetKind_Package) {
 		bool ok = OS_MakeDirectory(MEM_SCOPE_NONE, filesys_path);
@@ -293,36 +378,16 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 			}
 
 			if (asset->kind == AssetKind_StructData) {
-				Asset* type = GetAsset(tree, asset->struct_data.struct_type);
-				STR_View type_asset_path = AssetGetTextPath(TEMP, package, type);
+				Asset* type_asset = GetAsset(tree, asset->struct_data.struct_type);
+				STR_View type_asset_path = AssetGetTextPath(TEMP, package, type_asset);
 				fprintf(file, "type: \"%.*s\"\n", StrArg(type_asset_path));
-				fprintf(file, "data: {\n");
 				
-				char* data = (char*)asset->struct_data.data;
+				fprintf(file, "data: ");
 
-				for (int i = 0; i < type->struct_type.members.count; i++) {
-					StructMember* member = &type->struct_type.members.data[i];
-					switch (member->type.kind) {
-					case HT_TypeKind_AssetRef: {
-						HT_Asset val = *(HT_Asset*)(data + member->offset);
-						STR_View val_path = AssetGetTextPath(TEMP, package, GetAsset(tree, val));
-						fprintf(file, "\t%.*s: \"%.*s\",\n", StrArg(member->name), StrArg(val_path));
-					} break;
-					case HT_TypeKind_Float: {
-						fprintf(file, "\t%.*s: %f,\n", StrArg(member->name), *(float*)(data + member->offset));
-					}break;
-					case HT_TypeKind_Int: {
-						fprintf(file, "\t%.*s: %d,\n", StrArg(member->name), *(int*)(data + member->offset));
-					}break;
-					case HT_TypeKind_Bool: {
-						fprintf(file, "\t%.*s: %s,\n", StrArg(member->name), *(bool*)(data + member->offset) ? "true" : "false");
-					}break;
-					default: {
-						fprintf(file, "\t%.*s: TODO,\n", StrArg(member->name));
-					}break;
-					}
-				}
-				fprintf(file, "}\n");
+				HT_Type type = {};
+				type.kind = HT_TypeKind_Struct;
+				type.handle = type_asset->handle;
+				SerializeValue(file, tree, package, asset->struct_data.data, type, 0);
 			}
 
 			fclose(file);
