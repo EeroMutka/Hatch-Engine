@@ -366,7 +366,7 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 			}
 
 			if (asset->kind == AssetKind_Plugin) {
-				STR_View data_asset_path = AssetGetTextPath(TEMP, package, GetAsset(tree, asset->plugin.options.data));
+				STR_View data_asset_path = AssetGetTextPath(TEMP, package, GetAsset(tree, asset->plugin.options.data_asset));
 				fprintf(file, "data_asset: \"%.*s\"\n", StrArg(data_asset_path));
 				fprintf(file, "code_files: {\n");
 				for (int i = 0; i < asset->plugin.options.code_files.count; i++) {
@@ -728,28 +728,34 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 			}
 
 			if (asset->kind == AssetKind_Plugin) {
-				HT_Array* code_files = &asset->plugin.options.code_files;
-				ArrayClear(code_files, sizeof(HT_Asset));
 
-				MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
+				HT_Type type = { HT_TypeKind_Struct };
+				type.handle = ctx->tree->plugin_options_struct_type->handle;
+				MDParser child_p = {parse.node->first_child};
+				ParseMetadeskValue(ctx->tree, package, &asset->plugin.options, &type, &child_p);
 
-				Asset* data_asset = NULL;
-				if (!MD_NodeIsNil(data_node)) {
-					data_asset = FindAssetFromPath(ctx->tree, package, StrFromMD(data_node->first_child->string));
-				}
-				asset->plugin.options.data = data_asset ? data_asset->handle : NULL;
+				//HT_Array* code_files = &asset->plugin.options.code_files;
+				//ArrayClear(code_files, sizeof(HT_Asset));
 
-				MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("code_files"), 0);
-				if (!MD_NodeIsNil(source_files_node)) {
-					for (MD_EachNode(it, source_files_node->first_child)) {
-						STR_View path = StrFromMD(it->string);
-						Asset* elem = FindAssetFromPath(ctx->tree, package, path);
-						HT_Asset elem_ref = elem ? elem->handle : NULL;
+				//MD_Node* data_node = MD_ChildFromString(parse.node, MD_S8Lit("data_asset"), 0);
+				//
+				//Asset* data_asset = NULL;
+				//if (!MD_NodeIsNil(data_node)) {
+				//	data_asset = FindAssetFromPath(ctx->tree, package, StrFromMD(data_node->first_child->string));
+				//}
+				//asset->plugin.options.data = data_asset ? data_asset->handle : NULL;
 
-						ArrayPush(code_files, sizeof(HT_Asset));
-						((HT_Asset*)code_files->data)[code_files->count - 1] = elem_ref;
-					}
-				}
+				//MD_Node* source_files_node = MD_ChildFromString(parse.node, MD_S8Lit("code_files"), 0);
+				//if (!MD_NodeIsNil(source_files_node)) {
+				//	for (MD_EachNode(it, source_files_node->first_child)) {
+				//		STR_View path = StrFromMD(it->string);
+				//		Asset* elem = FindAssetFromPath(ctx->tree, package, path);
+				//		HT_Asset elem_ref = elem ? elem->handle : NULL;
+				//
+				//		ArrayPush(code_files, sizeof(HT_Asset));
+				//		((HT_Asset*)code_files->data)[code_files->count - 1] = elem_ref;
+				//	}
+				//}
 			}
 
 			if (asset->kind == AssetKind_StructData) {

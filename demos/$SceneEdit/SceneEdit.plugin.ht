@@ -3,3 +3,4 @@ code_files: {
 	"src/camera.h"
 	"src/scene_edit.cpp"
 }
+linker_inputs: {}

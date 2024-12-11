@@ -1114,7 +1114,7 @@ static void* HT_TempArenaPush(size_t size, size_t align) {
 
 static void* HT_GetPluginData_(/*AssetRef type_id*/) {
 	EditorState* s = g_plugin_call_ctx->s;
-	HT_Asset data = g_plugin_call_ctx->plugin->plugin_asset->plugin.options.data;
+	HT_Asset data = g_plugin_call_ctx->plugin->plugin_asset->plugin.options.data_asset;
 
 	Asset* data_asset = GetAsset(&s->asset_tree, data);
 	return data_asset ? data_asset->struct_data.data : NULL;

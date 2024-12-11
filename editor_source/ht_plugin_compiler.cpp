@@ -33,7 +33,7 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 
 	PluginOptions* plugin_opts = &plugin->plugin.options;
 
-	Asset* plugin_data = GetAsset(tree, plugin_opts->data);
+	Asset* plugin_data = GetAsset(tree, plugin_opts->data_asset);
 	if (plugin_data) {
 		ASSERT(plugin_data->kind == AssetKind_StructData);
 		ASSERT(GetAsset(tree, plugin_data->struct_data.struct_type) != NULL);

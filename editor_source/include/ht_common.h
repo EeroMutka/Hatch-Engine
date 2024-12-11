@@ -164,8 +164,9 @@ struct Asset_Package {
 };
 
 struct PluginOptions {
+	HT_Asset data_asset;
 	HT_Array code_files; // Array<AssetRef>
-	HT_Asset data;
+	HT_Array linker_inputs; // Array<AssetRef>
 };
 
 struct PluginAllocationHeader {

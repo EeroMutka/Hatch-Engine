@@ -59,16 +59,23 @@ static void InitAssetTree(AssetTree* tree) {
 
 	tree->plugin_options_struct_type = MakeNewAsset(tree, AssetKind_StructType);
 
+	StructMember member_data = {0};
+	StringInit(&member_data.name, "data_asset");
+	member_data.type.kind = HT_TypeKind_AssetRef;
+	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_data);
+
 	StructMember member_source_files = {0};
-	StringInit(&member_source_files.name, "Code Files");
+	StringInit(&member_source_files.name, "code_files");
 	member_source_files.type.kind = HT_TypeKind_Array;
 	member_source_files.type.subkind = HT_TypeKind_AssetRef;
 	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_source_files);
 
-	StructMember member_data = {0};
-	StringInit(&member_data.name, "Data Asset");
-	member_data.type.kind = HT_TypeKind_AssetRef;
-	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_data);
+	StructMember member_linker_inputs = {0};
+	StringInit(&member_linker_inputs.name, "linker_inputs");
+	member_linker_inputs.type.kind = HT_TypeKind_Array;
+	member_linker_inputs.type.subkind = HT_TypeKind_AssetRef;
+	DS_ArrPush(&tree->plugin_options_struct_type->struct_type.members, member_linker_inputs);
+
 
 	ComputeStructLayout(tree, tree->plugin_options_struct_type);
 }
