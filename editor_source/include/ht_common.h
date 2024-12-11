@@ -483,6 +483,11 @@ struct EditorState {
 	
 	UI_PanelTree panel_tree;
 
+	// -- simulation state --
+
+	bool is_simulating;
+	bool pending_reload_packages; // set to true after pressing "Stop" - delay it until the start of the next frame
+	
 	// ------------------
 	
 	vec2 rmb_menu_pos;
@@ -547,6 +552,7 @@ EXPORT void RegenerateTypeTable(EditorState* s);
 
 EXPORT void LoadProject(AssetTree* tree, STR_View project_directory);
 EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory);
+EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool force_reload);
 EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
@@ -559,6 +565,8 @@ EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 // -- ht_plugin_compiler.cpp ------------------------------------------
 
 EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project_directory);
+
+EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin);
 
 #ifdef HT_DYNAMIC
 EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath);

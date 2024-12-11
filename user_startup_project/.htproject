@@ -5,6 +5,7 @@ packages: {
 	"$HATCH_DIR/demos/$Scene",
 	"$HATCH_DIR/demos/$SceneEdit",
 	// "$HATCH_DIR/demos/$PhysicsGame",
+	"$HATCH_DIR/demos/$JoltPhysics",
 	"$HATCH_DIR/demos/$FGCourse",
 }
 
@@ -13,6 +14,7 @@ packages: {
 // running forever. The update order of plugins is determined by the order in which you enable them.
 run_plugins: {
 	"$SceneEdit/SceneEdit",
+	"$JoltPhysics/JoltPhysics",
 	// "$PhysicsGame/Source/physics_game",
 	"$FGCourse/Source/fg",
 }

@@ -13,9 +13,7 @@ data: {
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
-				@Type("$Scene/components/BoxComponent") {
-					half_extent: { 1, 1, 1 }
-				}
+				@Type("$Scene/components/BoxComponent") {}
 			}
 		}
 		"Floor": {
@@ -23,9 +21,7 @@ data: {
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
-				@Type("$Scene/components/BoxComponent") {
-					half_extent: { 5, 5, 0.1 }
-				}
+				@Type("$Scene/components/BoxComponent") {}
 			}
 		}
 	}

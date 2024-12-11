@@ -179,6 +179,30 @@ EXPORT void AddTopBar(EditorState* s) {
 		UI_PopBox(s->frame.window_dropdown);
 	}
 
+	if (s->is_simulating) {
+		UI_Box* stop_button = UI_BOX();
+		UI_AddButton(stop_button, UI_SizeFit(), UI_SizeFit(), 0, "Stop");
+		stop_button->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+		stop_button->draw_opts->transparent_bg_color = DS_Dup(TEMP, UI_RED);
+
+		if (UI_Clicked(stop_button)) {
+			s->is_simulating = false;
+			s->pending_reload_packages = true;
+		}
+	}
+	else {
+		UI_Box* simulate_button = UI_BOX();
+		UI_AddButton(simulate_button, UI_SizeFit(), UI_SizeFit(), 0, "Simulate");
+		simulate_button->draw_opts = DS_New(UI_BoxDrawOptArgs, TEMP);
+		simulate_button->draw_opts->transparent_bg_color = DS_Dup(TEMP, UI_LIME);
+
+		if (UI_Clicked(simulate_button)) {
+			s->is_simulating = true;
+		}
+	}
+
+	//UIAddTopBarButton(file_button, UI_SizeFit(), UI_SizeFit(), "Stop");
+	// 
 	//UI_Box* help_button = UI_BOX();
 	//UIAddTopBarButton(help_button, UI_SizeFit(), UI_SizeFit(), "Help");
 	//if (UI_Clicked(help_button)) {
@@ -1352,6 +1376,11 @@ static HT_ItemHandle HT_GetSelectedItemHandle() {
 	return (HT_ItemHandle)s->properties_tree_data_ui_state.selection;
 }
 
+static bool HT_IsSimulating() {
+	EditorState* s = g_plugin_call_ctx->s;
+	return s->is_simulating;
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	*(void**)&api.AddVertices = UI_AddVertices;
@@ -1364,6 +1393,7 @@ EXPORT void InitAPI(EditorState* s) {
 	api.UnregisterAssetViewerForType = HT_DeregisterAssetViewerForType;
 	api.GetAllOpenAssetsOfType = HT_GetAllOpenAssetsOfType;
 	api.PollNextCustomTabUpdate = HT_PollNextCustomTabUpdate;
+	api.IsSimulating = HT_IsSimulating;
 	//api.PollNextAssetViewerTabUpdate = HT_PollNextAssetViewerTabUpdate;
 
 #ifdef HT_EDITOR_DX12

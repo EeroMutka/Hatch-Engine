@@ -34,12 +34,11 @@ static Camera SceneEditUpdate(HT_API* ht, SceneEditState* s, const M_Perspective
 
 	for (HT_ItemGroupEach(&scene->entities, entity_i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, entity_i);
+
+		// find box component
+
 		if (item_handle_decoded.index == entity_i) {
 			TranslationGizmoUpdate(ht->input_frame, view, &s->translate_gizmo, mouse_pos, &entity->position, 0.f);
-
-			//DrawArrow3D(view, entity->position, entity->position + vec3{1.f, 0.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_RED);
-			//DrawArrow3D(view, entity->position, entity->position + vec3{0.f, 1.f, 0.f}, 0.03f, 0.012f, 12, 5.f, UI_GREEN);
-			//DrawArrow3D(view, entity->position, entity->position + vec3{0.f, 0.f, 1.f}, 0.03f, 0.012f, 12, 5.f, UI_BLUE);
 		}
 	}
 
@@ -49,4 +48,24 @@ static Camera SceneEditUpdate(HT_API* ht, SceneEditState* s, const M_Perspective
 // gizmo drawing requires fire-UI
 static void SceneEditDrawGizmos(HT_API* ht, SceneEditState* s, Scene__Scene* scene) {
 	TranslationGizmoDraw(&s->view, &s->translate_gizmo);
+
+	/*for (HT_ItemGroupEach(&scene->entities, entity_i)) {
+		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, entity_i);
+
+		for (int comp_i = 0; comp_i < entity->components.count; comp_i++) {
+			HT_Any* comp_any = &((HT_Any*)entity->components.data)[comp_i];
+			if (comp_any->type.handle == ht->types->Scene__BoxComponent) {
+				M_PerspectiveView cuboid_view = s->view;
+				cuboid_view.ws_to_ss =
+					M_MatScale(entity->scale) *
+					M_MatRotateX(entity->rotation.x*M_DegToRad) *
+					M_MatRotateY(entity->rotation.y*M_DegToRad) *
+					M_MatRotateZ(entity->rotation.z*M_DegToRad) *
+					M_MatTranslate(entity->position) *
+					cuboid_view.ws_to_ss;
+				
+				DrawCuboid3D(&cuboid_view, vec3{-0.5f, -0.5f, -0.5f}, vec3{0.5f, 0.5f, 0.5f}, 2.f, UI_SKYBLUE);
+			}
+		}
+	}*/
 }

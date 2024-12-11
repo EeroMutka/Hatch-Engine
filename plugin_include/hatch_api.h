@@ -525,6 +525,10 @@ struct HT_API {
 	// Returns a temporary array (i.e. TempArenaPush)
 	HT_Asset* (*GetAllOpenAssetsOfType)(HT_Asset struct_type_asset, int* out_count);
 	
+	// -- Simulation ---------------------------------
+
+	bool (*IsSimulating)();
+
 	// -- Input --------------------------------------
 	
 	const HT_InputFrame* input_frame;

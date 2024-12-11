@@ -329,7 +329,7 @@ EXPORT void SavePackageToDisk(Asset* package) {
 	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }
 
-static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path) {
+static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path, bool force_reload) {
 	OS_FileInfoArray files = {0};
 	OS_GetAllFilesInDirectory(MEM_SCOPE_TEMP, parent_full_path, &files);
 
@@ -395,7 +395,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 		}
 
 		ASSERT(info.last_write_time >= asset->modtime); // modtime should never decrease on windows
-		asset->reload_assets_pass2_needs_hotreload = info.last_write_time != asset->modtime;
+		asset->reload_assets_pass2_needs_hotreload = info.last_write_time != asset->modtime || force_reload;
 		asset->modtime = info.last_write_time;
 
 		if (info.last_write_time != asset->modtime) { // propagate modtime up through the parent folders
@@ -408,7 +408,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 		asset->reload_assets_filesys_path = full_path;
 
 		if (info.is_directory) {
-			ReloadAssetsPass1(tree, asset, full_path);
+			ReloadAssetsPass1(tree, asset, full_path, force_reload);
 		}
 	}
 }
@@ -704,7 +704,7 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 	}
 }
 
-static void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages) {
+EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool force_reload) {
 	// We do loading in two passes.
 	// 1. pass: delete assets which don't exist in the filesystem and make empty assets for those which do exist and we don't have as assets yet
 	// 2. pass: per each asset, fully reload its contents from disk.
@@ -721,7 +721,7 @@ static void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages) {
 	for (int i = 0; i < packages.count; i++) {
 		Asset* package = packages[i];
 		OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
-		ReloadAssetsPass1(tree, package, package->package.filesys_path);
+		ReloadAssetsPass1(tree, package, package->package.filesys_path, force_reload);
 	}
 
 	for (int i = 0; i < packages.count; i++) {
@@ -736,25 +736,29 @@ static void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages) {
 		ReloadAssetsPass3(&ctx, package, package);
 	}
 
-#ifdef HT_DYNAMIC
-	/*for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
+	for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
 		Asset* plugin_asset = ctx.queue_recompile_plugins[i];
+		RegeneratePluginHeader(tree, plugin_asset);
 
-		if (plugin_asset->plugin.active_instance != NULL) {
-			UnloadPlugin(s, plugin_asset);
-		}
-		
-		RecompilePlugin(s, plugin_asset);
-		
-		if (plugin_asset->plugin.active_by_request) {
-			RunPlugin(s, plugin_asset);
-		}
-
-		printf("Recompiling plugin!\n");
+#ifdef HT_DYNAMIC
+		//if (plugin_asset->plugin.active_instance != NULL) {
+		//	UnloadPlugin(s, plugin_asset);
+		//}
+		//
+		//RecompilePlugin(s, plugin_asset);
+		//
+		//if (plugin_asset->plugin.active_by_request) {
+		//	RunPlugin(s, plugin_asset);
+		//}
+		//
+		//printf("Recompiling plugin!\n");
+#else
+#endif
 	}
+#ifdef HT_DYNAMIC
 	if (ctx.queue_recompile_plugins.count > 0) {
-		RegenerateTypeTable(s);
-	}*/
+		//RegenerateTypeTable(s);
+	}
 #endif
 
 	MD_ArenaRelease(ctx.md_arena);
@@ -789,7 +793,7 @@ EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 		DS_ArrPush(&packages, package);
 	}
 	
-	ReloadPackages(tree, packages);
+	ReloadPackages(tree, packages, false);
 }
 
 EXPORT void HotreloadPackages(AssetTree* tree) {
@@ -798,7 +802,7 @@ EXPORT void HotreloadPackages(AssetTree* tree) {
 
 		if (OS_DirectoryWatchHasChanges(&asset->package.dir_watch)) {
 			printf("RELOADING PACKAGE!\n");
-			ReloadPackages(tree, {&asset, 1});
+			ReloadPackages(tree, {&asset, 1}, false);
 		}
 	}
 }

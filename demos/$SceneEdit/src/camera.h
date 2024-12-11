@@ -17,40 +17,31 @@ static void UpdateCamera(Camera* camera, const HT_InputFrame* in) {
 	mat4 rotation_matrix = M_MatRotateY(camera->pitch) * M_MatRotateZ(camera->yaw);
 	
 	float mov_speed = InputIsDown(in, HT_InputKey_Shift) ? 3.f : 1.f;
-	float rot_speed = InputIsDown(in, HT_InputKey_Shift) ? 1.5f : 1.f;
+	float rot_speed = (InputIsDown(in, HT_InputKey_Shift) ? 1.5f : 1.f) * 0.001f;
 	
-	if (InputIsDown(in, HT_InputKey_W)) {
-		camera->pos += rotation_matrix.row[0].xyz * 0.1f * mov_speed;
+	if (InputIsDown(in, HT_InputKey_MouseRight)) {
+		if (InputIsDown(in, HT_InputKey_W)) {
+			camera->pos += rotation_matrix.row[0].xyz * 0.1f * mov_speed;
+		}
+		if (InputIsDown(in, HT_InputKey_S)) {
+			camera->pos -= rotation_matrix.row[0].xyz * 0.1f * mov_speed;
+		}
+		if (InputIsDown(in, HT_InputKey_D)) {
+			camera->pos -= rotation_matrix.row[1].xyz * 0.1f * mov_speed;
+		}
+		if (InputIsDown(in, HT_InputKey_A)) {
+			camera->pos += rotation_matrix.row[1].xyz * 0.1f * mov_speed;
+		}
+		if (InputIsDown(in, HT_InputKey_E)) {
+			camera->pos.z += 0.1f * mov_speed;
+		}
+		if (InputIsDown(in, HT_InputKey_Q)) {
+			camera->pos.z -= 0.1f * mov_speed;
+		}
+		camera->yaw -= (float)in->raw_mouse_input[0] * rot_speed;
+		camera->pitch += (float)in->raw_mouse_input[1] * rot_speed;
 	}
-	if (InputIsDown(in, HT_InputKey_S)) {
-		camera->pos -= rotation_matrix.row[0].xyz * 0.1f * mov_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_D)) {
-		camera->pos -= rotation_matrix.row[1].xyz * 0.1f * mov_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_A)) {
-		camera->pos += rotation_matrix.row[1].xyz * 0.1f * mov_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_E)) {
-		camera->pos.z += 0.1f * rot_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_Q)) {
-		camera->pos.z -= 0.1f * rot_speed;
-	}
-	
-	if (InputIsDown(in, HT_InputKey_Right)) {
-		camera->yaw -= 0.02f * rot_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_Left)) {
-		camera->yaw += 0.02f * rot_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_Up)) {
-		camera->pitch -= 0.02f * rot_speed;
-	}
-	if (InputIsDown(in, HT_InputKey_Down)) {
-		camera->pitch += 0.02f * rot_speed;
-	}
-	
+
 	// NOTE: view-space has +Y down, and is right-handed (+X right, +Z forward)!!
 		// +x -> +z
 		// +y -> -x

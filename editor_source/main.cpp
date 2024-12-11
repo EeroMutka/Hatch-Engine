@@ -148,6 +148,17 @@ static void EditorInit(EditorState* s) {
 }
 
 static void UpdateAndDraw(EditorState* s) {
+	if (s->pending_reload_packages) {
+		s->pending_reload_packages = false;
+
+		DS_DynArray(Asset*) packages = {TEMP};
+		for (Asset* asset = s->asset_tree.root->first_child; asset; asset = asset->next) {
+			if (asset->kind != AssetKind_Package) continue;
+			DS_ArrPush(&packages, asset);
+		}
+		ReloadPackages(&s->asset_tree, packages, true);
+	}
+
 	UI_BeginFrame(&s->ui_inputs, s->default_font, s->icons_font);
 
 	s->frame = {};
@@ -168,7 +179,6 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_Box* root_box = UI_BOX();
 	UI_InitRootBox(root_box, (float)s->window_size.x, (float)s->window_size.y, 0);
 	UI_PushBox(root_box);
-
 
 	UI_PopBox(root_box);
 	UI_BoxComputeRects(root_box, vec2{0, 0});

@@ -24,20 +24,28 @@ data: {
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
+				@Type("$Scene/components/BoxComponent") {}
 				@Type("$Scene/components/MeshComponent") {
-					mesh: "Meshes/Monkey"
+					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
+				}
+				@Type("$JoltPhysics/components/PhysicsBodyComponent") {
+					enabled: true
 				}
 			}
 		}
 		"Torus": {
-			position: { 0, 0, 0 }
+			position: { 0, 0.5, 4 }
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
+				@Type("$Scene/components/BoxComponent") {}
 				@Type("$Scene/components/MeshComponent") {
-					mesh: "Meshes/Torus"
+					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
+				}
+				@Type("$JoltPhysics/components/PhysicsBodyComponent") {
+					enabled: true
 				}
 			}
 		}
