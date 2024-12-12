@@ -186,23 +186,27 @@ static void EndSimulation(HT_API* ht, Scene__Scene* scene) {
 	jolt_bodyInterface = NULL;
 }
 
-static void QuatToEulerAngles(JPH_Quat q, float* roll, float* pitch, float* yaw) {
-	// see https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
-	
-	// roll (x-axis rotation)
-	float sinr_cosp = 2 * (q.w * q.x + q.y * q.z);
-	float cosr_cosp = 1 - 2 * (q.x * q.x + q.y * q.y);
-	*roll = atan2f(sinr_cosp, cosr_cosp) * M_RadToDeg;
+// Euler angles defined in XYZ order, in degrees
+static vec3 QuatToEulerAnglesXYZ(JPH_Quat q) {
+	// Source: https://github.com/ralphtandetzky/num-quaternion/blob/master/src/unit_quaternion.rs (MIT-license, Ralph Tandetzky)
+	float sin_pitch = 2.f * (q.w * q.y - q.z * q.x);
 
-	// pitch (y-axis rotation)
-	float sinp = sqrtf(1 + 2 * (q.w * q.y - q.x * q.z));
-	float cosp = sqrtf(1 - 2 * (q.w * q.y - q.x * q.z));
-	*pitch = (2 * atan2f(sinp, cosp) - M_PI / 2) * M_RadToDeg;
-
-	// yaw (z-axis rotation)
-	float siny_cosp = 2 * (q.w * q.z + q.x * q.y);
-	float cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z);
-	*yaw = atan2f(siny_cosp, cosy_cosp) * M_RadToDeg;
+	vec3 xyz;
+	if (sin_pitch >= 0.99999f) { // Check for gimbal lock, which occurs when sin_pitch is close to 1 or -1
+		xyz.x = 0.f;
+		xyz.y = M_PI/2.f; // 90 degrees
+		xyz.z = -2.f * atan2f(q.x, q.w);
+	} else if (sin_pitch <= -0.99999f) {
+		xyz.x = 0.f;
+		xyz.y = -M_PI/2.f; // -90 degrees
+		xyz.z = 2.f * atan2f(q.x, q.w);
+	} else {
+		xyz.y = asinf(sin_pitch);
+		xyz.x = atan2f(2.f * (q.w * q.x + q.y * q.z), 1.f - 2.f * (q.x * q.x + q.y * q.y));
+		xyz.z = atan2f(2.f * (q.w * q.z + q.x * q.y), 1.f - 2.f * (q.y * q.y + q.z * q.z));
+	}
+	xyz *= M_RadToDeg;
+	return xyz;
 }
 
 static void SimulateScene(HT_API* ht, Scene__Scene* scene) {
@@ -229,7 +233,10 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene) {
 			JPH_Quat q;
 			JPH_BodyInterface_GetRotation(jolt_bodyInterface, body->jph_body_id, &q);
 			
-			QuatToEulerAngles(q, &entity->rotation.x, &entity->rotation.y, &entity->rotation.z);
+			// so QuaternionToEulerAngles returns euler angles that first rotate by y, then z, then x.
+			// so we want to convert to and from this weird coordinate system.
+
+			entity->rotation = QuatToEulerAnglesXYZ(q);
 
 			entity->position = {p.x, p.y, p.z};
 		}
