@@ -10,7 +10,8 @@ typedef struct HT_GeneratedTypeTable {
 	HT_Asset Scene__Texture;
 	HT_Asset SceneEdit__EditorCamera;
 	HT_Asset SceneEdit__SceneEditParams;
-	HT_Asset JoltPhysics__PhysicsBodyComponent;
+	HT_Asset JoltPhysics__BoxCollisionComponent;
+	HT_Asset JoltPhysics__PhysicsComponent;
 	HT_Asset FGCourse__fg_params_type;
 	int _unused;
 } HT_GeneratedTypeTable;
@@ -43,8 +44,12 @@ typedef struct SceneEdit__EditorCamera {
 } SceneEdit__EditorCamera;
 typedef struct SceneEdit__SceneEditParams {
 } SceneEdit__SceneEditParams;
-typedef struct JoltPhysics__PhysicsBodyComponent {
+typedef struct JoltPhysics__BoxCollisionComponent {
+} JoltPhysics__BoxCollisionComponent;
+typedef struct JoltPhysics__PhysicsComponent {
 	bool enabled;
-} JoltPhysics__PhysicsBodyComponent;
+	bool dynamic;
+	int jph_body_id;
+} JoltPhysics__PhysicsComponent;
 typedef struct FGCourse__fg_params_type {
 } FGCourse__fg_params_type;

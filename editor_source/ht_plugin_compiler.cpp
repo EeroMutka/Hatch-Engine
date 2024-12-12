@@ -162,6 +162,12 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 		if (asset->kind == AssetKind_Package) {
 			fprintf(f, "\tfiles \"%.*s/**\"\n", StrArg(asset->package.filesys_path));
 		}
+		if (asset->kind == AssetKind_File) {
+			if (STR_Match(STR_AfterLast(asset->name, '.'), "lib")) {
+				STR_View filepath = AssetGetAbsoluteFilepath(TEMP, asset);
+				fprintf(f, "\tlinks \"%.*s\"\n", StrArg(filepath));
+			}
+		}
 	}
 	fprintf(f, "\n");
 
@@ -176,6 +182,9 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 
 	fprintf(f, "\tlinks { \"d3d11\", \"d3dcompiler.lib\" } \n\n");
 
+	fprintf(f, "\tstaticruntime \"On\"\n");
+	fprintf(f, "\truntime \"Release\" -- always use the release version of CRT\n\n");
+
 	fprintf(f, "\tfilter \"configurations:Debug\"\n");
 	fprintf(f, "\t\tsymbols \"On\"\n\n");
 
@@ -184,6 +193,9 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 
 	fprintf(f, "\tfilter \"files:**.hlsl\"\n");
 	fprintf(f, "\t\tbuildaction \"None\" -- do not use Visual Studio's built-in HLSL compiler\n\n");
+
+	//fprintf(f, "\tfilter \"files:**.lib\"\n");
+	//fprintf(f, "\t\tbuildaction \"None\" -- do not use Visual Studio's built-in HLSL compiler\n\n");
 
 	fclose(f);
 
@@ -407,7 +419,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 		HT_Asset code_file = *((HT_Asset*)plugin_opts->code_files.data + i);
 		Asset* code_file_asset = GetAsset(&s->asset_tree, code_file);
 		if (code_file_asset) {
-			STR_View file_name = AssetGetPackageRelativePath(TEMP, code_file_asset);
+			STR_View file_name = AssetGetPackageRelativeFilepath(TEMP, code_file_asset);
 			STR_View file_extension = STR_AfterLast(file_name, '.');
 			
 			// Only add .c and .cpp files as translation units and not header files for example

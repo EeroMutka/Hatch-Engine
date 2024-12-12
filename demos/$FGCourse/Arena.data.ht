@@ -11,16 +11,22 @@ data: {
 		"Terrain": {
 			position: { 0, 0, 0 }
 			rotation: { 0, 0, 0 }
-			scale:    { 1, 1, 1 }
+			scale:    { 5, 5, 1 }
 			components: {
 				@Type("$Scene/components/MeshComponent") {
-					mesh: "Meshes/Terrain"
+					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/Grass_01"
 				}
+				@Type("$JoltPhysics/components/PhysicsComponent") {
+					enabled: true,
+					dynamic: false,
+					jph_body_id: 0,
+				}
+				@Type("$JoltPhysics/components/BoxCollisionComponent") {}
 			}
 		}
 		"Monkey": {
-			position: { 0, 0, 10}
+			position: { 0.6, 0, 10}
 			rotation: { 0, 0, 0 }
 			scale:    { 1, 1, 1 }
 			components: {
@@ -29,8 +35,10 @@ data: {
 					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
 				}
-				@Type("$JoltPhysics/components/PhysicsBodyComponent") {
-					enabled: true
+				@Type("$JoltPhysics/components/PhysicsComponent") {
+					enabled: true,
+					dynamic: true,
+					jph_body_id: 0,
 				}
 			}
 		}
@@ -44,8 +52,10 @@ data: {
 					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
 				}
-				@Type("$JoltPhysics/components/PhysicsBodyComponent") {
-					enabled: true
+				@Type("$JoltPhysics/components/PhysicsComponent") {
+					enabled: true,
+					dynamic: true,
+					jph_body_id: 0,
 				}
 			}
 		}

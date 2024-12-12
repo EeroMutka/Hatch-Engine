@@ -1,0 +1,5 @@
+struct: {
+	enabled: Bool
+	dynamic: Bool
+	jph_body_id: Int
+}
