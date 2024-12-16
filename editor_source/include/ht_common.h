@@ -490,7 +490,8 @@ struct EditorState {
 	// -- simulation state --
 
 	bool is_simulating;
-	bool pending_reload_packages; // set to true after pressing "Stop" - delay it until the start of the next frame
+	bool pending_stop_simulation; // set to true after pressing "Stop" - delay it until the start of the next frame
+	bool pending_start_simulation;
 	
 	// ------------------
 	

@@ -1,4 +1,4 @@
 struct: {
-	mesh: Asset
-	color_texture: Asset
+	mesh: Asset,
+	color_texture: Asset,
 }

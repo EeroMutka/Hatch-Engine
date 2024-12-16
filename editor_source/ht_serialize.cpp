@@ -216,7 +216,10 @@ struct ReloadAssetsContext {
 
 static void SerializeType(FILE* file, AssetTree* tree, Asset* package, HT_Type type) {
 	if (type.kind == HT_TypeKind_Array) {
-		TODO();
+		HT_Type elem_type = type;
+		elem_type.kind = elem_type.subkind;
+		fprintf(file, "@Array ");
+		SerializeType(file, tree, package, elem_type);
 	}
 	else if (type.kind == HT_TypeKind_Struct) {
 		Asset* struct_type = GetAsset(tree, type.handle);
@@ -224,7 +227,10 @@ static void SerializeType(FILE* file, AssetTree* tree, Asset* package, HT_Type t
 		fprintf(file, "\"%.*s\"", StrArg(struct_type_path));
 	}
 	else if (type.kind == HT_TypeKind_ItemGroup) {
-		TODO();
+		HT_Type elem_type = type;
+		elem_type.kind = elem_type.subkind;
+		fprintf(file, "@ItemGroup ");
+		SerializeType(file, tree, package, elem_type);
 	}
 	else {
 		STR_View type_string = HT_TypeKindToString(type.kind);
@@ -251,7 +257,7 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 			void* item_data = (char*)HT_GetItemHeader(val, item_idx) + val->item_offset;
 			SerializeValue(file, tree, package, item_data, elem_type, indent_level + 1);
 			
-			fprintf(file, "\n");
+			fprintf(file, ",\n");
 		}
 
 		for (int i = 0; i < indent_level; i++) fprintf(file, "\t");
@@ -273,7 +279,7 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 			
 			SerializeValue(file, tree, package, (char*)val.data + elem_size*i, elem_type, indent_level + 1);
 			
-			fprintf(file, "\n");
+			fprintf(file, ",\n");
 		}
 		
 		for (int i = 0; i < indent_level; i++) fprintf(file, "\t");
@@ -289,7 +295,7 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 			StructMember* member = &type_asset->struct_type.members.data[i];
 			fprintf(file, "%.*s: ", StrArg(member->name));
 			SerializeValue(file, tree, package, (char*)data + member->offset, member->type, indent_level + 1);
-			fprintf(file, "\n");
+			fprintf(file, ",\n");
 		}
 		
 		for (int j = 0; j < indent_level; j++) fprintf(file, "\t");
@@ -382,12 +388,12 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 			if (asset->kind == AssetKind_StructType) {
 				fprintf(file, "struct: {\n");
 				for (int i = 0; i < asset->struct_type.members.count; i++) {
-					//StructMember* member = &asset->struct_type.members.data[i];
-					//STR_View type_str = PluginVarTypeToString(member->type);
-					//fprintf(file, "\t%.*s: %.*s,\n", StrArg(member->name.str), StrArg(type_str));
-					fprintf(file, "\tTODO,\n");
+					StructMember* member = &asset->struct_type.members.data[i];
+					fprintf(file, "\t%.*s: ", StrArg(member->name.view));
+					SerializeType(file, tree, package, member->type);
+					fprintf(file, ",\n");
 				}
-				fprintf(file, "}\n\n");
+				fprintf(file, "}\n");
 			}
 
 			if (asset->kind == AssetKind_Plugin) {

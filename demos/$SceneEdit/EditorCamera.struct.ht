@@ -1,5 +1,5 @@
 struct: {
-	position: Vec3
-	pitch: Float
-	yaw: Float
+	position: Vec3,
+	pitch: Float,
+	yaw: Float,
 }

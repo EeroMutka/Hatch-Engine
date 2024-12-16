@@ -2,65 +2,65 @@ type: "$Scene/types/Scene"
 data: {
 	entities: {
 		"Terrain": {
-			position: { 0.000001, -0.000149, 1.921816 }
-			rotation: { 0.000000, 0.000000, 0.000000 }
-			scale: { 5.000000, 5.000000, 1.000000 }
+			position: { 0.000001, -0.000149, 1.921816 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 5.000000, 5.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/UnitBox"
-					color_texture: "Textures/Grass_01"
-				}
+					mesh: "Meshes/UnitBox",
+					color_texture: "Textures/Grass_01",
+				},
 				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true
-					dynamic: false
-					jph_body_id: 0
-				}
+					enabled: true,
+					dynamic: false,
+					jph_body_id: 16777216,
+				},
 				@Type("$JoltPhysics/Components/BoxCollisionComponent") {
-				}
-			}
-		}
+				},
+			},
+		},
 		"Monkey": {
-			position: { 0.600000, 0.000000, 10.000000 }
-			rotation: { 0.000000, 0.000000, 0.000000 }
-			scale: { 1.000000, 1.000000, 1.000000 }
+			position: { 0.310096, -0.218143, 12.237395 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
-				}
+				},
 				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/UnitBox"
-					color_texture: "Textures/cockdragon"
-				}
+					mesh: "Meshes/UnitBox",
+					color_texture: "Textures/cockdragon",
+				},
 				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true
-					dynamic: true
-					jph_body_id: 0
-				}
-			}
-		}
+					enabled: true,
+					dynamic: true,
+					jph_body_id: 16777217,
+				},
+			},
+		},
 		"Torus": {
-			position: { 0.000000, 0.500000, 4.000000 }
-			rotation: { 0.000000, 0.000000, 0.000000 }
-			scale: { 1.000000, 1.000000, 1.000000 }
+			position: { -0.002306, -1.009468, 13.412913 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
-				}
+				},
 				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/UnitBox"
-					color_texture: "Textures/cockdragon"
-				}
+					mesh: "Meshes/UnitBox",
+					color_texture: "Textures/cockdragon",
+				},
 				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true
-					dynamic: true
-					jph_body_id: 0
-				}
-			}
-		}
-	}
+					enabled: true,
+					dynamic: true,
+					jph_body_id: 16777218,
+				},
+			},
+		},
+	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { -5.923264, 6.815202, 10.623997 }
-			pitch: 0.387000
-			yaw: -0.738000
-		}
-	}
+			position: { 13.174302, -11.473723, 8.317365 },
+			pitch: 0.131500,
+			yaw: -3.837496,
+		},
+	},
 }

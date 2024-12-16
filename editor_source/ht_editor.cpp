@@ -186,8 +186,7 @@ EXPORT void AddTopBar(EditorState* s) {
 		stop_button->draw_opts->transparent_bg_color = DS_Dup(TEMP, UI_RED);
 
 		if (UI_Clicked(stop_button)) {
-			s->is_simulating = false;
-			s->pending_reload_packages = true;
+			s->pending_stop_simulation = true;
 		}
 	}
 	else {
@@ -197,7 +196,7 @@ EXPORT void AddTopBar(EditorState* s) {
 		simulate_button->draw_opts->transparent_bg_color = DS_Dup(TEMP, UI_LIME);
 
 		if (UI_Clicked(simulate_button)) {
-			s->is_simulating = true;
+			s->pending_start_simulation = true;
 		}
 	}
 

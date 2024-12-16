@@ -1,4 +1,4 @@
 type: "$Scene/types/Texture"
 data: {
-	texture_source: "Textures/Grass_01.png"
+	texture_source: "Textures/Grass_01.png",
 }

@@ -155,8 +155,18 @@ static void EditorInit(EditorState* s) {
 }
 
 static void UpdateAndDraw(EditorState* s) {
-	if (s->pending_reload_packages) {
-		s->pending_reload_packages = false;
+	if (s->pending_start_simulation) {
+		s->pending_start_simulation = false;
+		s->is_simulating = true;
+
+		for (Asset* asset = s->asset_tree.root->first_child; asset; asset = asset->next) {
+			if (asset->kind != AssetKind_Package) continue;
+			SavePackageToDisk(&s->asset_tree, asset);
+		}
+	}
+	if (s->pending_stop_simulation) {
+		s->pending_stop_simulation = false;
+		s->is_simulating = false;
 
 		DS_DynArray(Asset*) packages = {TEMP};
 		for (Asset* asset = s->asset_tree.root->first_child; asset; asset = asset->next) {

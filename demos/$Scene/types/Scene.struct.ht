@@ -1,4 +1,4 @@
 struct: {
-	entities: @ItemGroup "types/SceneEntity"
-	extended_data: @Array Any
+	entities: @ItemGroup "types/SceneEntity",
+	extended_data: @Array Any,
 }
