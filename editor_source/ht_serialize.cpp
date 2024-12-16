@@ -234,6 +234,29 @@ static void SerializeType(FILE* file, AssetTree* tree, Asset* package, HT_Type t
 
 static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* data, HT_Type type, int indent_level) {
 	switch (type.kind) {
+	case HT_TypeKind_ItemGroup: {
+		HT_ItemGroup* val = (HT_ItemGroup*)(data);
+
+		HT_Type elem_type = type;
+		elem_type.kind = elem_type.subkind;
+		
+		fprintf(file, "{\n");
+
+		for (HT_ItemGroupEach(val, item_idx)) {
+			for (int j = 0; j < indent_level + 1; j++) fprintf(file, "\t");
+
+			HT_ItemHeader* item_header = HT_GetItemHeader(val, item_idx);
+			fprintf(file, "\"%.*s\": ", StrArg(item_header->name.view));
+
+			void* item_data = (char*)HT_GetItemHeader(val, item_idx) + val->item_offset;
+			SerializeValue(file, tree, package, item_data, elem_type, indent_level + 1);
+			
+			fprintf(file, "\n");
+		}
+
+		for (int i = 0; i < indent_level; i++) fprintf(file, "\t");
+		fprintf(file, "}");
+	}break;
 	case HT_TypeKind_Array: {
 		HT_Array val = *(HT_Array*)(data);
 
@@ -284,9 +307,10 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 		STR_View val_path = AssetGetTextPath(TEMP, package, GetAsset(tree, val));
 		fprintf(file, "\"%.*s\"", StrArg(val_path));
 	} break;
-	case HT_TypeKind_Float: {
-		fprintf(file, "%f", *(float*)(data));
-	}break;
+	case HT_TypeKind_Float: { fprintf(file, "%f", *(float*)(data)); }break;
+	case HT_TypeKind_Vec2: { fprintf(file, "{ %f, %f }", ((vec2*)data)->x, ((vec2*)data)->y); }break;
+	case HT_TypeKind_Vec3: { fprintf(file, "{ %f, %f, %f }", ((vec3*)data)->x, ((vec3*)data)->y, ((vec3*)data)->z); }break;
+	case HT_TypeKind_Vec4: { fprintf(file, "{ %f, %f, %f, %f }", ((vec4*)data)->x, ((vec4*)data)->y, ((vec4*)data)->z, ((vec4*)data)->w); }break;
 	case HT_TypeKind_Int: {
 		fprintf(file, "%d", *(int*)(data));
 	}break;
@@ -294,6 +318,7 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 		fprintf(file, "%s", *(bool*)(data) ? "true" : "false");
 	}break;
 	default: {
+		ASSERT(0);
 		fprintf(file, "TODO");
 	}break;
 	}
@@ -366,15 +391,29 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 			}
 
 			if (asset->kind == AssetKind_Plugin) {
-				STR_View data_asset_path = AssetGetTextPath(TEMP, package, GetAsset(tree, asset->plugin.options.data_asset));
-				fprintf(file, "data_asset: \"%.*s\"\n", StrArg(data_asset_path));
-				fprintf(file, "code_files: {\n");
-				for (int i = 0; i < asset->plugin.options.code_files.count; i++) {
-					HT_Asset code_file_handle = ((HT_Asset*)asset->plugin.options.code_files.data)[i];
-					STR_View code_file_path = AssetGetTextPath(TEMP, package, GetAsset(tree, code_file_handle));
-					fprintf(file, "\t\"%.*s\",\n", StrArg(code_file_path));
+				HT_Type type = {};
+				type.kind = HT_TypeKind_Struct;
+				type.handle = tree->plugin_options_struct_type->handle;
+				void* data = &asset->plugin.options;
+				//SerializeValue(file, tree, package, &asset->plugin.options, type, 0);
+
+				Asset* type_asset = GetAsset(tree, type.handle);
+				for (int i = 0; i < type_asset->struct_type.members.count; i++) {
+					StructMember* member = &type_asset->struct_type.members.data[i];
+					fprintf(file, "%.*s: ", StrArg(member->name));
+					SerializeValue(file, tree, package, (char*)data + member->offset, member->type, 0);
+					fprintf(file, "\n");
 				}
-				fprintf(file, "}\n");
+
+				//STR_View data_asset_path = AssetGetTextPath(TEMP, package, GetAsset(tree, asset->plugin.options.data_asset));
+				//fprintf(file, "data_asset: \"%.*s\"\n", StrArg(data_asset_path));
+				//fprintf(file, "code_files: {\n");
+				//for (int i = 0; i < asset->plugin.options.code_files.count; i++) {
+				//	HT_Asset code_file_handle = ((HT_Asset*)asset->plugin.options.code_files.data)[i];
+				//	STR_View code_file_path = AssetGetTextPath(TEMP, package, GetAsset(tree, code_file_handle));
+				//	fprintf(file, "\t\"%.*s\",\n", StrArg(code_file_path));
+				//}
+				//fprintf(file, "}\n");
 			}
 
 			if (asset->kind == AssetKind_StructData) {

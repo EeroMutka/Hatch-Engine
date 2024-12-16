@@ -1,70 +1,66 @@
 type: "$Scene/types/Scene"
 data: {
-	// array of SceneEntities - this looks suspiciously similar to an AssetTree.
-	// Maybe we should have a "ItemTree" be a built-in type. What does a data tree look like then?
-	// A data tree is like an asset tree, where each item is a struct instance with an unique name/path.
-	// Items may be parented to other items.
-	// But before an ItemTree, we can get the main benefits as ItemList and just having a flat hierarchy.
-	
-	// entities: @ItemList "$Scene/types/SceneEntity"
 	entities: {
 		"Terrain": {
-			position: { 0, 0, 0 }
-			rotation: { 0, 0, 0 }
-			scale:    { 5, 5, 1 }
+			position: { 0.000001, -0.000149, 1.921816 }
+			rotation: { 0.000000, 0.000000, 0.000000 }
+			scale: { 5.000000, 5.000000, 1.000000 }
 			components: {
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/Grass_01"
 				}
-				@Type("$JoltPhysics/components/PhysicsComponent") {
-					enabled: true,
-					dynamic: false,
-					jph_body_id: 0,
+				@Type("$JoltPhysics/Components/PhysicsComponent") {
+					enabled: true
+					dynamic: false
+					jph_body_id: 0
 				}
-				@Type("$JoltPhysics/components/BoxCollisionComponent") {}
+				@Type("$JoltPhysics/Components/BoxCollisionComponent") {
+				}
 			}
 		}
 		"Monkey": {
-			position: { 0.6, 0, 10}
-			rotation: { 0, 0, 0 }
-			scale:    { 1, 1, 1 }
+			position: { 0.600000, 0.000000, 10.000000 }
+			rotation: { 0.000000, 0.000000, 0.000000 }
+			scale: { 1.000000, 1.000000, 1.000000 }
 			components: {
-				@Type("$Scene/components/BoxComponent") {}
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/BoxComponent") {
+				}
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
 				}
-				@Type("$JoltPhysics/components/PhysicsComponent") {
-					enabled: true,
-					dynamic: true,
-					jph_body_id: 0,
+				@Type("$JoltPhysics/Components/PhysicsComponent") {
+					enabled: true
+					dynamic: true
+					jph_body_id: 0
 				}
 			}
 		}
 		"Torus": {
-			position: { 0, 0.5, 4 }
-			rotation: { 0, 0, 0 }
-			scale:    { 1, 1, 1 }
+			position: { 0.000000, 0.500000, 4.000000 }
+			rotation: { 0.000000, 0.000000, 0.000000 }
+			scale: { 1.000000, 1.000000, 1.000000 }
 			components: {
-				@Type("$Scene/components/BoxComponent") {}
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/BoxComponent") {
+				}
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox"
 					color_texture: "Textures/cockdragon"
 				}
-				@Type("$JoltPhysics/components/PhysicsComponent") {
-					enabled: true,
-					dynamic: true,
-					jph_body_id: 0,
+				@Type("$JoltPhysics/Components/PhysicsComponent") {
+					enabled: true
+					dynamic: true
+					jph_body_id: 0
 				}
 			}
 		}
 	}
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { -10, 0, 5 }
-			pitch: 0
-			yaw: 0
+			position: { -5.923264, 6.815202, 10.623997 }
+			pitch: 0.387000
+			yaw: -0.738000
 		}
 	}
 }
