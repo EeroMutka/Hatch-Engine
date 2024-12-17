@@ -664,9 +664,20 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 	}break;
 	case HT_TypeKind_ItemGroup: {
 		HT_ItemGroup* val = (HT_ItemGroup*)dst;
-
+		
 		HT_Type item_type = *type;
 		item_type.kind = type->subkind;
+
+		// reset item group
+		{
+			for (HT_ItemGroupEach(val, item_idx)) {
+				HT_ItemHeader* item_header = HT_GetItemHeader(val, item_idx);
+				void* item_data = (char*)HT_GetItemHeader(val, item_idx) + val->item_offset;
+				Destruct(tree, item_data, &item_type);
+			}
+			ItemGroupDeinit(val);
+			ItemGroupInit(tree, val, &item_type);
+		}
 
 		for (; !MD_NodeIsNil(p->node); p->node = p->node->next) {
 			HT_ItemIndex item_i = ItemGroupAdd(val);
@@ -693,6 +704,15 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 
 		i32 elem_size, elem_align;
 		GetTypeSizeAndAlignment(tree, &elem_type, &elem_size, &elem_align);
+
+		// free existing data
+		{
+			for (int i = 0; i < val->count; i++) {
+				char* elem_data = (char*)val->data + elem_size*i;
+				Destruct(tree, elem_data, &elem_type);
+			}
+			ArrayClear(val, elem_size);
+		}
 
 		int i = 0;
 		while (!MD_NodeIsNil(p->node)) {

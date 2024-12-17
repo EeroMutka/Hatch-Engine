@@ -2,3 +2,5 @@ data_asset: ""
 code_files: {
 	"Source/jolt_physics.cpp",
 }
+linker_inputs: {
+}

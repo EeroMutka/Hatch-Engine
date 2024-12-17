@@ -58,9 +58,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { -0.437859, -8.032308, 16.457260 },
-			pitch: 0.344499,
-			yaw: -4.885494,
+			position: { -2.673784, -7.164574, 16.457260 },
+			pitch: 0.384499,
+			yaw: -5.191492,
 		},
 	},
 }
