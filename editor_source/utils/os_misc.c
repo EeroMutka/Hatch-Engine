@@ -7,21 +7,33 @@
 
 #include <stdio.h> // for fopen
 
-OS_API void OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data) {
+OS_API bool OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data) {
 	FILE* f = NULL;
 	errno_t err = fopen_s(&f, file, "rb");
-	assert(f); // TODO
+	if (f) {
+		fseek(f, 0, SEEK_END);
+		long fsize = ftell(f);
+		fseek(f, 0, SEEK_SET);
 
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
+		char* data = DS_ArenaPush(m->arena, fsize);
+		fread(data, fsize, 1, f);
 
-	char* data = DS_ArenaPush(m->arena, fsize);
-	fread(data, fsize, 1, f);
+		fclose(f);
+		STR_View result = {data, fsize};
+		*out_data = result;
+		return true;
+	}
+	return false;
+}
 
-	fclose(f);
-	STR_View result = {data, fsize};
-	*out_data = result;
+OS_API bool OS_WriteEntireFile(DS_MemScopeNone* m, const char* file, STR_View data) {
+	FILE* f = NULL;
+	errno_t err = fopen_s(&f, file, "wb");
+	if (f) {
+		bool ok = fwrite(data.data, data.size, 1, f) == data.size;
+		return ok;
+	}
+	return false;
 }
 
 OS_API bool OS_PathIsAbsolute(STR_View path) {

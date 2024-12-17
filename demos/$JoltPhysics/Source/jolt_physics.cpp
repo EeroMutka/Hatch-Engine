@@ -1,6 +1,6 @@
 #define HT_STATIC_PLUGIN_ID JoltPhysics
 
-//#define HAS_JOLT
+#define HAS_JOLT
 
 #include <hatch_api.h>
 

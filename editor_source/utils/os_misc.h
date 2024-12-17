@@ -3,7 +3,9 @@
 #define OS_API
 #endif
 
-OS_API void OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data);
+OS_API bool OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data);
+
+OS_API bool OS_WriteEntireFile(DS_MemScopeNone* m, const char* file, STR_View data);
 
 OS_API bool OS_PathIsAbsolute(STR_View path);
 

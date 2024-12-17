@@ -2,11 +2,11 @@ type: "$Scene/types/Scene"
 data: {
 	entities: {
 		"Terrain": {
-			position: { -0.000137, -0.000314, 13.161407 },
+			position: { -0.000082, -0.000317, 11.390066 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 5.000000, 5.000000, 1.000000 },
 			components: {
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
 					color_texture: "Textures/Grass_01",
 				},
@@ -24,9 +24,9 @@ data: {
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
-				@Type("$Scene/components/BoxComponent") {
+				@Type("$Scene/Components/BoxComponent") {
 				},
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
 					color_texture: "Textures/cockdragon",
 				},
@@ -42,9 +42,9 @@ data: {
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
-				@Type("$Scene/components/BoxComponent") {
+				@Type("$Scene/Components/BoxComponent") {
 				},
-				@Type("$Scene/components/MeshComponent") {
+				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
 					color_texture: "Textures/cockdragon",
 				},
@@ -58,9 +58,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 0.585673, -2.550752, 15.448756 },
-			pitch: 0.440499,
-			yaw: -4.239493,
+			position: { -0.437859, -8.032308, 16.457260 },
+			pitch: 0.344499,
+			yaw: -4.885494,
 		},
 	},
 }

@@ -289,9 +289,12 @@ int main(int argc, char** argv) {
 	InitAssetTree(&tree);
 	LoadProject(&tree, cwd);
 
-	// TODO: generate plugin headers locally into memory, then write to file if its different. This will make VS detect changes incrementally.
-	//Asset* plugin_asset = ctx.queue_recompile_plugins[i];
-	//RegeneratePluginHeader(tree, plugin_asset);
+	for (DS_BkArrEach(&tree.assets, asset_i)) {
+		Asset* asset = DS_BkArrGet(&tree.assets, asset_i);
+		if (asset->kind == AssetKind_Plugin) {
+			RegeneratePluginHeader(&tree, asset);
+		}
+	}
 
 	GeneratePremakeAndVSProjects(&tree, cwd);
 #else
