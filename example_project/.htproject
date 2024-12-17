@@ -47,4 +47,7 @@ editor_layout: {
 // - To refer to a thing inside a package, use "$MyNamespace/thing"
 // - the use of $ prefix makes search-and-replace within a package easy.
 
+
 // Whether or not the startup project, or "projects" in general count as packages doesn't really matter.
+
+// To reduce work, we could get rid of packages and have plugin hotreloading be an optional future feature. A plugin asset takes in a "source code folder" parameter that it passes to premake5.

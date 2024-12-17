@@ -176,6 +176,21 @@ OS_API bool OS_SetWorkingDir(DS_MemScopeNone* m, STR_View directory) {
 	return ok;
 }
 
+static void OS_ConvertSlashesInPlace(STR_View str, char from, char to) {
+	for (int i = 0; i < str.size; i++) {
+		if (str.data[i] == from) {
+			((char*)str.data)[i] = to;
+		}
+	}
+}
+
+OS_API void OS_GetWorkingDir(DS_MemScope* m, STR_View* directory) {
+	wchar_t buf[512];
+	bool ok = GetCurrentDirectoryW(512, buf) != 0;
+	OS_WideToUTF8(m, buf, directory);
+	OS_ConvertSlashesInPlace(*directory, '\\', '/');
+}
+
 OS_API bool OS_FileLastModificationTime(DS_MemScopeNone* m, STR_View filepath, uint64_t* out_modtime) {
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* filepath_wide = OS_UTF8ToWide(&temp, filepath, 1);
@@ -294,14 +309,6 @@ OS_API bool OS_FilePicker(DS_MemScope* m, STR_View* out_path) {
 	
 	OS_WideToUTF8(m, buffer, out_path);
 	return out_path->size > 0;
-}
-
-static void OS_ConvertSlashesInPlace(STR_View str, char from, char to) {
-	for (int i = 0; i < str.size; i++) {
-		if (str.data[i] == from) {
-			((char*)str.data)[i] = to;
-		}
-	}
 }
 
 OS_API void OS_GetThisExecutablePath(DS_MemScope* m, STR_View* out_path) {

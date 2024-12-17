@@ -1,5 +1,7 @@
 #define HT_STATIC_PLUGIN_ID JoltPhysics
 
+//#define HAS_JOLT
+
 #include <hatch_api.h>
 
 #include "../JoltPhysics.inc.ht"
@@ -93,6 +95,7 @@ static void GenerateMeshCollisionData(HT_Asset mesh_asset, Scene__SceneEntity* e
 }
 
 static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
+#ifdef HAS_JOLT
 	bool ok = JPH_Init();
 	HT_ASSERT(ok);
 
@@ -175,15 +178,18 @@ static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
 			body_component->jph_body_id = body_id;
 		}
 	}
+#endif
 }
 
 static void EndSimulation(HT_API* ht, Scene__Scene* scene) {
+#ifdef HAS_JOLT
 	JPH_JobSystem_Destroy(jolt_jobSystem);
 	JPH_PhysicsSystem_Destroy(jolt_system);
 	JPH_Shutdown();
 	jolt_jobSystem = NULL;
 	jolt_system = NULL;
 	jolt_bodyInterface = NULL;
+#endif
 }
 
 // Euler angles defined in XYZ order, in degrees
@@ -218,6 +224,7 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene) {
 	// Instead insert all new objects in batches instead of 1 at a time to keep the broad phase efficient.
 	// JPH_PhysicsSystem_OptimizeBroadPhase(system);
 
+#ifdef HAS_JOLT
 	JPH_PhysicsSystem_Update(jolt_system, cDeltaTime, 1, jolt_jobSystem);
 
 	for (HT_ItemGroupEach(&scene->entities, entity_i)) {
@@ -241,6 +248,8 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene) {
 			entity->position = {p.x, p.y, p.z};
 		}
 	}
+#endif
+
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
@@ -276,55 +285,4 @@ HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	// ... What about hotreloading asset data from disk while a simulation is running? That should be possible right?
 	// imagine running into a location as a player, then re-exporting a mesh from blender. Yes, when a change to asset data is detected on disk, the runtime data is overwritten with that data automatically.
 	// We can persist data from entities that are selected to allow for running simulations etc. The scene editor plugin can do this internally by saving transforms of selected (or otherwise marked) objects and updating the asset data after the simulation has ended. This is better compared to a "persist this asset" hatch API, because it lets us persist only specific fields (transform).
-
 }
-
-
-
-//JPH_BodyID floorId = {};
-//{
-//	// Next we can create a rigid body to serve as the floor, we make a large box
-//	// Create the settings for the collision volume (the shape). 
-//	// Note that for simple shapes (like boxes) you can also directly construct a BoxShape.
-//	JPH_Vec3 boxHalfExtents = { 100.0f, 1.0f, 100.0f };
-//	JPH_BoxShape* floorShape = JPH_BoxShape_Create(&boxHalfExtents, JPH_DEFAULT_CONVEX_RADIUS);
-//
-//	JPH_Vec3 floorPosition = { 0.0f, -1.0f, 0.0f };
-//	JPH_BodyCreationSettings* floorSettings = JPH_BodyCreationSettings_Create3(
-//		(const JPH_Shape*)floorShape,
-//		&floorPosition,
-//		NULL, // Identity, 
-//		JPH_MotionType_Static,
-//		LAYER_NON_MOVING);
-//
-//	// Create the actual rigid body
-//	floorId = JPH_BodyInterface_CreateAndAddBody(bodyInterface, floorSettings, JPH_Activation_DontActivate);
-//	JPH_BodyCreationSettings_Destroy(floorSettings);
-//}
-
-//{
-//	static constexpr float	cCharacterHeightStanding = 1.35f;
-//	static constexpr float	cCharacterRadiusStanding = 0.3f;
-//	static constexpr float	cCharacterHeightCrouching = 0.8f;
-//	static constexpr float	cCharacterRadiusCrouching = 0.3f;
-//	static constexpr float	cInnerShapeFraction = 0.9f;
-//
-//	JPH_CapsuleShape* capsuleShape = JPH_CapsuleShape_Create(0.5f * cCharacterHeightStanding, cCharacterRadiusStanding);
-//	JPH_Vec3 position = { 0, 0.5f * cCharacterHeightStanding + cCharacterRadiusStanding, 0 };
-//	auto mStandingShape = JPH_RotatedTranslatedShape_Create(&position, NULL, (JPH_Shape*)capsuleShape);
-//
-//	JPH_CharacterVirtualSettings characterSettings{};
-//	JPH_CharacterVirtualSettings_Init(&characterSettings);
-//	characterSettings.base.shape = (const JPH_Shape*)mStandingShape;
-//	characterSettings.base.supportingVolume = { {0, 1, 0}, -cCharacterRadiusStanding }; // Accept contacts that touch the lower sphere of the capsule
-//	static const JPH_RVec3 characterVirtualPosition = { -5.0f, 0, 3.0f };
-//
-//	auto mAnimatedCharacterVirtual = JPH_CharacterVirtual_Create(&characterSettings, &characterVirtualPosition, NULL, 0, system);
-//}
-
-// Remove the destroy sphere from the physics system. Note that the sphere itself keeps all of its state and can be re-added at any time.
-//JPH_BodyInterface_RemoveAndDestroyBody(bodyInterface, sphereId);
-//
-//// Remove and destroy the floor
-//JPH_BodyInterface_RemoveAndDestroyBody(bodyInterface, floorId);
-//

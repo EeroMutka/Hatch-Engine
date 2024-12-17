@@ -23,6 +23,8 @@ OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path
 
 OS_API bool OS_MakeDirectory(DS_MemScopeNone* m, STR_View directory);
 
+OS_API void OS_GetWorkingDir(DS_MemScope* m, STR_View* directory);
+
 OS_API bool OS_SetWorkingDir(DS_MemScopeNone* m, STR_View directory);
 
 OS_API bool OS_FileLastModificationTime(DS_MemScopeNone* m, STR_View filepath, uint64_t* out_modtime);

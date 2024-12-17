@@ -212,7 +212,7 @@ struct Asset {
 	};
 
 	STR_View reload_assets_filesys_path; // temporary variable
-	bool reload_assets_pass2_needs_hotreload; // temporary variable
+	bool reload_assets_pass2_needs_load; // temporary variable
 
 	bool ui_state_is_open; // for the Assets panel
 };
@@ -447,8 +447,6 @@ struct PerFrameState {
 struct EditorState {
 	HT_API* api;
 
-	DS_Arena persistent_arena;
-	
 	ivec2 window_size;
 	OS_Window window;
 

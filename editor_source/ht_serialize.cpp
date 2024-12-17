@@ -155,7 +155,10 @@ EXPORT void LoadProject(AssetTree* tree, STR_View project_directory) {
 	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
 	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
 	ASSERT(!MD_NodeIsNil(parse.node));
-	ASSERT(parse.errors.node_count == 0);
+	if (parse.errors.node_count != 0) {
+		printf("Failed to load .htproject at '%.*s'\n", StrArg(project_directory));
+		exit(1);
+	}
 	
 	LoadProjectFromParsedNode(tree, parse.node);
 
@@ -530,7 +533,7 @@ static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_fu
 		}
 
 		ASSERT(info.last_write_time >= asset->modtime); // modtime should never decrease on windows
-		asset->reload_assets_pass2_needs_hotreload = info.last_write_time != asset->modtime || force_reload;
+		asset->reload_assets_pass2_needs_load = info.last_write_time != asset->modtime || force_reload;
 		asset->modtime = info.last_write_time;
 
 		if (info.last_write_time != asset->modtime) { // propagate modtime up through the parent folders
@@ -598,7 +601,7 @@ static HT_Type ParseMetadeskType(AssetTree* tree, Asset* package, MDParser* p) {
 
 static void ReloadAssetsPass2(ReloadAssetsContext* ctx, Asset* package, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
-		if (asset->reload_assets_pass2_needs_hotreload) {
+		if (asset->reload_assets_pass2_needs_load) {
 			MD_ParseResult parse;
 			if (asset->kind == AssetKind_StructType)
 			{
@@ -761,7 +764,7 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 
 static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* parent) {
 	for (Asset* asset = parent->first_child; asset; asset = asset->next) {
-		if (asset->reload_assets_pass2_needs_hotreload) {
+		if (asset->reload_assets_pass2_needs_load) {
 			MD_ParseResult parse;
 			if (asset->kind == AssetKind_StructData || asset->kind == AssetKind_Plugin) {
 				MD_String8 md_filepath = {(MD_u8*)asset->reload_assets_filesys_path.data, (MD_u64)asset->reload_assets_filesys_path.size};
@@ -824,19 +827,19 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 
 		// queue plugin for recompilation if any of its source files has changed
 		if (asset->kind == AssetKind_Plugin) {
-			bool code_file_was_hotreloaded = false;
+			bool code_file_was_loaded = false;
 
 			HT_Array code_files = asset->plugin.options.code_files;
 			for (int i = 0; i < code_files.count; i++) {
 				HT_Asset code_file_handle = ((HT_Asset*)code_files.data)[i];
 				Asset* code_file = GetAsset(ctx->tree, code_file_handle);
-				if (code_file && code_file->reload_assets_pass2_needs_hotreload) {
-					code_file_was_hotreloaded = true;
+				if (code_file && code_file->reload_assets_pass2_needs_load) {
+					code_file_was_loaded = true;
 					break;
 				}
 			}
 
-			if (code_file_was_hotreloaded) {
+			if (code_file_was_loaded) {
 				DS_ArrPush(&ctx->queue_recompile_plugins, asset);
 			}
 		}
@@ -877,7 +880,7 @@ EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool 
 		ReloadAssetsPass3(&ctx, package, package);
 	}
 
-	for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
+	/*for (int i = 0; i < ctx.queue_recompile_plugins.count; i++) {
 		Asset* plugin_asset = ctx.queue_recompile_plugins[i];
 		RegeneratePluginHeader(tree, plugin_asset);
 
@@ -895,7 +898,8 @@ EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool 
 		//printf("Recompiling plugin!\n");
 #else
 #endif
-	}
+	}*/
+
 #ifdef HT_DYNAMIC
 	if (ctx.queue_recompile_plugins.count > 0) {
 		//RegenerateTypeTable(s);

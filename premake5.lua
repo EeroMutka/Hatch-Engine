@@ -7,12 +7,12 @@ function specify_warnings()
 	linkoptions "-IGNORE:4099" -- disable linker warning: "PDB was not found ...; linking object as if no debug info"
 end
 
-workspace "Hatch"
+workspace "hatch"
 	architecture "x64"
 	configurations { "Debug", "Release" }
 	location "%{_ACTION}"
 
-project "Hatch"
+project "hatch-gen"
 	kind "ConsoleApp"
 	language "C++"
 	targetdir "build"
@@ -25,7 +25,9 @@ project "Hatch"
 	files "plugin_include/**"
 	-- files "plugin_include/ht_utils/fire/**"
 	
-	defines "HT_DYNAMIC"
+	defines "HT_GEN"
+	defines "HT_IMPORT="
+	defines "HT_ALL_STATIC_EXPORTS="
 	defines "HT_EDITOR_DX11"
 	defines { "HATCH_DIR=\"" .. path.getabsolute(".") .. "\"" }
 	

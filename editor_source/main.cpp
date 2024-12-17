@@ -80,22 +80,8 @@ static void InitAssetTree(AssetTree* tree) {
 	ComputeStructLayout(tree, tree->plugin_options_struct_type);
 }
 
-static void EditorInit(EditorState* s) {
+static void EditorInit(DS_MemScope* persist, EditorState* s) {
 	InitAssetTree(&s->asset_tree);
-
-	DS_ArenaInit(&s->persistent_arena, 4096, DS_HEAP);
-	
-	DS_Arena* persist = &s->persistent_arena;
-	DS_MemScope mem_scope_persist = MEM_SCOPE(persist);
-
-	// hmm... maybe we want the working directory to be the executable directory always. BUT we want a define for hatch directory!! For hatch resources...
-
-	STR_View exe_path;
-	OS_GetThisExecutablePath(&mem_scope_persist, &exe_path);
-	DEFAULT_WORKING_DIRECTORY = STR_BeforeLast(exe_path, '/');
-
-	// The working directory should always be path of the executable by default
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY);
 
 	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");
 	
@@ -116,8 +102,8 @@ static void EditorInit(EditorState* s) {
 	// NOTE: the font data must remain alive across the whole program lifetime!
 	STR_View roboto_mono_ttf, icons_ttf;
 	
-	OS_ReadEntireFile(&mem_scope_persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
-	OS_ReadEntireFile(&mem_scope_persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
+	OS_ReadEntireFile(persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/roboto_mono.ttf", &roboto_mono_ttf);
+	OS_ReadEntireFile(persist, HATCH_DIR "/plugin_include/ht_utils/fire/fire_ui/resources/fontello/font/fontello.ttf", &icons_ttf);
 
 	s->default_font = { UI_STBTT_FontInit(roboto_mono_ttf.data, -4.f), 18 };
 	s->icons_font = { UI_STBTT_FontInit(icons_ttf.data, -2.f), 18 };
@@ -140,7 +126,7 @@ static void EditorInit(EditorState* s) {
 	
 	DS_BkArrInit(&s->plugin_instances, DS_HEAP, 32);
 
-	DS_BkArrInit(&s->tab_classes, persist, 16);
+	DS_BkArrInit(&s->tab_classes, persist->arena, 16);
 	s->assets_tab_class = CreateTabClass(s, "Assets");
 	s->log_tab_class = CreateTabClass(s, "Log");
 	s->errors_tab_class = CreateTabClass(s, "Errors");
@@ -284,8 +270,6 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main(int argc, char** argv) {
-	STR_View project_directory = STR_Form(DS_HEAP, "%s/user_startup_project", HATCH_DIR);
-	
 	DS_Arena temp_arena;
 	DS_ArenaInit(&temp_arena, 4096, DS_HEAP);
 
@@ -294,50 +278,67 @@ int main(int argc, char** argv) {
 	MEM_SCOPE_TEMP_ = {TEMP, TEMP};
 	CPU_FREQUENCY = OS_GetCPUFrequency();
 
-	bool generate_vs_project = false;
-	for (int i = 0; i < argc; i++) {
-		if (strcmp(argv[i], "-vs") == 0) generate_vs_project = true;
-	}
+#ifdef HT_GEN
+	// The `hatch-gen` command regenerates the visual studio solution for the project in the
+	// current working directory, as well as regenerates any auto-generated header files.
 
-	if (generate_vs_project) {
-		AssetTree tree = {};
-		InitAssetTree(&tree);
-		LoadProject(&tree, project_directory);
-		GeneratePremakeAndVSProjects(&tree, project_directory);
-	}
-	else {
-		RenderState render_state = {};
-		EditorState editor_state = {};
-		editor_state.window_size = { 1920, 1080 };
-		editor_state.render_state = &render_state;
+	STR_View cwd;
+	OS_GetWorkingDir(MEM_SCOPE_TEMP, &cwd);
 
-		EditorInit(&editor_state);
-		
-		editor_state.project_directory = project_directory;
-		LoadProjectIncludingEditorLayout(&editor_state, project_directory);
+	AssetTree tree = {};
+	InitAssetTree(&tree);
+	LoadProject(&tree, cwd);
 
-		for (;;) {
-			DS_ArenaReset(TEMP);
-			UI_OS_ResetFrameInputs(&editor_state.window, &editor_state.ui_inputs);
+	// TODO: generate plugin headers locally into memory, then write to file if its different. This will make VS detect changes incrementally.
+	//Asset* plugin_asset = ctx.queue_recompile_plugins[i];
+	//RegeneratePluginHeader(tree, plugin_asset);
 
-			OS_Event event;
-			HT_OS_Events input_events;
-			HT_OS_BeginEvents(&input_events, &editor_state.input_frame);
-			while (OS_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
-				UI_OS_RegisterInputEvent(&editor_state.ui_inputs, &event);
-				HT_OS_AddEvent(&input_events, &event);
-			}
-			HT_OS_EndEvents(&input_events);
-			
-			float mouse_x, mouse_y;
-			OS_GetMousePosition(&editor_state.window, &mouse_x, &mouse_y);
-			editor_state.input_frame.mouse_position = vec2{mouse_x, mouse_y};
+	GeneratePremakeAndVSProjects(&tree, cwd);
+#else
+	DS_Arena persistent_arena;
+	DS_ArenaInit(&persistent_arena, 4096, DS_HEAP);
+	DS_MemScope persist = MEM_SCOPE(&persistent_arena);
 
-			if (OS_WindowShouldClose(&editor_state.window)) break;
+	STR_View exe_path;
+	OS_GetThisExecutablePath(&persist, &exe_path);
+	STR_View exe_dir = STR_BeforeLast(exe_path, '/');
+	STR_View project_dir = STR_BeforeLast(exe_dir, '/');
+	
+	DEFAULT_WORKING_DIRECTORY = exe_dir;
+	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY);
 
-			UpdateAndDraw(&editor_state);
+	RenderState render_state = {};
+	EditorState editor_state = {};
+	editor_state.window_size = { 1920, 1080 };
+	editor_state.render_state = &render_state;
+
+	EditorInit(&persist, &editor_state);
+
+	editor_state.project_directory = project_dir;
+	LoadProjectIncludingEditorLayout(&editor_state, project_dir);
+
+	for (;;) {
+		DS_ArenaReset(TEMP);
+		UI_OS_ResetFrameInputs(&editor_state.window, &editor_state.ui_inputs);
+
+		OS_Event event;
+		HT_OS_Events input_events;
+		HT_OS_BeginEvents(&input_events, &editor_state.input_frame);
+		while (OS_PollEvent(&editor_state.window, &event, OnResizeWindow, &editor_state)) {
+			UI_OS_RegisterInputEvent(&editor_state.ui_inputs, &event);
+			HT_OS_AddEvent(&input_events, &event);
 		}
+		HT_OS_EndEvents(&input_events);
+
+		float mouse_x, mouse_y;
+		OS_GetMousePosition(&editor_state.window, &mouse_x, &mouse_y);
+		editor_state.input_frame.mouse_position = vec2{mouse_x, mouse_y};
+
+		if (OS_WindowShouldClose(&editor_state.window)) break;
+
+		UpdateAndDraw(&editor_state);
 	}
+#endif
 
 	return 0;
 }
