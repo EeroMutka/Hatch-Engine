@@ -1,10 +1,11 @@
-#if 0
 #define HT_NO_STATIC_PLUGIN_EXPORTS
 
 #include "common.h"
 #include "ThirdParty/ufbx.h"
 #include "ThirdParty/stb_image.h"
 
+#include "message_manager.h"
+#include "render_manager.h"
 #include "mesh_manager.h"
 
 MeshManager MeshManager::instance{};
@@ -21,67 +22,9 @@ static char* TempCString(HT_StringView str) {
 	return data;
 }
 
-static Texture ImportTexture(HT_API* ht, HT_StringView file_path) {
-	ID3D11Texture2D* texture;
-	ID3D11ShaderResourceView* texture_srv;
-
-	const char* file_path_cstr = TempCString(file_path);
-
-	int size_x, size_y, num_components;
-	u8* img_data = stbi_load(file_path_cstr, &size_x, &size_y, &num_components, 4);
-
-	D3D11_SUBRESOURCE_DATA texture_initial_data = {};
-	texture_initial_data.pSysMem = img_data;
-	texture_initial_data.SysMemPitch = size_x * 4; // 4 bytes per pixel
-
-	D3D11_TEXTURE2D_DESC desc = {};
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.Width = size_x;
-	desc.Height = size_y;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.SampleDesc.Count = 1;
-	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	bool ok = ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
-	HT_ASSERT(ok);
-
-	ok = ht->D3D11_device->CreateShaderResourceView(texture, NULL, &texture_srv) == S_OK;
-	HT_ASSERT(ok);
-
-	stbi_image_free(img_data);
-
-	return { texture, texture_srv };
-}
-
-// bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
-static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
-	HT_ASSERT(size > 0);
-
-	D3D11_BUFFER_DESC desc = {0};
-	desc.ByteWidth = size;
-	desc.Usage = D3D11_USAGE_DYNAMIC; // lets do dynamic for simplicity    D3D11_USAGE_DEFAULT;
-	desc.BindFlags = bind_flags;
-	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-	// TODO: We can provide initial data by just passing it as the second arg to CreateBuffer!!!!
-	ID3D11Buffer* buffer;
-	bool ok = ht->D3D11_device->CreateBuffer(&desc, NULL, &buffer) == S_OK;
-	HT_ASSERT(ok);
-
-	D3D11_MAPPED_SUBRESOURCE buffer_mapped;
-	ok = ht->D3D11_device_context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &buffer_mapped) == S_OK;
-	HT_ASSERT(ok && buffer_mapped.pData);
-
-	memcpy(buffer_mapped.pData, data, size);
-
-	ht->D3D11_device_context->Unmap(buffer, 0);
-	return buffer;
-}
-
-static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_path) {
-	Mesh result = {};
-	DS_ArrInit(&result.parts, allocator);
+static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_path) {
+	RenderMesh* result = new RenderMesh();
+	DS_ArrInit(&result->parts, allocator);
 
 	ufbx_error error; // Optional, pass NULL if you don't care about errors
 
@@ -161,11 +104,11 @@ static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_p
 				};
 				DS_ArrPush(&temp_parts, temp_part);
 
-				MeshPart loaded_part = {};
+				RenderMeshPart loaded_part = {};
 				loaded_part.base_index_location = total_num_indices;
 				loaded_part.base_vertex_location = total_num_vertices;
 				loaded_part.index_count = num_indices;
-				DS_ArrPush(&result.parts, loaded_part);
+				DS_ArrPush(&result->parts, loaded_part);
 
 				total_num_indices += num_indices;
 				total_num_vertices += num_vertices;
@@ -186,13 +129,13 @@ static Mesh ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_p
 		memcpy((u32*)combined_indices + temp_part.base_index, temp_part.indices, temp_part.num_indices * sizeof(u32));
 	}
 
-	result.vbo = CreateGPUBuffer(ht, total_num_vertices * sizeof(Vertex), D3D11_BIND_VERTEX_BUFFER, combined_vertices);
-	result.ibo = CreateGPUBuffer(ht, total_num_indices * sizeof(u32), D3D11_BIND_INDEX_BUFFER, combined_indices);
+	RenderManager::CreateMesh(result, combined_vertices, total_num_vertices, combined_indices, total_num_indices);
+
 	return result;
 }
 
-bool MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset, Mesh* out_mesh) {
-	Mesh* cached = NULL;
+RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
+	RenderMesh** cached = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&instance.meshes, mesh_asset, &cached);
 	if (added_new) {
 		Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, FG::ht, mesh_asset);
@@ -200,23 +143,28 @@ bool MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset, Mesh* out_mesh) {
 		HT_StringView mesh_source_file = FG::ht->AssetGetFilepath(mesh_data->mesh_source);
 		*cached = ImportMesh(FG::ht, FG::heap, mesh_source_file);
 	}
-
-	*out_mesh = *cached;
-	return true;
+	return *cached;
 }
 
-bool MeshManager::GetColorTextureFromTextureAsset(HT_Asset texture_asset, Texture* out_texture) {
-	Texture* cached = NULL;
+RenderTexture* MeshManager::GetColorTextureFromTextureAsset(HT_Asset texture_asset) {
+	RenderTexture** cached = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&instance.textures, texture_asset, &cached);
 	if (added_new) {
 		Scene__Texture* color_texture_data = HT_GetAssetData(Scene__Texture, FG::ht, texture_asset);
 		HT_ASSERT(color_texture_data);
-		HT_StringView color_texture_source_file = FG::ht->AssetGetFilepath(color_texture_data->texture_source);
-		*cached = ImportTexture(FG::ht, color_texture_source_file);
-	}
-	
-	*out_texture = *cached;
-	return true;
-}
+		HT_StringView file_path = FG::ht->AssetGetFilepath(color_texture_data->texture_source);
+		
+		const char* file_path_cstr = TempCString(file_path);
+		int size_x, size_y, num_components;
 
-#endif
+		u8* img_data = stbi_load(file_path_cstr, &size_x, &size_y, &num_components, 4);
+
+		RenderTexture* texture = new RenderTexture();
+		RenderManager::CreateTexture(texture, size_x, size_y, img_data);
+
+		stbi_image_free(img_data);
+
+		*cached = texture;
+	}
+	return *cached;
+}

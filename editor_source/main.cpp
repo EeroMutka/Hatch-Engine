@@ -174,6 +174,9 @@ static void UpdateAndDraw(EditorState* s) {
 
 	HotreloadPackages(&s->asset_tree);
 
+	// we want Update to be called on plugins before any custom tab updates - Update should be the first thing that can be called during a frame, there we can reset a temp allocator for example.
+	UpdatePlugins(s);
+
 	UI_Rect panel_area_rect = {0};
 	panel_area_rect.min.y = TOP_BAR_HEIGHT;
 	panel_area_rect.max = UI_VEC2{(float)s->window_size.x, (float)s->window_size.y};
@@ -188,7 +191,6 @@ static void UpdateAndDraw(EditorState* s) {
 	UI_DrawBox(root_box);
 
 
-	UpdatePlugins(s);
 	
 	// Add top bar after panel tree to make the top bar dropdowns "in front" of the root
 	AddTopBar(s);

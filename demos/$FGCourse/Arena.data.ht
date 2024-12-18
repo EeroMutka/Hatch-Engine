@@ -38,9 +38,9 @@ data: {
 			},
 		},
 		"Torus": {
-			position: { 1.373714, -1.009469, 22.706661 },
+			position: { -0.476286, -0.409469, 21.806662 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 1.000000, 1.000000, 1.000000 },
+			scale: { 8.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
 				},
@@ -58,9 +58,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 5.261677, -1.469578, 24.346294 },
-			pitch: 0.687999,
-			yaw: -15.835963,
+			position: { -2.848121, -10.051708, 23.090393 },
+			pitch: 0.205996,
+			yaw: -17.755003,
 		},
 	},
 }

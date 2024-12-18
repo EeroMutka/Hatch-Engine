@@ -1,5 +1,11 @@
 #define HT_NO_STATIC_PLUGIN_EXPORTS
 
+#define HT_INCLUDE_D3D11_API
+#define WIN32_LEAN_AND_MEAN
+#include <d3d11.h>
+#undef far  // wtf windows.h
+#undef near // wtf windows.h
+
 #include "common.h"
 
 #include "message_manager.h"
@@ -10,14 +16,13 @@
 #define UI_Vec2 vec2
 #include <ht_utils/fire/fire_ui/fire_ui.c>
 
-#define HT_INCLUDE_D3D11_API
-#define WIN32_LEAN_AND_MEAN
-#include <d3d11.h>
-#undef far  // wtf windows.h
-#undef near // wtf windows.h
+#include <ht_utils/gizmos/gizmos.h>
+
+#include "../../$SceneEdit/src/camera.h"
+#include "../../$SceneEdit/src/scene_edit.h"
 
 struct ShaderConstants {
-	mat4 ws_to_cs;
+	mat4 world_to_clip;
 };
 
 struct VertexShader {
@@ -68,11 +73,68 @@ static UI_CachedGlyph UIGetCachedGlyph(u32 codepoint, UI_Font font) {
 	return *(UI_CachedGlyph*)&glyph;
 }
 
-static VertexShader LoadVertexShader(HT_API* ht, HT_StringView shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
+void RenderManager::CreateTexture(RenderTexture* target, int width, int height, void* data) {
+	ID3D11Texture2D* texture;
+	ID3D11ShaderResourceView* texture_srv;
+
+	D3D11_SUBRESOURCE_DATA texture_initial_data = {};
+	texture_initial_data.pSysMem = data;
+	texture_initial_data.SysMemPitch = width * 4; // 4 bytes per pixel
+
+	D3D11_TEXTURE2D_DESC desc = {};
+	desc.Usage = D3D11_USAGE_DEFAULT;
+	desc.Width = width;
+	desc.Height = height;
+	desc.MipLevels = 1;
+	desc.ArraySize = 1;
+	desc.SampleDesc.Count = 1;
+	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+	bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
+	HT_ASSERT(ok);
+
+	ok = FG::ht->D3D11_device->CreateShaderResourceView(texture, NULL, &texture_srv) == S_OK;
+	HT_ASSERT(ok);
+	
+	target->texture = texture;
+	target->texture_srv = texture_srv;
+}
+
+// bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
+static ID3D11Buffer* CreateGPUBuffer(int size, u32 bind_flags, void* data) {
+	HT_ASSERT(size > 0);
+
+	D3D11_BUFFER_DESC desc = {0};
+	desc.ByteWidth = size;
+	desc.Usage = D3D11_USAGE_DYNAMIC; // lets do dynamic for simplicity    D3D11_USAGE_DEFAULT;
+	desc.BindFlags = bind_flags;
+	desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	// TODO: We can provide initial data by just passing it as the second arg to CreateBuffer!!!!
+	ID3D11Buffer* buffer;
+	bool ok = FG::ht->D3D11_device->CreateBuffer(&desc, NULL, &buffer) == S_OK;
+	HT_ASSERT(ok);
+
+	D3D11_MAPPED_SUBRESOURCE buffer_mapped;
+	ok = FG::ht->D3D11_device_context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &buffer_mapped) == S_OK;
+	HT_ASSERT(ok && buffer_mapped.pData);
+
+	memcpy(buffer_mapped.pData, data, size);
+
+	FG::ht->D3D11_device_context->Unmap(buffer, 0);
+	return buffer;
+}
+
+void RenderManager::CreateMesh(RenderMesh* target, Vertex* vertices, int num_vertices, u32* indices, int num_indices) {
+	target->vbo = CreateGPUBuffer(num_vertices * sizeof(Vertex), D3D11_BIND_VERTEX_BUFFER, vertices);
+	target->ibo = CreateGPUBuffer(num_indices * sizeof(u32), D3D11_BIND_INDEX_BUFFER, indices);
+}
+
+static VertexShader LoadVertexShader(HT_StringView shader_path, D3D11_INPUT_ELEMENT_DESC* input_elems, int input_elems_count) {
 	ID3DBlob* errors = NULL;
 
 	ID3DBlob* vs_blob = NULL;
-	HRESULT vs_res = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, &errors);
+	HRESULT vs_res = FG::ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "vertex_shader", "vs_5_0", 0, 0, &vs_blob, &errors);
 	bool ok = vs_res == S_OK;
 	if (!ok) {
 		char* err = (char*)errors->GetBufferPointer();
@@ -80,12 +142,12 @@ static VertexShader LoadVertexShader(HT_API* ht, HT_StringView shader_path, D3D1
 	}
 
 	ID3D11VertexShader* shader;
-	ok = ht->D3D11_device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), NULL, &shader) == S_OK;
+	ok = FG::ht->D3D11_device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), NULL, &shader) == S_OK;
 	HT_ASSERT(ok);
 
 	ID3D11InputLayout* input_layout = NULL;
 	if (input_elems_count > 0) {
-		ok = ht->D3D11_device->CreateInputLayout(input_elems, input_elems_count, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &input_layout) == S_OK;
+		ok = FG::ht->D3D11_device->CreateInputLayout(input_elems, input_elems_count, vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), &input_layout) == S_OK;
 		HT_ASSERT(ok);
 	}
 
@@ -93,20 +155,20 @@ static VertexShader LoadVertexShader(HT_API* ht, HT_StringView shader_path, D3D1
 	return { shader, input_layout };
 }
 
-static ID3D11PixelShader* LoadPixelShader(HT_API* ht, HT_StringView shader_path) {
+static ID3D11PixelShader* LoadPixelShader(HT_StringView shader_path) {
 	ID3DBlob* ps_blob;
-	bool ok = ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "pixel_shader", "ps_5_0", 0, 0, &ps_blob, NULL) == S_OK;
+	bool ok = FG::ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "pixel_shader", "ps_5_0", 0, 0, &ps_blob, NULL) == S_OK;
 	HT_ASSERT(ok);
 
 	ID3D11PixelShader* shader;
-	ok = ht->D3D11_device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), NULL, &shader) == S_OK;
+	ok = FG::ht->D3D11_device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), NULL, &shader) == S_OK;
 	HT_ASSERT(ok);
 
 	ps_blob->Release();
 	return shader;
 }
 
-static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
+static void MaybeRecreateRenderTargets(int width, int height) {
 	D3D11_TEXTURE2D_DESC desc;
 	if (color_target) color_target->GetDesc(&desc);
 	if (color_target == NULL || desc.Width != width || desc.Height != height) {
@@ -126,13 +188,13 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		desc.SampleDesc.Count = 1;
 		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 		desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-		bool ok = ht->D3D11_device->CreateTexture2D(&desc, NULL, &color_target) == S_OK;
+		bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, NULL, &color_target) == S_OK;
 		HT_ASSERT(ok);
 
-		ok = ht->D3D11_device->CreateRenderTargetView(color_target, NULL, &color_target_view) == S_OK;
+		ok = FG::ht->D3D11_device->CreateRenderTargetView(color_target, NULL, &color_target_view) == S_OK;
 		HT_ASSERT(ok);
 
-		ok = ht->D3D11_device->CreateShaderResourceView(color_target, NULL, &color_target_srv) == S_OK;
+		ok = FG::ht->D3D11_device->CreateShaderResourceView(color_target, NULL, &color_target_srv) == S_OK;
 		HT_ASSERT(ok);
 
 		D3D11_TEXTURE2D_DESC depth_desc = {};
@@ -143,10 +205,10 @@ static void MaybeRecreateRenderTargets(HT_API* ht, int width, int height) {
 		depth_desc.SampleDesc.Count = 1;
 		depth_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 		depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-		ok = ht->D3D11_device->CreateTexture2D(&depth_desc, NULL, &depth_target) == S_OK;
+		ok = FG::ht->D3D11_device->CreateTexture2D(&depth_desc, NULL, &depth_target) == S_OK;
 		HT_ASSERT(ok);
 
-		ok = ht->D3D11_device->CreateDepthStencilView(depth_target, NULL, &depth_target_view) == S_OK;
+		ok = FG::ht->D3D11_device->CreateDepthStencilView(depth_target, NULL, &depth_target_view) == S_OK;
 		HT_ASSERT(ok);
 	}
 }
@@ -158,11 +220,9 @@ static void UpdateShaderConstants(ID3D11DeviceContext* dc, ShaderConstants val) 
 	dc->Unmap(cbo, 0);
 }
 
-void RenderManager::Init() {
-	
-}
-
-void RenderManager::RenderAllQueued() {
+static void Render(HT_API* ht) {
+	RenderParamsMessage render_params;
+	if (!MessageManager::PopNextMessage(&render_params)) return;
 
 	// setup UI / gizmos rendering
 	{
@@ -178,16 +238,15 @@ void RenderManager::RenderAllQueued() {
 		UI_ResetDrawState();
 	}
 
-	int width = open_scene_rect_max.x - open_scene_rect_min.x;
-	int height = open_scene_rect_max.y - open_scene_rect_min.y;
-	MaybeRecreateRenderTargets(ht, width, height);
+	vec2 rect_size = render_params.rect.max - render_params.rect.min;
+	MaybeRecreateRenderTargets((int)rect_size.x, (int)rect_size.y);
 
-	SceneEditDrawGizmos(ht, &scene_edit_state, open_scene);
+	//SceneEditDrawGizmos(FG::ht, &scene_edit_state, open_scene);
 
-	ID3D11DeviceContext* dc = ht->D3D11_device_context;
+	ID3D11DeviceContext* dc = FG::ht->D3D11_device_context;
 
 	ShaderConstants constants = {};
-	constants.ws_to_cs = open_scene_ws_to_cs;
+	constants.world_to_clip = render_params.world_to_clip;
 	UpdateShaderConstants(dc, constants);
 
 	dc->PSSetSamplers(0, 1, &sampler);
@@ -203,8 +262,8 @@ void RenderManager::RenderAllQueued() {
 	D3D11_VIEWPORT viewport = {};
 	viewport.TopLeftX = 0;
 	viewport.TopLeftY = 0;
-	viewport.Width = (float)width;
-	viewport.Height = (float)height;
+	viewport.Width = rect_size.x;
+	viewport.Height = rect_size.y;
 	viewport.MinDepth = 0.f;
 	viewport.MaxDepth = 1.f;
 	dc->RSSetViewports(1, &viewport);
@@ -221,43 +280,57 @@ void RenderManager::RenderAllQueued() {
 	RenderObjectMessage render_object;
 	while (MessageManager::PopNextMessage(&render_object)) {
 
-		constants.ws_to_cs = ls_to_ws * open_scene_ws_to_cs;
+		constants.world_to_clip = render_object.local_to_world * render_params.world_to_clip;
 		UpdateShaderConstants(dc, constants);
 
-		if (mesh_component) {
-			Mesh mesh_data;
-			Texture color_texture;
-			bool ok =
-				MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data) &&
-				MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture);
+		const RenderMesh* mesh_data = render_object.mesh;
+		const RenderTexture* color_texture = render_object.color_texture;
 
-			if (ok) {
-				for (int i = 0; i < mesh_data.parts.count; i++) {
-					MeshPart part = mesh_data.parts[i];
-					u32 vbo_offset = 0;
-					u32 vbo_stride = sizeof(Vertex);
-					dc->IASetVertexBuffers(0, 1, &mesh_data.vbo, &vbo_stride, &vbo_offset);
-					dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
+		for (int i = 0; i < mesh_data->parts.count; i++) {
+			RenderMeshPart part = mesh_data->parts[i];
+			u32 vbo_offset = 0;
+			u32 vbo_stride = sizeof(Vertex);
+			dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);
+			dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
 
-					dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
-					dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-				}
-			}
+			dc->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&color_texture->texture_srv);
+			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 		}
 
+		/*
+		if (mesh_component) {
+		Mesh mesh_data;
+		Texture color_texture;
+		bool ok =
+		MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data) &&
+		MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture);
+
+		if (ok) {
+		for (int i = 0; i < mesh_data.parts.count; i++) {
+		MeshPart part = mesh_data.parts[i];
+		u32 vbo_offset = 0;
+		u32 vbo_stride = sizeof(Vertex);
+		dc->IASetVertexBuffers(0, 1, &mesh_data.vbo, &vbo_stride, &vbo_offset);
+		dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
+
+		dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
+		dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
+		}
+		}
+		}*/
 	}
 
 	{
 		D3D11_VIEWPORT present_viewport = {};
-		present_viewport.TopLeftX = (float)open_scene_rect_min.x;
-		present_viewport.TopLeftY = (float)open_scene_rect_min.y;
-		present_viewport.Width = (float)width;
-		present_viewport.Height = (float)height;
+		present_viewport.TopLeftX = render_params.rect.min.x;
+		present_viewport.TopLeftY = render_params.rect.min.y;
+		present_viewport.Width = rect_size.x;
+		present_viewport.Height = rect_size.y;
 		present_viewport.MinDepth = 0.f;
 		present_viewport.MaxDepth = 1.f;
 		dc->RSSetViewports(1, &present_viewport);
 
-		ID3D11RenderTargetView* present_target = ht->D3D11_GetHatchRenderTargetView();
+		ID3D11RenderTargetView* present_target = FG::ht->D3D11_GetHatchRenderTargetView();
 
 		dc->VSSetShader(present_vs.shader, NULL, 0);
 		dc->PSSetShader(present_ps, NULL, 0);
@@ -272,7 +345,7 @@ void RenderManager::RenderAllQueued() {
 		// Submit UI draw commands to hatch
 		UI_FinalizeDrawBatch();
 
-		u32 first_vertex = ht->AddVertices((HT_DrawVertex*)G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count);
+		u32 first_vertex = FG::ht->AddVertices((HT_DrawVertex*)G_UI.vertex_buffer.data, UI_STATE.vertex_buffer_count);
 
 		int ib_count = G_UI.index_buffer.count;
 		for (int i = 0; i < ib_count; i++) {
@@ -281,11 +354,43 @@ void RenderManager::RenderAllQueued() {
 
 		for (int i = 0; i < UI_STATE.draw_commands.count; i++) {
 			UI_DrawCommand* draw_command = &UI_STATE.draw_commands[i];
-			ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
+			FG::ht->AddIndices(&G_UI.index_buffer[draw_command->first_index], draw_command->index_count);
 		}
 	}
 
+}
 
+void RenderManager::Init() {
+	// create cbo
+	D3D11_BUFFER_DESC cbo_desc = {};
+	cbo_desc.ByteWidth      = sizeof(ShaderConstants) + 0xf & 0xfffffff0; // ensure constant buffer size is multiple of 16 bytes
+	cbo_desc.Usage          = D3D11_USAGE_DYNAMIC;
+	cbo_desc.BindFlags      = D3D11_BIND_CONSTANT_BUFFER;
+	cbo_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	FG::ht->D3D11_device->CreateBuffer(&cbo_desc, nullptr, &cbo);
 
-	
+	// create sampler
+	D3D11_SAMPLER_DESC sampler_desc = {};
+	sampler_desc.Filter         = D3D11_FILTER_MIN_MAG_MIP_POINT;
+	sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+	FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
+
+	HT_StringView main_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/main_shader.hlsl";
+	HT_StringView present_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/present_shader.hlsl";
+
+	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
+		{    "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{     "UV", 0,    DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0},
+	};
+	main_vs = LoadVertexShader(main_shader_path, main_vs_inputs, _countof(main_vs_inputs));
+	main_ps = LoadPixelShader(main_shader_path);
+
+	present_vs = LoadVertexShader(present_shader_path, NULL, 0);
+	present_ps = LoadPixelShader(present_shader_path);
+
+	FG::ht->D3D11_SetRenderProc(Render);
 }

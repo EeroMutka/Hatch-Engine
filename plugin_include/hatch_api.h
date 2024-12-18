@@ -252,10 +252,14 @@ HT_StaticExports HT__Concat(HT_STATIC_EXPORTS__, HT_STATIC_PLUGIN_ID) = { HT__St
 
 typedef struct HT_GeneratedTypeTable HT_GeneratedTypeTable;
 
+typedef struct HT_Rect {
+	vec2 min;
+	vec2 max;
+} HT_Rect;
+
 typedef struct HT_AssetViewerTabUpdate {
 	HT_Asset data_asset;
-	ivec2 rect_min;
-	ivec2 rect_max;
+	HT_Rect rect;
 } HT_AssetViewerTabUpdate;
 
 typedef void (*TabUpdateProc)(struct HT_API* ht, const HT_AssetViewerTabUpdate* update_info);
@@ -264,8 +268,7 @@ typedef struct HT_TabClass HT_TabClass;
 
 typedef struct HT_CustomTabUpdate {
 	HT_TabClass* tab_class;
-	ivec2 rect_min;
-	ivec2 rect_max;
+	HT_Rect rect;
 } HT_CustomTabUpdate;
 
 typedef enum HT_InputKey {

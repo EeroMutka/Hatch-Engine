@@ -1274,8 +1274,7 @@ EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rec
 			if (plugin) {
 				HT_AssetViewerTabUpdate update = {};
 				update.data_asset = selected_asset;
-				update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
-				update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
+				update.rect = {area_rect.min, area_rect.max};
 				
 				UI_Rect parent_rect = UI_GetActiveScissorRect();
 				UI_SetActiveScissorRect(area_rect);
@@ -1292,8 +1291,7 @@ EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rec
 	else {
 		HT_CustomTabUpdate update;
 		update.tab_class = (HT_TabClass*)tab;
-		update.rect_min = {(int)area_rect.min.x, (int)area_rect.min.y};
-		update.rect_max = {(int)area_rect.max.x, (int)area_rect.max.y};
+		update.rect = { area_rect.min, area_rect.max };
 		DS_ArrPush(&s->frame.queued_custom_tab_updates, update);
 	}
 }
