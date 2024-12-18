@@ -12,7 +12,7 @@ void MessageManager::Init() {
 	DS_ArrInit(&instance.messages, FG::heap);
 }
 
-void MessageManager::Reset() {
+void MessageManager::BeginFrame() {
 	DS_ArrClear(&instance.messages);
 }
 

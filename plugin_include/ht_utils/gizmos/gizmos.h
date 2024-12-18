@@ -7,10 +7,6 @@
 #error "math_extras.h" must be included before this file!
 #endif
 
-#ifndef FIRE_UI_INCLUDED
-#error "fire_ui.h" must be included before this file!
-#endif
-
 #define GIZMOS_API static
 
 typedef enum TranslationAxis {
@@ -63,6 +59,10 @@ typedef struct TranslationGizmo {
 	quat drag_start_rotation;
 } RotationGizmo;*/
 
+GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_PerspectiveView* view, TranslationGizmo* gizmo, vec2 mouse_pos, vec3* translation, float snap_size);
+
+// Optional drawing functions, using fire-UI
+#ifdef FIRE_UI_INCLUDED
 GIZMOS_API void DrawPoint3D(const M_PerspectiveView* view, vec3 p, float thickness, UI_Color color);
 GIZMOS_API void DrawGrid3D(const M_PerspectiveView* view, UI_Color color);
 GIZMOS_API void DrawGridEx3D(const M_PerspectiveView* view, vec3 origin, vec3 x_dir, vec3 y_dir, UI_Color color);
@@ -77,8 +77,8 @@ GIZMOS_API void DrawQuad3D(const M_PerspectiveView* view, vec3 a, vec3 b, vec3 c
 GIZMOS_API void DrawQuadFrame3D(const M_PerspectiveView* view, vec3 a, vec3 b, vec3 c, vec3 d, float thickness, UI_Color color);
 
 //GIZMOS_API bool TranslationGizmoShouldApply(const TranslationGizmo* gizmo);
-GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_PerspectiveView* view, TranslationGizmo* gizmo, vec2 mouse_pos, vec3* translation, float snap_size);
 GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const TranslationGizmo* gizmo);
+#endif
 
 // GIZMOS_API bool RotationGizmoShouldApply(const RotationGizmo* gizmo);
 // GIZMOS_API void RotationGizmoUpdate(const M_PerspectiveView* view, RotationGizmo* gizmo, vec3 origin, quat* rotation);
@@ -387,50 +387,6 @@ GIZMOS_API void TranslationGizmoUpdate(const HT_InputFrame* in, const M_Perspect
 	*translation = origin.xyz;
 }
 
-GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const TranslationGizmo* gizmo) {
-	TranslationAxis active_axis = gizmo->moving_axis_ ? gizmo->moving_axis_ : gizmo->hovered_axis_;
-	bool x_active = active_axis == TranslationAxis_X;
-	bool y_active = active_axis == TranslationAxis_Y;
-	bool z_active = active_axis == TranslationAxis_Z;
-	
-	UI_Color nonhovered_colors[] = {UI_COLOR{225, 50, 10, 255}, UI_COLOR{50, 225, 10, 255}, UI_COLOR{10, 120, 225, 255}};
-	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{gizmo->arrow_scale, 0.f, 0.f}, 0.03f, 0.012f, 12, x_active ? 3.f : 3.f, x_active ? UI_YELLOW : nonhovered_colors[0]);
-	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, gizmo->arrow_scale, 0.f}, 0.03f, 0.012f, 12, y_active ? 3.f : 3.f, y_active ? UI_YELLOW : nonhovered_colors[1]);
-	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, 0.f, gizmo->arrow_scale}, 0.03f, 0.012f, 12, z_active ? 3.f : 3.f, z_active ? UI_YELLOW : nonhovered_colors[2]);
-
-	UI_Color inner_colors[] = {{255, 30, 30, 130+50}, {30, 255, 30, 130+50}, {60, 60, 255, 180+50}};
-
-	for (int i = 0; i < 3; i++) {
-		if (gizmo->plane_gizmo_visibility[i] > 0.f) {
-			bool active = active_axis == TranslationAxis_YZ + i;
-			bool hovered_implicitly = active && gizmo->plane_gizmo_is_implicitly_hovered;
-
-			UI_Color frame_color = active ? UI_YELLOW : nonhovered_colors[i];
-			UI_Color inner_color = frame_color;
-			
-			float frame_width = active ? 4.f : 2.f;
-			if (hovered_implicitly) frame_width = 2.f;
-
-			inner_color.a = (uint8_t)((float)inner_color.a * 0.5f * gizmo->plane_gizmo_visibility[i]);
-			frame_color.a = (uint8_t)((float)frame_color.a * gizmo->plane_gizmo_visibility[i]);
-
-			vec2 q[] = {
-				UI_VEC2{gizmo->plane_gizmo_quads[i][0].x, gizmo->plane_gizmo_quads[i][0].y},
-				UI_VEC2{gizmo->plane_gizmo_quads[i][1].x, gizmo->plane_gizmo_quads[i][1].y},
-				UI_VEC2{gizmo->plane_gizmo_quads[i][2].x, gizmo->plane_gizmo_quads[i][2].y},
-				UI_VEC2{gizmo->plane_gizmo_quads[i][3].x, gizmo->plane_gizmo_quads[i][3].y},
-			};
-			UI_DrawQuad(q[0], q[1], q[2], q[3], inner_color);
-
-			UI_DrawLine(q[0], q[1], frame_width, frame_color);
-			UI_DrawLine(q[1], q[2], frame_width, frame_color);
-			UI_DrawLine(q[2], q[3], frame_width, frame_color);
-			UI_DrawLine(q[3], q[0], frame_width, frame_color);
-			
-		}
-	}
-}
-
 #if 0
 
 GIZMOS_API bool RotationGizmoShouldApply(const RotationGizmo* gizmo) {
@@ -572,6 +528,52 @@ GIZMOS_API void RotationGizmoDraw(const M_PerspectiveView* view, const RotationG
 #endif
 
 // ----------------------------------------------------------
+
+#ifdef FIRE_UI_INCLUDED
+
+GIZMOS_API void TranslationGizmoDraw(const M_PerspectiveView* view, const TranslationGizmo* gizmo) {
+	TranslationAxis active_axis = gizmo->moving_axis_ ? gizmo->moving_axis_ : gizmo->hovered_axis_;
+	bool x_active = active_axis == TranslationAxis_X;
+	bool y_active = active_axis == TranslationAxis_Y;
+	bool z_active = active_axis == TranslationAxis_Z;
+
+	UI_Color nonhovered_colors[] = {UI_COLOR{225, 50, 10, 255}, UI_COLOR{50, 225, 10, 255}, UI_COLOR{10, 120, 225, 255}};
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{gizmo->arrow_scale, 0.f, 0.f}, 0.03f, 0.012f, 12, x_active ? 3.f : 3.f, x_active ? UI_YELLOW : nonhovered_colors[0]);
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, gizmo->arrow_scale, 0.f}, 0.03f, 0.012f, 12, y_active ? 3.f : 3.f, y_active ? UI_YELLOW : nonhovered_colors[1]);
+	DrawArrow3D(view, gizmo->origin, gizmo->origin + vec3{0.f, 0.f, gizmo->arrow_scale}, 0.03f, 0.012f, 12, z_active ? 3.f : 3.f, z_active ? UI_YELLOW : nonhovered_colors[2]);
+
+	UI_Color inner_colors[] = {{255, 30, 30, 130+50}, {30, 255, 30, 130+50}, {60, 60, 255, 180+50}};
+
+	for (int i = 0; i < 3; i++) {
+		if (gizmo->plane_gizmo_visibility[i] > 0.f) {
+			bool active = active_axis == TranslationAxis_YZ + i;
+			bool hovered_implicitly = active && gizmo->plane_gizmo_is_implicitly_hovered;
+
+			UI_Color frame_color = active ? UI_YELLOW : nonhovered_colors[i];
+			UI_Color inner_color = frame_color;
+
+			float frame_width = active ? 4.f : 2.f;
+			if (hovered_implicitly) frame_width = 2.f;
+
+			inner_color.a = (uint8_t)((float)inner_color.a * 0.5f * gizmo->plane_gizmo_visibility[i]);
+			frame_color.a = (uint8_t)((float)frame_color.a * gizmo->plane_gizmo_visibility[i]);
+
+			vec2 q[] = {
+				UI_VEC2{gizmo->plane_gizmo_quads[i][0].x, gizmo->plane_gizmo_quads[i][0].y},
+				UI_VEC2{gizmo->plane_gizmo_quads[i][1].x, gizmo->plane_gizmo_quads[i][1].y},
+				UI_VEC2{gizmo->plane_gizmo_quads[i][2].x, gizmo->plane_gizmo_quads[i][2].y},
+				UI_VEC2{gizmo->plane_gizmo_quads[i][3].x, gizmo->plane_gizmo_quads[i][3].y},
+			};
+			UI_DrawQuad(q[0], q[1], q[2], q[3], inner_color);
+
+			UI_DrawLine(q[0], q[1], frame_width, frame_color);
+			UI_DrawLine(q[1], q[2], frame_width, frame_color);
+			UI_DrawLine(q[2], q[3], frame_width, frame_color);
+			UI_DrawLine(q[3], q[0], frame_width, frame_color);
+
+		}
+	}
+}
 
 // To do a blender-style translation modal, we want to calculate how much the mouse is moved along the 2D line. Then, move the object origin in screen space by that delta. Then, project that to the original 3D axis.
 
@@ -791,3 +793,4 @@ GIZMOS_API void DrawArrow3D(const M_PerspectiveView* view, vec3 from, vec3 to,
 		}
 	}
 }
+#endif

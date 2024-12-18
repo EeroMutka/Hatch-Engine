@@ -45,6 +45,8 @@ static Camera SceneEditUpdate(HT_API* ht, SceneEditState* s, const M_Perspective
 	return camera;
 }
 
+// Include rendering functions using fire-UI
+#ifdef FIRE_UI_INCLUDED
 // gizmo drawing requires fire-UI
 static void SceneEditDrawGizmos(HT_API* ht, SceneEditState* s, Scene__Scene* scene) {
 	TranslationGizmoDraw(&s->view, &s->translate_gizmo);
@@ -69,3 +71,4 @@ static void SceneEditDrawGizmos(HT_API* ht, SceneEditState* s, Scene__Scene* sce
 		}
 	}*/
 }
+#endif

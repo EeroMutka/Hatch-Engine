@@ -6,7 +6,7 @@ class Message {};
 class MessageManager {
 public:
 	static void Init();
-	static void Reset();
+	static void BeginFrame();
 	
 	template<typename T>
 	static inline void SendNewMessage(const T& message) {

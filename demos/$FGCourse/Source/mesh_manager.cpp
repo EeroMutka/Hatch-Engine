@@ -1,3 +1,4 @@
+#if 0
 #define HT_NO_STATIC_PLUGIN_EXPORTS
 
 #include "common.h"
@@ -8,13 +9,17 @@
 
 MeshManager MeshManager::instance{};
 
+void MeshManager::Init() {
+	DS_MapInit(&instance.meshes, FG::heap);
+	DS_MapInit(&instance.textures, FG::heap);
+}
+
 static char* TempCString(HT_StringView str) {
 	char* data = DS_ArenaPush(FG::temp, str.size + 1);
 	memcpy(data, str.data, str.size);
 	data[str.size] = 0;
 	return data;
 }
-
 
 static Texture ImportTexture(HT_API* ht, HT_StringView file_path) {
 	ID3D11Texture2D* texture;
@@ -48,7 +53,6 @@ static Texture ImportTexture(HT_API* ht, HT_StringView file_path) {
 
 	return { texture, texture_srv };
 }
-
 
 // bind_flags: D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_INDEX_BUFFER
 static ID3D11Buffer* CreateGPUBuffer(HT_API* ht, int size, u32 bind_flags, void* data) {
@@ -215,3 +219,4 @@ bool MeshManager::GetColorTextureFromTextureAsset(HT_Asset texture_asset, Textur
 	return true;
 }
 
+#endif
