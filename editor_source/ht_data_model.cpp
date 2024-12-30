@@ -123,13 +123,13 @@ EXPORT Asset* MakeNewAsset(AssetTree* tree, AssetKind kind) {
 	case AssetKind_Package: break;
 	case AssetKind_Folder:  { name = "Untitled Folder"; }break;
 	case AssetKind_Plugin: {
-		//asset->plugin.options_data = DS_MemAlloc(DS_HEAP, tree->plugin_options_struct_type->struct_type.size);
+		//asset->plugin.options_data = DS_MemAlloc(HEAP, tree->plugin_options_struct_type->struct_type.size);
 		//memset(asset->plugin.options_data, 0, tree->plugin_options_struct_type->struct_type.size);
 		name = "Untitled Plugin";
-		//DS_ArrInit(&asset->plugin.allocations, DS_HEAP);
+		//DS_ArrInit(&asset->plugin.allocations, HEAP);
 	}break;
 	case AssetKind_StructType: {
-		DS_ArrInit(&asset->struct_type.members, DS_HEAP);
+		DS_ArrInit(&asset->struct_type.members, HEAP);
 		name = "Untitled Struct";
 	}break;
 	case AssetKind_StructData: {
@@ -181,7 +181,7 @@ EXPORT void InitStructDataAsset(AssetTree* tree, Asset* asset, Asset* struct_typ
 	ASSERT(struct_type->kind == AssetKind_StructType);
 
 	asset->struct_data.struct_type = struct_type->handle;
-	asset->struct_data.data = DS_MemAlloc(DS_HEAP, struct_type->struct_type.size);
+	asset->struct_data.data = DS_MemAlloc(HEAP, struct_type->struct_type.size);
 	
 	HT_Type type = {};
 	type.kind = HT_TypeKind_Struct;
@@ -203,7 +203,7 @@ EXPORT void DeinitStructDataAssetIfInitialized(AssetTree* tree, Asset* asset) {
 		type.handle = asset->struct_data.struct_type;
 		Destruct(tree, asset->struct_data.data, &type);
 
-		DS_MemFree(DS_HEAP, asset->struct_data.data);
+		DS_MemFree(HEAP, asset->struct_data.data);
 		asset->struct_data.data = NULL;
 	}
 }
@@ -264,7 +264,7 @@ EXPORT void AnyChangeType(AssetTree* tree, HT_Any* any, HT_Type* new_type) {
 	
 	i32 size, align;
 	GetTypeSizeAndAlignment(tree, new_type, &size, &align);
-	any->data = DS_MemAlloc(DS_HEAP, size);
+	any->data = DS_MemAlloc(HEAP, size);
 	any->type = *new_type;
 	Construct(tree, any->data, new_type);
 }
@@ -272,7 +272,7 @@ EXPORT void AnyChangeType(AssetTree* tree, HT_Any* any, HT_Type* new_type) {
 EXPORT void AnyDeinit(AssetTree* tree, HT_Any* any) {
 	if (any->data) {
 		Destruct(tree, any->data, &any->type);
-		DS_MemFree(DS_HEAP, any->data);
+		DS_MemFree(HEAP, any->data);
 	}
 	DS_DebugFillGarbage(any, sizeof(*any));
 }
@@ -280,18 +280,18 @@ EXPORT void AnyDeinit(AssetTree* tree, HT_Any* any) {
 EXPORT void ArrayPush(HT_Array* array, int32_t elem_size) {
 	if (array->count == array->capacity) {
 		int32_t new_capacity = array->capacity == 0 ? 8 : array->capacity * 2;
-		array->data = DS_MemResize(DS_HEAP, array->data, array->capacity * elem_size, new_capacity * elem_size);
+		array->data = DS_MemResize(HEAP, array->data, array->capacity * elem_size, new_capacity * elem_size);
 		array->capacity = new_capacity;
 		//if (array->capacity == 0) {
 		//	int32_t new_size = elem_size * 8;
-		//	array->data = DS_MemAlloc(DS_HEAP, new_size);
+		//	array->data = DS_MemAlloc(HEAP, new_size);
 		//	array->capacity = 8;
 		//}
 		//else {
 		//	int32_t new_capacity = array->capacity * 2;
 		//	int32_t old_size = array->capacity * elem_size;
 		//	int32_t new_size = new_capacity * elem_size;
-		//	array->data = DS_AllocatorFn(DS_HEAP, array->data, old_size, new_size, DS_DEFAULT_ALIGNMENT);
+		//	array->data = DS_AllocatorFn(HEAP, array->data, old_size, new_size, DS_DEFAULT_ALIGNMENT);
 		//	array->capacity = new_capacity;
 		//}
 	}
@@ -324,7 +324,7 @@ EXPORT void ItemGroupDeinit(HT_ItemGroup* group) {
 	
 	for (int i = 0; i < group->buckets.count; i++) {
 		void* bucket = ((void**)group->buckets.data)[i];
-		DS_MemFree(DS_HEAP, bucket);
+		DS_MemFree(HEAP, bucket);
 	}
 	ArrayDeinit(&group->buckets);
 	DS_DebugFillGarbage(group, sizeof(*group));
@@ -362,7 +362,7 @@ EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group) {
 			ArrayPush(&group->buckets, sizeof(void*));
 			
 			i32 bucket_size = group->item_full_size * group->elems_per_bucket;
-			void* bucket = DS_MemAlloc(DS_HEAP, bucket_size);
+			void* bucket = DS_MemAlloc(HEAP, bucket_size);
 
 			((void**)group->buckets.data)[group->buckets.count - 1] = bucket;
 			group->last_bucket_end = 0;
@@ -399,12 +399,12 @@ EXPORT void StringInit(HT_String* x, STR_View value) {
 	if (value.size > 0) StringSetValue(x, value);
 }
 EXPORT void StringDeinit(HT_String* x) {
-	STR_Free(DS_HEAP, x->view);
+	STR_Free(HEAP, x->view);
 }
 
 EXPORT void StringSetValue(HT_String* x, STR_View value) {
-	STR_Free(DS_HEAP, x->view);
-	x->view = STR_Clone(DS_HEAP, value);
+	STR_Free(HEAP, x->view);
+	x->view = STR_Clone(HEAP, value);
 	x->capacity = value.size;
 }
 
@@ -414,7 +414,7 @@ EXPORT void ArrayClear(HT_Array* array, int32_t elem_size) {
 }
 
 EXPORT void ArrayDeinit(HT_Array* array) {
-	DS_MemFree(DS_HEAP, array->data);
+	DS_MemFree(HEAP, array->data);
 	DS_DebugFillGarbage(array, sizeof(*array));
 }
 
@@ -437,7 +437,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	case AssetKind_Root: break;
 	case AssetKind_Package: {
 		OS_DeinitDirectoryWatch(&asset->package.dir_watch);
-		STR_Free(DS_HEAP, asset->package.filesys_path);
+		STR_Free(HEAP, asset->package.filesys_path);
 	}break;
 	case AssetKind_Folder: {
 	}break;
@@ -447,7 +447,7 @@ EXPORT void DeleteAssetIncludingChildren(AssetTree* tree, Asset* asset) {
 	case AssetKind_Plugin: {
 		ASSERT(asset->plugin.active_instance == NULL);
 		//DS_ArenaDeinit(&asset->plugin.error_log.arena);
-		//DS_MemFree(DS_HEAP, asset->plugin.options_data);
+		//DS_MemFree(HEAP, asset->plugin.options_data);
 		//DS_ArrDeinit(&asset->plugin.allocations);
 	}break;
 	case AssetKind_StructType: {

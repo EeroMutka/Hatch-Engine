@@ -15,8 +15,9 @@
 // -- Globals -----------------------------
 
 EXPORT DS_Arena* TEMP;
-EXPORT DS_MemScopeNone MEM_SCOPE_NONE_;
-EXPORT DS_MemScope MEM_SCOPE_TEMP_;
+EXPORT DS_Allocator HEAP_;
+EXPORT DS_Allocator* HEAP;
+EXPORT DS_Info DS_INFO;
 EXPORT uint64_t CPU_FREQUENCY;
 EXPORT STR_View CURRENT_WORKING_DIRECTORY;
 
@@ -39,9 +40,9 @@ static STR_View QueryTabName(UI_PanelTree* tree, UI_Tab* tab) {
 }
 
 static void InitAssetTree(AssetTree* tree) {
-	DS_BkArrInit(&tree->assets, DS_HEAP, 32);
+	DS_BkArrInit(&tree->assets, HEAP, 32);
 	tree->root = MakeNewAsset(tree, AssetKind_Root);
-	DS_MapInit(&tree->package_from_name, DS_HEAP);
+	DS_MapInit(&tree->package_from_name, HEAP);
 
 	tree->name_and_type_struct_type = MakeNewAsset(tree, AssetKind_StructType);
 
@@ -80,14 +81,14 @@ static void InitAssetTree(AssetTree* tree) {
 	ComputeStructLayout(tree, tree->plugin_options_struct_type);
 }
 
-static void EditorInit(DS_MemScope* persist, EditorState* s) {
+static void EditorInit(DS_Arena* persist, EditorState* s) {
 	InitAssetTree(&s->asset_tree);
 
 	s->window = OS_CreateWindow(s->window_size.x, s->window_size.y, "Hatch");
 	
 	RenderInit(s->render_state, s->window_size, s->window);
 
-	UI_Init(DS_HEAP);
+	UI_Init(HEAP);
 #ifdef HT_EDITOR_DX12
 	D3D12_CPU_DESCRIPTOR_HANDLE atlas_cpu_descriptor = s->render_state->srv_heap->GetCPUDescriptorHandleForHeapStart();
 	D3D12_GPU_DESCRIPTOR_HANDLE atlas_gpu_descriptor = s->render_state->srv_heap->GetGPUDescriptorHandleForHeapStart();
@@ -111,29 +112,29 @@ static void EditorInit(DS_MemScope* persist, EditorState* s) {
 	// -- Hatch stuff ---------------------------------------------------------------------------
 
 	{
-		DS_ArenaInit(&s->log.arena, 4096, DS_HEAP);
+		DS_ArenaInit(&s->log.arena, 4096, HEAP);
 		DS_ArrInit(&s->log.messages, &s->log.arena);
 	}
 
 	{
-		DS_ArrInit(&s->error_list.errors, DS_HEAP);
+		DS_ArrInit(&s->error_list.errors, HEAP);
 	}
 
-	UI_PanelTreeInit(&s->panel_tree, DS_HEAP);
+	UI_PanelTreeInit(&s->panel_tree, HEAP);
 	s->panel_tree.query_tab_name = QueryTabName;
 	s->panel_tree.update_and_draw_tab = UpdateAndDrawTab;
 	s->panel_tree.user_data = s;
 	
-	DS_BkArrInit(&s->plugin_instances, DS_HEAP, 32);
+	DS_BkArrInit(&s->plugin_instances, HEAP, 32);
 
-	DS_BkArrInit(&s->tab_classes, persist->arena, 16);
+	DS_BkArrInit(&s->tab_classes, persist, 16);
 	s->assets_tab_class = CreateTabClass(s, "Assets");
 	s->log_tab_class = CreateTabClass(s, "Log");
 	s->errors_tab_class = CreateTabClass(s, "Errors");
 	s->properties_tab_class = CreateTabClass(s, "Properties");
 	s->asset_viewer_tab_class = CreateTabClass(s, "Asset Viewer");
 
-	DS_ArrInit(&s->type_table, DS_HEAP);
+	DS_ArrInit(&s->type_table, HEAP);
 
 	s->panel_tree.root = NewUIPanel(&s->panel_tree);
 	
@@ -272,12 +273,14 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main(int argc, char** argv) {
-	DS_Arena temp_arena;
-	DS_ArenaInit(&temp_arena, 4096, DS_HEAP);
+	HEAP_ = { &DS_INFO, DS_HeapAllocatorProc };
+	HEAP = &HEAP_;
 
+	DS_Arena temp_arena;
+	DS_ArenaInit(&temp_arena, 4096, HEAP);
 	TEMP = &temp_arena;
-	MEM_SCOPE_NONE_ = {TEMP};
-	MEM_SCOPE_TEMP_ = {TEMP, TEMP};
+	DS_INFO.temp_arena = &temp_arena;
+
 	CPU_FREQUENCY = OS_GetCPUFrequency();
 
 #ifdef HT_GEN
@@ -301,9 +304,8 @@ int main(int argc, char** argv) {
 
 	GeneratePremakeAndVSProjects(&tree, cwd);
 #else
-	DS_Arena persistent_arena;
-	DS_ArenaInit(&persistent_arena, 4096, DS_HEAP);
-	DS_MemScope persist = MEM_SCOPE(&persistent_arena);
+	DS_Arena persist;
+	DS_ArenaInit(&persist, 4096, HEAP);
 
 	STR_View exe_path;
 	OS_GetThisExecutablePath(&persist, &exe_path);

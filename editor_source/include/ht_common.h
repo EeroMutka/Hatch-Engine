@@ -97,14 +97,16 @@ typedef vec2 UI_Vec2;
 // -- Globals ---------------------------------------------------------
 
 extern DS_Arena* TEMP;
-extern DS_MemScope MEM_SCOPE_TEMP_;
-extern DS_MemScopeNone MEM_SCOPE_NONE_;
+extern DS_Allocator HEAP_;
+extern DS_Allocator* HEAP;
+extern DS_Info DS_INFO;
+//extern DS_MemScopeNone MEM_SCOPE_NONE_;
 extern uint64_t CPU_FREQUENCY;
 extern STR_View CURRENT_WORKING_DIRECTORY; // cache the current working directory to avoid having to query for it every time we want to temporarily change it
 
-#define MEM_SCOPE_NONE   (DS_MemScopeNone*)&MEM_SCOPE_NONE_
-#define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
-#define MEM_SCOPE(ARENA) DS_MemScope{ ARENA, TEMP }
+#define DS (&DS_INFO)
+//#define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
+//#define MEM_SCOPE(ARENA) DS_MemScope{ ARENA, TEMP }
 
 // -- Constants -------------------------------------------------------
 

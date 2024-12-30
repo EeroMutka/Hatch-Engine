@@ -14,7 +14,7 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
 
-	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path); // @speed: we're doing this a bunch unnecessarily
+	bool ok = OS_SetWorkingDir(DS, package->package.filesys_path); // @speed: we're doing this a bunch unnecessarily
 	ASSERT(ok);
 
 	STR_View plugin_name = plugin->name;
@@ -112,12 +112,12 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 	}
 
 	STR_View existing_data;
-	bool has_existing_data = OS_ReadEntireFile(MEM_SCOPE_TEMP, header_filepath, &existing_data);
+	bool has_existing_data = OS_ReadEntireFile(TEMP, header_filepath, &existing_data);
 	if (!has_existing_data || !STR_Match(existing_data, str.str)) {
-		OS_WriteEntireFile(MEM_SCOPE_NONE, header_filepath, str.str);
+		OS_WriteEntireFile(DS, header_filepath, str.str);
 	}
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(DS, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project_directory) {
@@ -207,7 +207,7 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 
 	// also want to run the command now.
 	u32 exit_code;
-	bool ok = OS_RunProcess(MEM_SCOPE_NONE, "premake5 vs2022", &exit_code);
+	bool ok = OS_RunProcess(DS, "premake5 vs2022", &exit_code);
 }
 
 #ifdef HT_DYNAMIC
@@ -246,8 +246,8 @@ EXPORT void ForceVisualStudioToClosePDBFileHandle(STR_View pdb_filepath) {
 	DWORD dwError = RmStartSession(&dwSession, 0, szSessionKey);
 
 	STR_View pdb_filename = STR_AfterLast(pdb_filepath, '/');
-	const wchar_t* pdb_filename_w = OS_UTF8ToWide(MEM_SCOPE_TEMP, pdb_filename, 1);
-	const wchar_t* pdb_filepath_w = OS_UTF8ToWide(MEM_SCOPE_TEMP, pdb_filepath, 1);
+	const wchar_t* pdb_filename_w = OS_UTF8ToWide(TEMP, pdb_filename, 1);
+	const wchar_t* pdb_filepath_w = OS_UTF8ToWide(TEMP, pdb_filepath, 1);
 
 	if (dwError == ERROR_SUCCESS) {
 		dwError = RmRegisterResources(dwSession, 1, &pdb_filepath_w, 0, NULL, 0, NULL);
@@ -371,7 +371,7 @@ static void FlushBuildLog(BuildLog* build_log) {
 		if (is_error) {
 			Error error = {};
 			error.owner_asset = build_log->plugin;
-			error.string = STR_Clone(DS_HEAP, line);
+			error.string = STR_Clone(HEAP, line);
 			error.added_tick = OS_GetCPUTick();
 			DS_ArrPush(&build_log->error_list->errors, error);
 		}
@@ -398,7 +398,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+	bool ok = OS_SetWorkingDir(DS, package->package.filesys_path);
 	ASSERT(ok);
 
 	BUILD_ProjectOptions opts = {};
@@ -447,7 +447,7 @@ EXPORT bool RecompilePlugin(EditorState* s, Asset* plugin) {
 	FlushBuildLog(&build_log);
 
 	BUILD_ProjectDeinit(&project);
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(DS, DEFAULT_WORKING_DIRECTORY); // reset working directory
 	return ok;
 }
 

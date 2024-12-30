@@ -120,7 +120,7 @@ static void LoadProjectFromParsedNode(AssetTree* tree, MD_Node* root) {
 				path = STR_Form(TEMP, "%s%v", HATCH_DIR, path);
 			}
 			
-			bool ok = OS_PathToAbsolute(MEM_SCOPE_TEMP, path_unconverted, &path);
+			bool ok = OS_PathToAbsolute(TEMP, path_unconverted, &path);
 			EXPECT_OR_USER_ERROR(ok, "ERROR: tried to load a package from an invalid path: '%.*s'\n", StrArg(path_unconverted));
 
 			DS_ArrPush(&package_paths, path);
@@ -131,7 +131,7 @@ static void LoadProjectFromParsedNode(AssetTree* tree, MD_Node* root) {
 }
 
 EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory) {
-	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, project_directory);
+	bool ok = OS_SetWorkingDir(DS, project_directory);
 	CURRENT_WORKING_DIRECTORY = project_directory;
 	ASSERT(ok);
 
@@ -166,7 +166,7 @@ EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_di
 }
 
 EXPORT void LoadProject(AssetTree* tree, STR_View project_directory) {
-	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, project_directory);
+	bool ok = OS_SetWorkingDir(DS, project_directory);
 	CURRENT_WORKING_DIRECTORY = project_directory;
 	ASSERT(ok);
 
@@ -353,11 +353,11 @@ static void SerializeValue(FILE* file, AssetTree* tree, Asset* package, void* da
 
 static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View filesys_path) {
 	if (asset->kind == AssetKind_Folder || asset->kind == AssetKind_Package) {
-		bool ok = OS_MakeDirectory(MEM_SCOPE_NONE, filesys_path);
+		bool ok = OS_MakeDirectory(DS, filesys_path);
 		ASSERT(ok);
 
 		OS_FileInfoArray files;
-		ok = OS_GetAllFilesInDirectory(MEM_SCOPE_TEMP, filesys_path, &files);
+		ok = OS_GetAllFilesInDirectory(TEMP, filesys_path, &files);
 
 		DS_Map(uint64_t, Asset*) asset_from_name;
 		DS_MapInit(&asset_from_name, TEMP);
@@ -381,9 +381,9 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 
 			if (DS_MapFindPtr(&asset_from_name, hash) == NULL) {
 				if (info->is_directory) {
-					OS_DeleteDirectory(MEM_SCOPE_NONE, info->name);
+					OS_DeleteDirectory(DS, info->name);
 				} else {
-					OS_DeleteFile(MEM_SCOPE_NONE, info->name);
+					OS_DeleteFile(DS, info->name);
 				}
 			}
 		}
@@ -398,7 +398,7 @@ static void SaveAsset(AssetTree* tree, Asset* package, Asset* asset, STR_View fi
 
 		if (asset->kind == AssetKind_File) { // only write file assets when they don't exist already
 			uint64_t modtime;
-			bool file_exists = OS_FileGetModtime(MEM_SCOPE_NONE, filesys_path, &modtime);
+			bool file_exists = OS_FileGetModtime(DS, filesys_path, &modtime);
 			write = file_exists == false;
 		}
 
@@ -466,26 +466,26 @@ EXPORT void SavePackageToDisk(AssetTree* tree, Asset* package) {
 
 	if (package->package.filesys_path.size == 0) {
 		STR_View filesys_path;
-		bool ok = OS_FolderPicker(MEM_SCOPE_TEMP, &filesys_path);
+		bool ok = OS_FolderPicker(TEMP, &filesys_path);
 		if (!ok) {
 			printf("Invalid path selected!\n"); // TODO: use log window
 			return;
 		}
-		package->package.filesys_path = STR_Clone(DS_HEAP, filesys_path);
+		package->package.filesys_path = STR_Clone(HEAP, filesys_path);
 	}
 
 	package->package.dir_watch_will_have_hatch_written_changes = true;
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+	OS_SetWorkingDir(DS, package->package.filesys_path);
 
 	SaveAsset(tree, package, package, package->package.filesys_path);
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(DS, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path, bool force_reload) {
 	OS_FileInfoArray files = {0};
-	OS_GetAllFilesInDirectory(MEM_SCOPE_TEMP, parent_full_path, &files);
+	OS_GetAllFilesInDirectory(TEMP, parent_full_path, &files);
 
 	DS_Map(uint64_t, int) file_idx_from_name;
 	DS_MapInit(&file_idx_from_name, TEMP);
@@ -902,19 +902,19 @@ EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool 
 
 	for (int i = 0; i < packages.count; i++) {
 		Asset* package = packages[i];
-		OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+		OS_SetWorkingDir(DS, package->package.filesys_path);
 		ReloadAssetsPass1(tree, package, package->package.filesys_path, force_reload);
 	}
 
 	for (int i = 0; i < packages.count; i++) {
 		Asset* package = packages[i];
-		OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+		OS_SetWorkingDir(DS, package->package.filesys_path);
 		ReloadAssetsPass2(&ctx, package, package);
 	}
 
 	for (int i = 0; i < packages.count; i++) {
 		Asset* package = packages[i];
-		OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+		OS_SetWorkingDir(DS, package->package.filesys_path);
 		ReloadAssetsPass3(&ctx, package, package);
 	}
 
@@ -945,7 +945,7 @@ EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool 
 #endif
 
 	MD_ArenaRelease(ctx.md_arena);
-	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(DS, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
@@ -966,9 +966,9 @@ EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 
 		MoveAssetToInside(tree, package, tree->root);
 
-		package->package.filesys_path = STR_Clone(DS_HEAP, path);
+		package->package.filesys_path = STR_Clone(HEAP, path);
 
-		bool ok = OS_InitDirectoryWatch(MEM_SCOPE_NONE, &package->package.dir_watch, package->package.filesys_path);
+		bool ok = OS_InitDirectoryWatch(DS, &package->package.dir_watch, package->package.filesys_path);
 		EXPECT_OR_USER_ERROR(ok, "ERROR: tried to load a package from an invalid path: '%.*s'\n", StrArg(package->package.filesys_path));
 
 		DS_ArrPush(&packages, package);

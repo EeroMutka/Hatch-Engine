@@ -888,7 +888,7 @@ static void UpdateAndDrawRMBMenu(EditorState* s) {
 			UI_AddLabel(load_package_box, UI_SizeFlex(1.f), UI_SizeFit(), UI_BoxFlag_Clickable, "Load Package");
 			if (UI_Clicked(load_package_box)) {
 				STR_View load_package_path;
-				if (OS_FolderPicker(MEM_SCOPE_TEMP, &load_package_path)) {
+				if (OS_FolderPicker(TEMP, &load_package_path)) {
 					//s->assets_tree_ui_state.selection = (UI_Key)...->handle
 					LoadPackages(&s->asset_tree, { &load_package_path, 1 });
 				}
@@ -1083,7 +1083,7 @@ static void* HT_AllocatorProc(void* ptr, size_t size) {
 		
 			DS_ArrPop(&plugin->allocations);
 
-			DS_MemFree(DS_HEAP, header);
+			DS_MemFree(HEAP, header);
 		}
 		return NULL;
 	}
@@ -1094,9 +1094,9 @@ static void* HT_AllocatorProc(void* ptr, size_t size) {
 		if (ptr) {
 			char* allocation_base = (char*)ptr - 16;
 			size_t old_size = ptr ? ((PluginAllocationHeader*)allocation_base)->size : 0;
-			header = (PluginAllocationHeader*)DS_MemResizeAligned(DS_HEAP, allocation_base, old_size, 16 + size, 16);
+			header = (PluginAllocationHeader*)DS_MemResizeAligned(HEAP, allocation_base, old_size, 16 + size, 16);
 		} else {
-			header = (PluginAllocationHeader*)DS_MemAllocAligned(DS_HEAP, 16 + size, 16);
+			header = (PluginAllocationHeader*)DS_MemAllocAligned(HEAP, 16 + size, 16);
 		}
 
 		header->size = size;
@@ -1123,12 +1123,12 @@ EXPORT UI_Tab* CreateTabClass(EditorState* s, STR_View name) {
 	UI_Tab* tab;
 	NEW_SLOT_PTR(&tab, &s->tab_classes, &s->first_free_tab_class, freelist_next);
 	*tab = {};
-	tab->name = STR_Clone(DS_HEAP, name);
+	tab->name = STR_Clone(HEAP, name);
 	return tab;
 }
 
 EXPORT void DestroyTabClass(EditorState* s, UI_Tab* tab) {
-	STR_Free(DS_HEAP, tab->name);
+	STR_Free(HEAP, tab->name);
 	tab->name = {}; // mark free slot with this
 	FREE_SLOT_PTR(tab, &s->first_free_tab_class, freelist_next);
 }
@@ -1300,7 +1300,7 @@ static HRESULT HT_D3DCompileFromFile(STR_View FileName, const D3D_SHADER_MACRO* 
 	ID3DInclude* pInclude, const char* pEntrypoint, const char* pTarget, u32 Flags1,
 	u32 Flags2, ID3DBlob** ppCode, ID3DBlob** ppErrorMsgs)
 {
-	wchar_t* pFileName = OS_UTF8ToWide(MEM_SCOPE_TEMP, FileName, 1);
+	wchar_t* pFileName = OS_UTF8ToWide(TEMP, FileName, 1);
 	return D3DCompileFromFile(pFileName, pDefines, pInclude, pEntrypoint, pTarget, Flags1, Flags2, ppCode, ppErrorMsgs);
 }
 
@@ -1430,7 +1430,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 
 	Asset* package = plugin_asset;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
-	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path);
+	bool ok = OS_SetWorkingDir(DS, package->package.filesys_path);
 	ASSERT(ok);
 
 #ifdef HT_DYNAMIC
@@ -1455,7 +1455,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 	*plugin_instance = {};
 	plugin_instance->plugin_asset = plugin_asset;
 	plugin_instance->handle = (HT_PluginInstance)EncodeHandle(plugin_handle);
-	DS_ArrInit(&plugin_instance->allocations, DS_HEAP);
+	DS_ArrInit(&plugin_instance->allocations, HEAP);
 
 	STR_View plugin_name = plugin_asset->name;
 
@@ -1494,7 +1494,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 
 	plugin_asset->plugin.active_instance = plugin_instance->handle;
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(DS, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
@@ -1523,7 +1523,7 @@ EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {
 
 	for (int i = 0; i < plugin->allocations.count; i++) {
 		PluginAllocationHeader* allocation = plugin->allocations[i];
-		DS_MemFree(DS_HEAP, allocation);
+		DS_MemFree(HEAP, allocation);
 	}
 	DS_ArrDeinit(&plugin->allocations);
 	plugin->allocations = {};

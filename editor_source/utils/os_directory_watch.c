@@ -7,15 +7,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-OS_API bool OS_InitDirectoryWatch(DS_MemScopeNone* m, OS_DirectoryWatch* watch, STR_View directory) {
-	DS_MemScope temp = DS_ScopeBeginT(m);
-	wchar_t* directory_wide = OS_UTF8ToWide(&temp, directory, 1);
+OS_API bool OS_InitDirectoryWatch(DS_Info* ds, OS_DirectoryWatch* watch, STR_View directory) {
+	DS_ArenaMark mark = DS_ArenaGetMark(ds->temp_arena);
+	
+	wchar_t* directory_wide = OS_UTF8ToWide(ds->temp_arena, directory, 1);
 
 	HANDLE handle = FindFirstChangeNotificationW(directory_wide, TRUE,
 		FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY);
 	watch->handle = handle;
 
-	DS_ScopeEnd(&temp);
+	DS_ArenaSetMark(ds->temp_arena, mark);
 	return handle != INVALID_HANDLE_VALUE;
 }
 

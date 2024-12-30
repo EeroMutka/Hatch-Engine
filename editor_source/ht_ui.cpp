@@ -76,7 +76,7 @@ EXPORT UI_Panel* NewUIPanel(UI_PanelTree* tree) {
 		panel = (UI_Panel*)DS_BkArrPushUndef(&tree->panels);
 	}
 	*panel = UI_Panel{0};
-	DS_ArrInit(&panel->tabs, DS_HEAP);
+	DS_ArrInit(&panel->tabs, HEAP);
 	return panel;
 }
 
@@ -90,7 +90,7 @@ EXPORT HT_String UITextToString(UI_Text text) {
 
 EXPORT UI_Text StringToUIText(HT_String string) {
 	UI_Text result = {};
-	result.text.allocator = DS_HEAP;
+	result.text.allocator = HEAP;
 	result.text.capacity = (int)string.capacity;
 	result.text.count = (int)string.size;
 	result.text.data = string.data;
