@@ -15,9 +15,8 @@
 // -- Globals -----------------------------
 
 EXPORT DS_Arena* TEMP;
-EXPORT DS_Allocator HEAP_;
 EXPORT DS_Allocator* HEAP;
-EXPORT DS_Info DS_INFO;
+EXPORT DS_Info* DS;
 EXPORT uint64_t CPU_FREQUENCY;
 EXPORT STR_View CURRENT_WORKING_DIRECTORY;
 
@@ -273,14 +272,14 @@ static void HT_OS_AddEvent(HT_OS_Events* s, const OS_Event* event) {
 }
 
 int main(int argc, char** argv) {
-	HEAP_ = { &DS_INFO, DS_HeapAllocatorProc };
-	HEAP = &HEAP_;
-
-	DS_Arena temp_arena;
-	DS_ArenaInit(&temp_arena, 4096, HEAP);
+	DS_Arena temp_arena = {0};
+	DS_Info ds = { &temp_arena };
+	DS_AllocatorBase heap = { &ds, DS_HeapAllocatorProc };
+	DS_ArenaInit(&temp_arena, 4096, (DS_Allocator*)&heap);
+	
+	DS = &ds;
+	HEAP = (DS_Allocator*)&heap;
 	TEMP = &temp_arena;
-	DS_INFO.temp_arena = &temp_arena;
-
 	CPU_FREQUENCY = OS_GetCPUFrequency();
 
 #ifdef HT_GEN
