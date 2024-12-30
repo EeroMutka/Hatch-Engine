@@ -3,9 +3,14 @@
 #define OS_API
 #endif
 
+OS_API bool OS_IsDebuggerPresent();
+
 OS_API bool OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data);
 
 OS_API bool OS_WriteEntireFile(DS_MemScopeNone* m, const char* file, STR_View data);
+
+// Converts path to a canonical absolute path
+OS_API bool OS_PathToAbsolute(DS_MemScope* m, STR_View path, STR_View* out_path);
 
 OS_API bool OS_PathIsAbsolute(STR_View path);
 
@@ -21,12 +26,11 @@ OS_API bool OS_RunProcess(DS_MemScopeNone* m, STR_View command_string, uint32_t*
 
 OS_API void OS_DeleteDirectory(DS_MemScopeNone* m, STR_View directory_path);
 
-OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path);
-
 OS_API bool OS_MakeDirectory(DS_MemScopeNone* m, STR_View directory);
 
 OS_API void OS_GetWorkingDir(DS_MemScope* m, STR_View* directory);
 
+// `directory` must be an absolute path
 OS_API bool OS_SetWorkingDir(DS_MemScopeNone* m, STR_View directory);
 
 OS_API bool OS_FileLastModificationTime(DS_MemScopeNone* m, STR_View filepath, uint64_t* out_modtime);

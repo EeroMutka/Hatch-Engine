@@ -13,6 +13,7 @@
 EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 	Asset* package = plugin;
 	for (;package->kind != AssetKind_Package; package = package->parent) {}
+
 	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, package->package.filesys_path); // @speed: we're doing this a bunch unnecessarily
 	ASSERT(ok);
 
@@ -116,12 +117,10 @@ EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin) {
 		OS_WriteEntireFile(MEM_SCOPE_NONE, header_filepath, str.str);
 	}
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project_directory) {
-	OS_SetWorkingDir(MEM_SCOPE_NONE, project_directory);
-
 	FILE* f = NULL;
 	fopen_s(&f, "premake5.lua", "wb");
 	ASSERT(f);
@@ -142,12 +141,12 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 	fprintf(f, "workspace \"%.*s\"\n", StrArg(project_name));
 	fprintf(f, "\tarchitecture \"x64\"\n");
 	fprintf(f, "\tconfigurations { \"Debug\", \"Release\" }\n");
-	fprintf(f, "\tlocation \"%%{_ACTION}\"\n\n");
+	fprintf(f, "\tlocation (\".\" .. _ACTION)\n\n");
 
 	fprintf(f, "project \"%.*s\"\n", StrArg(project_name));
 	fprintf(f, "\tkind \"ConsoleApp\"\n");
 	fprintf(f, "\tlanguage \"C++\"\n");
-	fprintf(f, "\ttargetdir \"build\"\n\n");
+	fprintf(f, "\ttargetdir \".build\"\n\n");
 
 	fprintf(f, "\tspecify_warnings()\n\n");
 
@@ -209,8 +208,6 @@ EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project
 	// also want to run the command now.
 	u32 exit_code;
 	bool ok = OS_RunProcess(MEM_SCOPE_NONE, "premake5 vs2022", &exit_code);
-
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
 }
 
 #ifdef HT_DYNAMIC

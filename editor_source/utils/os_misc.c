@@ -7,6 +7,10 @@
 
 #include <stdio.h> // for fopen
 
+OS_API bool OS_IsDebuggerPresent() {
+	return (bool)IsDebuggerPresent();
+}
+
 OS_API bool OS_ReadEntireFile(DS_MemScope* m, const char* file, STR_View* out_data) {
 	FILE* f = NULL;
 	errno_t err = fopen_s(&f, file, "rb");
@@ -141,7 +145,15 @@ OS_API void OS_DeleteDirectory(DS_MemScopeNone* m, STR_View directory_path) {
 	DS_ScopeEnd(&temp);
 }
 
-OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path) {
+static void OS_ConvertSlashesInPlace(STR_View str, char from, char to) {
+	for (int i = 0; i < str.size; i++) {
+		if (str.data[i] == from) {
+			((char*)str.data)[i] = to;
+		}
+	}
+}
+
+OS_API bool OS_PathToAbsolute(DS_MemScope* m, STR_View path, STR_View* out_path) {
 	// https://pdh11.blogspot.com/2009/05/pathcanonicalize-versus-what-it-says-on.html
 	// https://stackoverflow.com/questions/10198420/open-directory-using-createfile
 
@@ -166,6 +178,7 @@ OS_API bool OS_PathToCanonical(DS_MemScope* m, STR_View path, STR_View* out_path
 	if (ok) {
 		wchar_t* result_wide_cut = result_wide + 4; // strings returned have `\\?\` - prefix that we want to get rid of
 		OS_WideToUTF8(m, result_wide_cut, out_path);
+		OS_ConvertSlashesInPlace(*out_path, '\\', '/');
 	}
 
 	DS_ScopeEnd(&temp);
@@ -181,19 +194,13 @@ OS_API bool OS_MakeDirectory(DS_MemScopeNone* m, STR_View directory) {
 }
 
 OS_API bool OS_SetWorkingDir(DS_MemScopeNone* m, STR_View directory) {
+	assert(OS_PathIsAbsolute(directory));
+
 	DS_MemScope temp = DS_ScopeBeginT(m);
 	wchar_t* dir_wide = OS_UTF8ToWide(&temp, directory, 1);
 	bool ok = SetCurrentDirectoryW(dir_wide) != 0;
 	DS_ScopeEnd(&temp);
 	return ok;
-}
-
-static void OS_ConvertSlashesInPlace(STR_View str, char from, char to) {
-	for (int i = 0; i < str.size; i++) {
-		if (str.data[i] == from) {
-			((char*)str.data)[i] = to;
-		}
-	}
 }
 
 OS_API void OS_GetWorkingDir(DS_MemScope* m, STR_View* directory) {

@@ -1494,7 +1494,7 @@ EXPORT void RunPlugin(EditorState* s, Asset* plugin_asset) {
 
 	plugin_asset->plugin.active_instance = plugin_instance->handle;
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void UnloadPlugin(EditorState* s, Asset* plugin_asset) {

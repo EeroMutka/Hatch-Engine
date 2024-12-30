@@ -99,16 +99,30 @@ EXPORT void RegenerateTypeTable(EditorState* s) {
 	s->api->types = (HT_GeneratedTypeTable*)s->type_table.data;
 }
 
+// NOTE: modifies the metadesk path in-place to use / instead of the \\ separator
+//static STR_View PathFromMDAndConvertSlashes(MD_String8 path) {
+//	for (int i = 0; i < path.size; i++) {
+//		if (path.str[i] == '\\') path.str[i] = '/';
+//	}
+//	return {(char*)path.str, path.size};
+//}
+
 static void LoadProjectFromParsedNode(AssetTree* tree, MD_Node* root) {
 	MD_Node* packages = MD_ChildFromString(root, MD_S8Lit("packages"), 0);
 	if (!MD_NodeIsNil(packages)) {
 		DS_DynArray(STR_View) package_paths = {TEMP};
 
 		for (MD_Node* child = packages->first_child; !MD_NodeIsNil(child); child = child->next) {
-			STR_View path = StrFromMD(child->string);
+			STR_View path_unconverted = StrFromMD(child->string);
+			STR_View path;
+
 			if (STR_CutStart(&path, "$HATCH_DIR")) {
 				path = STR_Form(TEMP, "%s%v", HATCH_DIR, path);
 			}
+			
+			bool ok = OS_PathToAbsolute(MEM_SCOPE_TEMP, path_unconverted, &path);
+			EXPECT_OR_USER_ERROR(ok, "ERROR: tried to load a package from an invalid path: '%.*s'\n", StrArg(path_unconverted));
+
 			DS_ArrPush(&package_paths, path);
 		}
 
@@ -117,9 +131,12 @@ static void LoadProjectFromParsedNode(AssetTree* tree, MD_Node* root) {
 }
 
 EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory) {
+	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, project_directory);
+	CURRENT_WORKING_DIRECTORY = project_directory;
+	ASSERT(ok);
+
 	MD_Arena* md_arena = MD_ArenaAlloc();
-	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
-	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
+	MD_ParseResult parse = MD_ParseWholeFile(md_arena, MD_S8Lit(".htproject"));
 	ASSERT(!MD_NodeIsNil(parse.node));
 	ASSERT(parse.errors.node_count == 0);
 
@@ -149,11 +166,12 @@ EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_di
 }
 
 EXPORT void LoadProject(AssetTree* tree, STR_View project_directory) {
-	ASSERT(OS_PathIsAbsolute(project_directory));
+	bool ok = OS_SetWorkingDir(MEM_SCOPE_NONE, project_directory);
+	CURRENT_WORKING_DIRECTORY = project_directory;
+	ASSERT(ok);
 
 	MD_Arena* md_arena = MD_ArenaAlloc();
-	MD_String8 md_filepath = StrToMD(STR_Form(TEMP, "%v/.htproject", project_directory));
-	MD_ParseResult parse = MD_ParseWholeFile(md_arena, md_filepath);
+	MD_ParseResult parse = MD_ParseWholeFile(md_arena, MD_S8Lit(".htproject"));
 	ASSERT(!MD_NodeIsNil(parse.node));
 	if (parse.errors.node_count != 0) {
 		printf("Failed to load .htproject at '%.*s'\n", StrArg(project_directory));
@@ -462,7 +480,7 @@ EXPORT void SavePackageToDisk(AssetTree* tree, Asset* package) {
 
 	SaveAsset(tree, package, package, package->package.filesys_path);
 
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 static void ReloadAssetsPass1(AssetTree* tree, Asset* parent, STR_View parent_full_path, bool force_reload) {
@@ -927,7 +945,7 @@ EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool 
 #endif
 
 	MD_ArenaRelease(ctx.md_arena);
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY); // reset working directory
+	OS_SetWorkingDir(MEM_SCOPE_NONE, CURRENT_WORKING_DIRECTORY); // reset working directory
 }
 
 EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
@@ -935,15 +953,13 @@ EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 
 	for (int i = 0; i < paths.count; i++) {
 		STR_View path = paths[i];
-		ASSERT(OS_PathIsAbsolute(path));
 
 		Asset* package = MakeNewAsset(tree, AssetKind_Package);
 		package->ui_state_is_open = true;
 
+		ASSERT(!STR_ContainsU(path, '\\'));
 		STR_View package_name = STR_AfterLast(path, '/');
-		bool has_dollar = STR_CutStart(&package_name, "$");
-		ASSERT(has_dollar);
-
+		
 		u64 name_hash = DS_MurmurHash64A(package_name.data, package_name.size, 0);
 		bool newly_added = DS_MapInsert(&tree->package_from_name, name_hash, package);
 		ASSERT(newly_added);
@@ -953,7 +969,7 @@ EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths) {
 		package->package.filesys_path = STR_Clone(DS_HEAP, path);
 
 		bool ok = OS_InitDirectoryWatch(MEM_SCOPE_NONE, &package->package.dir_watch, package->package.filesys_path);
-		ASSERT(ok);
+		EXPECT_OR_USER_ERROR(ok, "ERROR: tried to load a package from an invalid path: '%.*s'\n", StrArg(package->package.filesys_path));
 
 		DS_ArrPush(&packages, package);
 	}

@@ -18,7 +18,7 @@ EXPORT DS_Arena* TEMP;
 EXPORT DS_MemScopeNone MEM_SCOPE_NONE_;
 EXPORT DS_MemScope MEM_SCOPE_TEMP_;
 EXPORT uint64_t CPU_FREQUENCY;
-EXPORT STR_View DEFAULT_WORKING_DIRECTORY;
+EXPORT STR_View CURRENT_WORKING_DIRECTORY;
 
 extern "C" {
 	EXPORT UI_State UI_STATE;
@@ -283,9 +283,10 @@ int main(int argc, char** argv) {
 #ifdef HT_GEN
 	// The `hatch-gen` command regenerates the visual studio solution for the project in the
 	// current working directory, as well as regenerates any auto-generated header files.
-
+	
 	STR_View cwd;
 	OS_GetWorkingDir(MEM_SCOPE_TEMP, &cwd);
+	CURRENT_WORKING_DIRECTORY = cwd;
 
 	AssetTree tree = {};
 	InitAssetTree(&tree);
@@ -308,9 +309,6 @@ int main(int argc, char** argv) {
 	OS_GetThisExecutablePath(&persist, &exe_path);
 	STR_View exe_dir = STR_BeforeLast(exe_path, '/');
 	STR_View project_dir = STR_BeforeLast(exe_dir, '/');
-	
-	DEFAULT_WORKING_DIRECTORY = exe_dir;
-	OS_SetWorkingDir(MEM_SCOPE_NONE, DEFAULT_WORKING_DIRECTORY);
 
 	RenderState render_state = {};
 	EditorState editor_state = {};

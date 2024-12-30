@@ -16,6 +16,17 @@
 #define ASSERT(X) do { if (!(X)) __debugbreak(); } while (0)
 #endif
 
+// like an assert except not removed from release builds
+#define EXPECT(X) do { if (!(X)) { __debugbreak(); exit(1); } } while (0)
+
+#define EXPECT_OR_USER_ERROR(X, ERROR_FMT, ...) do { \
+	if (!(X)) { \
+		printf(ERROR_FMT, __VA_ARGS__); \
+		if (OS_IsDebuggerPresent()) __debugbreak(); \
+		exit(1); \
+	} \
+	} while (0)
+
 #define TODO() __debugbreak()
 
 #define DS_ASSERT(X) ASSERT(X)
@@ -89,7 +100,7 @@ extern DS_Arena* TEMP;
 extern DS_MemScope MEM_SCOPE_TEMP_;
 extern DS_MemScopeNone MEM_SCOPE_NONE_;
 extern uint64_t CPU_FREQUENCY;
-extern STR_View DEFAULT_WORKING_DIRECTORY;
+extern STR_View CURRENT_WORKING_DIRECTORY; // cache the current working directory to avoid having to query for it every time we want to temporarily change it
 
 #define MEM_SCOPE_NONE   (DS_MemScopeNone*)&MEM_SCOPE_NONE_
 #define MEM_SCOPE_TEMP   (DS_MemScope*)&MEM_SCOPE_TEMP_
@@ -560,6 +571,9 @@ EXPORT void RegenerateTypeTable(EditorState* s);
 EXPORT void LoadProject(AssetTree* tree, STR_View project_directory);
 EXPORT void LoadProjectIncludingEditorLayout(EditorState* s, STR_View project_directory);
 EXPORT void ReloadPackages(AssetTree* tree, DS_ArrayView<Asset*> packages, bool force_reload);
+
+// Gives a user error if a package doesn't exist at the specified path.
+// The path string is however expected to not include backslashes.
 EXPORT void LoadPackages(AssetTree* tree, DS_ArrayView<STR_View> paths);
 
 // -- ht_log.cpp ------------------------------------------------------
@@ -571,6 +585,7 @@ EXPORT void UpdateAndDrawLogTab(EditorState* s, UI_Key key, UI_Rect area);
 
 // -- ht_plugin_compiler.cpp ------------------------------------------
 
+// Assumes current working directory to be the project directory
 EXPORT void GeneratePremakeAndVSProjects(AssetTree* asset_tree, STR_View project_directory);
 
 EXPORT void RegeneratePluginHeader(AssetTree* tree, Asset* plugin);

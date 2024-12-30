@@ -394,12 +394,22 @@ DS_API void DS_ArenaReset(DS_Arena* arena);
 
 // -- MemScope ----------------------------------------------
 
+// An alternative to the MemScope system:
+// 
+// void DoStuff(DS_Info* ds);
+//
+// String CloneString(DS_Allocator* allocator, String string);
+// 
+// DS_Allocator and DS_Arena would then always store a pointer to a temp arena.
+// 
+
 // When passing a temporary arena to a function, it's often not immediately clear from the call-site whether the arena parameter
 // is for temporary allocations within the function or for allocating caller result data. To make this distinction clear,
 // DS_MemScopeNone can be used for passing temporary arenas only.
 typedef struct DS_MemScopeNone {
 	DS_Arena* temp;
 } DS_MemScopeNone;
+
 
 // DS_MemScope is used for passing a temporary arena and a results arena to a function.
 // It can also be used for temporary child scopes that get immediately
