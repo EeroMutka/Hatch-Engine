@@ -10,19 +10,20 @@ end
 workspace "hatch"
 	architecture "x64"
 	configurations { "Debug", "Release" }
-	location "%{_ACTION}"
+	location("." .. _ACTION)
 
 project "hatch-gen"
 	kind "ConsoleApp"
 	language "C++"
-	targetdir "build"
+	targetdir ".build"
 	
 	specify_warnings()
 	
-	includedirs "plugin_include"
+	includedirs "."
 	
-	files "editor_source/**"
-	files "plugin_include/**"
+	files "*"
+	files "ht_editor_source/**"
+	files "ht_utils/**"
 	-- files "plugin_include/ht_utils/fire/**"
 	
 	defines "HT_GEN"

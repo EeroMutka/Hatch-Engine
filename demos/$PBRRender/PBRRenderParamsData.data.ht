@@ -1,6 +1,0 @@
-type: "PBRRenderParams"
-data: {
-	scene_type: "types/Scene"
-	main_pass_shader: "shaders/main_pass.hlsl"
-	present_shader: "shaders/present.hlsl"
-}

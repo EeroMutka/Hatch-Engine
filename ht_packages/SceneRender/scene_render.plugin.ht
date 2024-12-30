@@ -1,0 +1,6 @@
+data_asset: ""
+code_files: {
+	"source/scene_render.cpp",
+}
+linker_inputs: {
+}

@@ -1,5 +1,5 @@
-build/
-vs2022/
+.build/
+.vs2022/
 user_startup_project/premake5.lua
 SponzaAssets/
 SunTempleAssets/
