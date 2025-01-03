@@ -1,3 +1,4 @@
+#define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
 #include <ht_utils/fire/fire_string.h>
 
@@ -160,7 +161,7 @@ OS_API bool OS_PathToAbsolute(DS_Arena* arena, STR_View path, STR_View* out_path
 	// https://pdh11.blogspot.com/2009/05/pathcanonicalize-versus-what-it-says-on.html
 	// https://stackoverflow.com/questions/10198420/open-directory-using-createfile
 
-	DS_Scope scope = DS_ScopePushA(arena);
+	DS_Scope scope = DS_ScopePushWithOut(arena);
 	wchar_t* path_wide = OS_UTF8ToWide(scope.temp_arena, path, 1);
 
 	HANDLE file_handle = CreateFileW(path_wide, 0, 0, NULL, OPEN_ALWAYS, FILE_FLAG_BACKUP_SEMANTICS, NULL);
@@ -276,7 +277,7 @@ OS_API bool OS_FolderPicker(DS_Arena* arena, STR_View* out_path) {
 }
 
 OS_API bool OS_GetAllFilesInDirectory(DS_Arena* arena, STR_View directory, OS_FileInfoArray* out_files) {
-	DS_Scope scope = DS_ScopePushA(arena);
+	DS_Scope scope = DS_ScopePushWithOut(arena);
 
 	char* match_str_data = DS_ArenaPush(scope.temp_arena, directory.size + 2);
 	memcpy(match_str_data, directory.data, directory.size);

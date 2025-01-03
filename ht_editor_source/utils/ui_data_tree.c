@@ -1,3 +1,4 @@
+#define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
 #include <ht_utils/fire/fire_string.h>
 #include <ht_utils/fire/fire_ui/fire_ui.h>

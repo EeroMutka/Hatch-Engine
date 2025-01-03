@@ -65,22 +65,30 @@
 #define DS_DEFAULT_ARENA_PUSH_ALIGNMENT 8
 #endif
 
+// DS_Info provides access to "global" info, though currently only being an arena for temporary allocations.
+// Passing a temporary arena to a function as a DS_Info parameter shows the intent better in the callsite compared
+// to passing it as an arena pointer, as it clearly distinguishes it from an arena parameter intended for result allocations.
+typedef struct DS_Info {
+	struct DS_Arena* temp_arena;
+} DS_Info;
+
 typedef struct DS_AllocatorBase {
+	// Pointer to the global info is stored here to make it easy to get the temporary arena
+	// inside functions that just take an allocator or an arena parameter.
+	DS_Info* ds;
+
 	// AllocatorProc is a combination of malloc, free and realloc.
 	// A new allocation is made when new_size > 0.
 	// An existing allocation is freed when new_size == 0; in this case the old_size parameter is ignored.
 	// To resize an existing allocation, pass the existing pointer into `ptr` and its size into `old_size`.
-	struct DS_Info* ds;
 	void* (*allocator_proc)(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align);
 } DS_AllocatorBase;
 
 // ----------------------------------------------------------
 
-typedef struct DS_Arena DS_Arena;
-
 // For convenience, DS_Allocator is type-defined to be DS_Arena to make it easy to pass an arena pointer to any parameter
-// of type DS_Allocator*, but it can be anything that points to DS_AllocatorBase.
-typedef DS_Arena DS_Allocator;
+// of type DS_Allocator*, but really it can be anything that contains a DS_AllocatorBase as its first member.
+typedef struct DS_Arena DS_Allocator;
 
 typedef struct DS_ArenaBlockHeader {
 	size_t size_including_header;
@@ -92,7 +100,7 @@ typedef struct DS_ArenaMark {
 	char* ptr;
 } DS_ArenaMark;
 
-struct DS_Arena {
+typedef struct DS_Arena {
 	union {
 		DS_AllocatorBase base;
 		struct DS_Info* ds;
@@ -102,7 +110,7 @@ struct DS_Arena {
 	DS_Allocator* allocator;
 	size_t block_size;
 	size_t total_mem_reserved;
-};
+} DS_Arena;
 
 // --- Internal helpers -------------------------------------
 
@@ -126,6 +134,17 @@ static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t
 		return _aligned_realloc(ptr, size, align);
 	}
 }
+
+struct DS_BasicMemConfig {
+	DS_Info ds_info;
+	DS_Arena temp_arena;
+	DS_AllocatorBase heap_allocator;
+
+	// Usage helpers
+	DS_Arena* temp;
+	DS_Info* ds;
+	DS_Allocator* heap;
+};
 #endif
 
 // Results in a compile-error if `elem` does not match the array's element type
@@ -381,7 +400,7 @@ static inline bool DS_MapIter(DS_MapRaw* map, int* i, void** out_key, void** out
 	return true;
 }
 
-// -- Arena interface --------------------------------
+// -- Arena ------------------------------------------
 
 DS_API void DS_ArenaInit(DS_Arena* arena, size_t block_size, DS_Allocator* allocator);
 DS_API void DS_ArenaDeinit(DS_Arena* arena);
@@ -396,10 +415,8 @@ DS_API void DS_ArenaReset(DS_Arena* arena);
 
 // -- Scope ------------------------------------------
 
-typedef struct DS_Info {
-	DS_Arena* temp_arena;
-} DS_Info;
-
+// DS_Scope provides convenience functions for storing an arena mark as a local and
+// setting it back after some temporary allocations.
 typedef struct DS_Scope {
 	DS_Arena* temp_arena;
 	DS_ArenaMark reset_to;
@@ -410,11 +427,17 @@ static inline DS_Scope DS_ScopePush(DS_Info* ds) {
 	return scope;
 }
 
-static inline DS_Scope DS_ScopePushA(DS_Arena* outer) {
-	DS_Scope scope = {outer->ds->temp_arena};
-	if (scope.temp_arena != outer) {
+// Use this version of DS_ScopePush if, within the scope, you're allocating memory into an arena
+// which is intended to outlive the scope.
+static inline DS_Scope DS_ScopePushWithOut(DS_Arena* outliving_arena) {
+	DS_Scope scope = {outliving_arena->ds->temp_arena};
+	
+	// If the same arena is used for allocating memory that is expected to outlive the scope,
+	// we definitely don't want to reset the arena mark on DS_ScopePop!!
+	if (scope.temp_arena != outliving_arena) {
 		scope.reset_to = scope.temp_arena->mark;
 	}
+
 	return scope;
 }
 
@@ -1313,3 +1336,17 @@ DS_API void DS_ArenaSetMark(DS_Arena* arena, DS_ArenaMark mark) {
 	}
 	DS_ProfExit();
 }
+
+#ifndef DS_NO_MALLOC
+static void DS_InitBasicMemConfig(DS_BasicMemConfig* mem) {
+	mem->ds_info = { &mem->temp_arena };
+	mem->heap_allocator = { &mem->ds_info, DS_HeapAllocatorProc };
+	DS_ArenaInit(&mem->temp_arena, 4096, (DS_Allocator*)&mem->heap_allocator);	
+	mem->temp = &mem->temp_arena;
+	mem->ds = &mem->ds_info;
+	mem->heap = (DS_Allocator*)&mem->heap_allocator;
+}
+static void DS_DeinitBasicMemConfig(DS_BasicMemConfig* mem) {
+	DS_ArenaDeinit(&mem->temp_arena);
+}
+#endif
