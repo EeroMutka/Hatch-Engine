@@ -11,12 +11,12 @@
 MeshManager MeshManager::instance{};
 
 void MeshManager::Init() {
-	DS_MapInit(&instance.meshes, FG::heap);
-	DS_MapInit(&instance.textures, FG::heap);
+	DS_MapInit(&instance.meshes, FG::mem.heap);
+	DS_MapInit(&instance.textures, FG::mem.heap);
 }
 
 static char* TempCString(HT_StringView str) {
-	char* data = DS_ArenaPush(FG::temp, str.size + 1);
+	char* data = DS_ArenaPush(FG::mem.temp, str.size + 1);
 	memcpy(data, str.data, str.size);
 	data[str.size] = 0;
 	return data;
@@ -44,7 +44,7 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 		u32 num_indices;
 	};
 
-	DS_DynArray(TempMeshPart) temp_parts = {FG::temp};
+	DS_DynArray(TempMeshPart) temp_parts = {FG::mem.temp};
 	u32 total_num_vertices = 0;
 	u32 total_num_indices = 0;
 
@@ -57,14 +57,14 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 			ufbx_mesh* fbx_mesh = node->mesh;
 
 			u32 num_tri_indices = (u32)fbx_mesh->max_face_triangles * 3;
-			u32* tri_indices = (u32*)DS_ArenaPush(FG::temp, num_tri_indices * sizeof(u32));
+			u32* tri_indices = (u32*)DS_ArenaPush(FG::mem.temp, num_tri_indices * sizeof(u32));
 
 			for (u32 part_i = 0; part_i < fbx_mesh->material_parts.count; part_i++) {
 				ufbx_mesh_part* part = &fbx_mesh->material_parts[part_i];
 				//ufbx_material* material = fbx_mesh->materials[part_i];
 
 				u32 num_triangles = (u32)part->num_triangles;
-				Vertex* vertices = (Vertex*)DS_ArenaPush(FG::temp, num_triangles * 3 * sizeof(Vertex));
+				Vertex* vertices = (Vertex*)DS_ArenaPush(FG::mem.temp, num_triangles * 3 * sizeof(Vertex));
 				u32 num_vertices = 0;
 
 				for (u32 face_i = 0; face_i < part->num_faces; face_i++) {
@@ -92,7 +92,7 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 					{ vertices, num_vertices, sizeof(Vertex) },
 				};
 				u32 num_indices = num_triangles * 3;
-				u32* indices = (u32*)DS_ArenaPush(FG::temp, num_indices * sizeof(u32));
+				u32* indices = (u32*)DS_ArenaPush(FG::mem.temp, num_indices * sizeof(u32));
 
 				// This call will deduplicate vertices, modifying the arrays passed in `streams[]`,
 				// indices are written in `indices[]` and the number of unique vertices is returned.
@@ -141,7 +141,7 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 		Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, FG::ht, mesh_asset);
 		HT_ASSERT(mesh_data);
 		HT_StringView mesh_source_file = FG::ht->AssetGetFilepath(mesh_data->mesh_source);
-		*cached = ImportMesh(FG::ht, FG::heap, mesh_source_file);
+		*cached = ImportMesh(FG::ht, FG::mem.heap, mesh_source_file);
 	}
 	return *cached;
 }

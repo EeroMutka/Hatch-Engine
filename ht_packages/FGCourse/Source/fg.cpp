@@ -7,27 +7,28 @@
 
 #include <ht_utils/gizmos/gizmos.h>
 
-#include "../../$SceneEdit/src/camera.h"
-#include "../../$SceneEdit/src/scene_edit.h"
+#include "ht_packages/SceneEdit/src/camera.h"
+#include "ht_packages/SceneEdit/src/scene_edit.h"
 
 // -----------------------------------------------------
 
-DS_Arena* FG::temp;
-DS_Allocator* FG::heap;
+//DS_Arena* FG::temp;
+//DS_Allocator* FG::heap;
 HT_API* FG::ht;
-Allocator FG::temp_allocator_wrapper;
-Allocator FG::heap_allocator_wrapper;
-DS_Arena FG::temp_arena;
+DS_BasicMemConfig FG::mem;
+//Allocator FG::temp_allocator_wrapper;
+//Allocator FG::heap_allocator_wrapper;
+//DS_Arena FG::temp_arena;
 
 static SceneEditState scene_edit_state;
 
 // -----------------------------------------------------
 
-static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
-	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
-	if (ptr) memcpy(data, ptr, old_size);
-	return data;
-}
+//static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
+//	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
+//	if (ptr) memcpy(data, ptr, old_size);
+//	return data;
+//}
 
 static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	void* data = ((Allocator*)allocator)->ht->AllocatorProc(ptr, size);
@@ -86,9 +87,9 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	open_scene_view.has_camera_position = true;
 	open_scene_view.camera_position = camera->position;
 	open_scene_view.ws_to_ss = world_to_clip * cs_to_ss;
-	invert4x4((float*)&open_scene_view.ws_to_ss, (float*)&open_scene_view.ss_to_ws);
+	open_scene_view.ss_to_ws = M_Inverse4x4(open_scene_view.ws_to_ss);
 	
-	SceneEditUpdate(ht, &scene_edit_state, &open_scene_view, mouse_pos, scene);
+	SceneEditUpdate(ht, &scene_edit_state, update_info->rect, mouse_pos, scene);
 
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
@@ -131,14 +132,25 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 
 void FG::Init(HT_API* ht_api) {
 	ht = ht_api;
-	temp_allocator_wrapper = {{TempAllocatorProc}, ht};
-	heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
-	temp = &temp_arena;
-	heap = (DS_Allocator*)&heap_allocator_wrapper;
+
+	// Copied from DS_InitBasicMemConfig
+	mem.ds_info.temp_arena = &mem.temp_arena;
+	mem.heap_allocator.allocator_proc = HeapAllocatorProc;
+	mem.heap_allocator.ds = &mem.ds_info;
+	DS_ArenaInit(&mem.temp_arena, 4096, (DS_Allocator*)&mem.heap_allocator);	
+	mem.temp = &mem.temp_arena;
+	mem.ds = &mem.ds_info;
+	mem.heap = (DS_Allocator*)&mem.heap_allocator;
+	
+	//temp_allocator_wrapper = {{TempAllocatorProc}, ht};
+	//heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
+	//temp = &temp_arena;
+	//heap = (DS_Allocator*)&heap_allocator_wrapper;
 }
 
 void FG::ResetTempArena() {
-	DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
+	DS_ArenaReset(&mem.temp_arena);
+	//DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {

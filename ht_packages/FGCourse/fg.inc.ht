@@ -4,6 +4,7 @@
 typedef struct HT_GeneratedTypeTable {
 	HT_Asset Scene__BoxComponent;
 	HT_Asset Scene__MeshComponent;
+	HT_Asset Scene__SpriteComponent;
 	HT_Asset Scene__Mesh;
 	HT_Asset Scene__Scene;
 	HT_Asset Scene__SceneEntity;
@@ -21,6 +22,12 @@ typedef struct Scene__MeshComponent {
 	HT_Asset mesh;
 	HT_Asset color_texture;
 } Scene__MeshComponent;
+typedef struct Scene__SpriteComponent {
+	HT_Asset texture;
+	vec2 uv_min;
+	vec2 uv_max;
+	float pixels_per_world_unit;
+} Scene__SpriteComponent;
 typedef struct Scene__Mesh {
 	HT_Asset mesh_source;
 } Scene__Mesh;

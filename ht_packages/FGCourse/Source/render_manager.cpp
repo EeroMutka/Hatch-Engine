@@ -18,8 +18,8 @@
 
 #include <ht_utils/gizmos/gizmos.h>
 
-#include "../../$SceneEdit/src/camera.h"
-#include "../../$SceneEdit/src/scene_edit.h"
+#include "ht_packages/SceneEdit/src/camera.h"
+#include "ht_packages/SceneEdit/src/scene_edit.h"
 
 struct ShaderConstants {
 	mat4 world_to_clip;
@@ -226,15 +226,15 @@ static void Render(HT_API* ht) {
 
 	// setup UI / gizmos rendering
 	{
-		DS_ArrInit(&G_UI.vertex_buffer, FG::temp);
-		DS_ArrInit(&G_UI.index_buffer, FG::temp);
+		DS_ArrInit(&G_UI.vertex_buffer, FG::mem.temp);
+		DS_ArrInit(&G_UI.index_buffer, FG::mem.temp);
 		UI_STATE.backend.ResizeAndMapVertexBuffer = UIResizeAndMapVertexBuffer;
 		UI_STATE.backend.ResizeAndMapIndexBuffer  = UIResizeAndMapIndexBuffer;
 
 		// setup UI text rendering backend
 		UI_STATE.backend.GetCachedGlyph = UIGetCachedGlyph;
 
-		UI_TEMP = FG::temp;
+		UI_TEMP = FG::mem.temp;
 		UI_ResetDrawState();
 	}
 

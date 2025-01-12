@@ -135,7 +135,7 @@ static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t
 	}
 }
 
-struct DS_BasicMemConfig {
+typedef struct DS_BasicMemConfig {
 	DS_Info ds_info;
 	DS_Arena temp_arena;
 	DS_AllocatorBase heap_allocator;
@@ -144,7 +144,7 @@ struct DS_BasicMemConfig {
 	DS_Arena* temp;
 	DS_Info* ds;
 	DS_Allocator* heap;
-};
+} DS_BasicMemConfig;
 #endif
 
 // Results in a compile-error if `elem` does not match the array's element type
@@ -1339,8 +1339,9 @@ DS_API void DS_ArenaSetMark(DS_Arena* arena, DS_ArenaMark mark) {
 
 #ifndef DS_NO_MALLOC
 static void DS_InitBasicMemConfig(DS_BasicMemConfig* mem) {
-	mem->ds_info = { &mem->temp_arena };
-	mem->heap_allocator = { &mem->ds_info, DS_HeapAllocatorProc };
+	mem->ds_info.temp_arena = &mem->temp_arena;
+	mem->heap_allocator.allocator_proc = DS_HeapAllocatorProc;
+	mem->heap_allocator.ds = &mem->ds_info;
 	DS_ArenaInit(&mem->temp_arena, 4096, (DS_Allocator*)&mem->heap_allocator);	
 	mem->temp = &mem->temp_arena;
 	mem->ds = &mem->ds_info;

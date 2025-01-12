@@ -25,6 +25,7 @@ struct Allocator {
 
 // ----------------------------------------------
 
+DS_Info ds_info;
 static Allocator temp_allocator_wrapper;
 static Allocator heap_allocator_wrapper;
 static DS_Arena temp_arena;
@@ -80,8 +81,9 @@ static const JPH_BroadPhaseLayer BROAD_PHASE_LAYER_MOVING = 1;
 static const uint32_t BROAD_PHASE_NUM_LAYERS = 2;
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
-	temp_allocator_wrapper = {{TempAllocatorProc}, ht};
-	heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
+	ds_info.temp_arena = &temp_arena;
+	temp_allocator_wrapper = {{&ds_info, TempAllocatorProc}, ht};
+	heap_allocator_wrapper = {{&ds_info, HeapAllocatorProc}, ht};
 	TEMP = &temp_arena;
 	HEAP = (DS_Allocator*)&heap_allocator_wrapper;
 

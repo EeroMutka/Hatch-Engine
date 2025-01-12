@@ -9,7 +9,7 @@
 MessageManager MessageManager::instance{};
 
 void MessageManager::Init() {
-	DS_ArrInit(&instance.messages, FG::heap);
+	DS_ArrInit(&instance.messages, FG::mem.heap);
 }
 
 void MessageManager::BeginFrame() {
@@ -17,7 +17,7 @@ void MessageManager::BeginFrame() {
 }
 
 void MessageManager::SendNewMessageSized(uint64_t type, const Message& message, size_t message_size) {
-	void* data = DS_ArenaPush(FG::temp, message_size);
+	void* data = DS_ArenaPush(FG::mem.temp, message_size);
 	memcpy(data, &message, message_size);
 
 	StoredMessage stored = {type, data};
