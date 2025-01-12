@@ -188,13 +188,15 @@ EXPORT STR_View AssetGetTextPath(DS_Arena* arena, Asset* current_package, Asset*
 
 	STR_View result = asset->name;
 	for (Asset* p = asset->parent;; p = p->parent) {
-		STR_View p_name = p->kind == AssetKind_Package ? GetPackageName(p) : p->name; // @cleanup
-
-		if (p->kind == AssetKind_Package && p == current_package) break; // local paths don't need the package prefix
-
-		result = STR_Form(TEMP, "%v/%v", p_name, result);
-		
-		if (p->kind == AssetKind_Package) break;
+		if (p->kind == AssetKind_Package) {
+			STR_View p_name = GetPackageName(p);
+			if (p == current_package) break; // local paths don't need the package prefix
+			result = STR_Form(TEMP, "$%v/%v", p_name, result);
+			break;
+		}
+		else {
+			result = STR_Form(TEMP, "%v/%v", p->name, result);
+		}
 	}
 
 	return result;
@@ -814,12 +816,10 @@ static void ReloadAssetsPass3(ReloadAssetsContext* ctx, Asset* package, Asset* p
 			}
 
 			if (asset->kind == AssetKind_Plugin) {
-
 				HT_Type type = { HT_TypeKind_Struct };
 				type.handle = ctx->tree->plugin_options_struct_type->handle;
 				MDParser child_p = {parse.node->first_child};
 				ParseMetadeskValue(ctx->tree, package, &asset->plugin.options, &type, &child_p);
-
 				//HT_Array* code_files = &asset->plugin.options.code_files;
 				//ArrayClear(code_files, sizeof(HT_Asset));
 
