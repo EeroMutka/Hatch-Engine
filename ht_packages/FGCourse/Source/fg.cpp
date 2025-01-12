@@ -31,7 +31,7 @@ static SceneEditState scene_edit_state;
 //}
 
 static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
-	void* data = ((Allocator*)allocator)->ht->AllocatorProc(ptr, size);
+	void* data = FG::ht->AllocatorProc(ptr, size);
 	return data;
 }
 

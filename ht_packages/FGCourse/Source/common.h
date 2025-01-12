@@ -11,11 +11,6 @@
 
 #include "../fg.inc.ht"
 
-struct Allocator {
-	DS_AllocatorBase base;
-	HT_API* ht;
-};
-
 class FG {
 public:
 	static void Init(HT_API* ht_api);
@@ -26,7 +21,7 @@ public:
 	//static DS_Allocator* heap;
 
 private:
-	static Allocator temp_allocator_wrapper;
-	static Allocator heap_allocator_wrapper;
+	//static DS_AllocatorBase temp_allocator_wrapper;
+	//static DS_AllocatorBase heap_allocator_wrapper;
 	static DS_Arena temp_arena;
 };

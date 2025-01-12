@@ -1,8 +1,6 @@
-// sprites are rendered in the entity-list order.
-// Position Z and rotation X, Y are ignored.
 struct: {
 	texture: Asset,
-	uv_min: Vec2, // in pixels
-	uv_max: Vec2, // in pixels
+	uv_min: Vec2,
+	uv_max: Vec2,
 	pixels_per_world_unit: Float,
 }

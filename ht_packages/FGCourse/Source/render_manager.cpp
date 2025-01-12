@@ -378,8 +378,8 @@ void RenderManager::Init() {
 	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
 	FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
 
-	HT_StringView main_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/main_shader.hlsl";
-	HT_StringView present_shader_path = HATCH_DIR "/demos/$FGCourse/Shaders/present_shader.hlsl";
+	HT_StringView main_shader_path = "../../ht_packages/FGCourse/Shaders/main_shader.hlsl";
+	HT_StringView present_shader_path = "../../ht_packages/FGCourse/Shaders/present_shader.hlsl";
 
 	D3D11_INPUT_ELEMENT_DESC main_vs_inputs[] = {
 		{    "POS", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,                            0, D3D11_INPUT_PER_VERTEX_DATA, 0},
