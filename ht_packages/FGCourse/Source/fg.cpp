@@ -4,6 +4,7 @@
 #include "message_manager.h"
 #include "render_manager.h"
 #include "mesh_manager.h"
+#include "audio_manager.h"
 
 #include <ht_utils/gizmos/gizmos.h>
 
@@ -12,14 +13,8 @@
 
 // -----------------------------------------------------
 
-//DS_Arena* FG::temp;
-//DS_Allocator* FG::heap;
 HT_API* FG::ht;
 DS_BasicMemConfig FG::mem;
-//Allocator FG::temp_allocator_wrapper;
-//Allocator FG::heap_allocator_wrapper;
-//DS_Arena FG::temp_arena;
-
 static SceneEditState scene_edit_state;
 
 // -----------------------------------------------------
@@ -158,6 +153,7 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	MessageManager::Init();
 	MeshManager::Init();
 	RenderManager::Init();
+	AudioManager::Init();
 	
 	bool ok = ht->RegisterAssetViewerForType(ht->types->Scene__Scene, AssetViewerTabUpdate);
 	HT_ASSERT(ok);

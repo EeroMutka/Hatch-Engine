@@ -1378,6 +1378,11 @@ static bool HT_IsSimulating() {
 	return s->is_simulating;
 }
 
+static void* HT_GetOSWindowHandle() {
+	EditorState* s = g_plugin_call_ctx->s;
+	return s->window.handle;
+}
+
 EXPORT void InitAPI(EditorState* s) {
 	static HT_API api = {};
 	*(void**)&api.AddVertices = UI_AddVertices;
@@ -1422,6 +1427,8 @@ EXPORT void InitAPI(EditorState* s) {
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;
 	api.DestroyTabClass = HT_DestroyTabClass;
 	api.input_frame = &s->input_frame;
+
+	api.GetOSWindowHandle = HT_GetOSWindowHandle;
 	s->api = &api;
 }
 

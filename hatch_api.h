@@ -555,6 +555,10 @@ struct HT_API {
 	
 	HT_CachedGlyph (*GetCachedGlyph)(u32 codepoint);
 	
+	// -- OS -----------------------------------------
+
+	void* (*GetOSWindowHandle)(); // returns HWND on Windows
+	
 	// -- D3D11 API -----------------------------------
 	
 #ifdef HT_INCLUDE_D3D11_API
