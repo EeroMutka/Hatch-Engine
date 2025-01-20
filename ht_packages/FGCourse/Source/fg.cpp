@@ -1,4 +1,5 @@
 #define HT_STATIC_PLUGIN_ID fg
+#define FIRE_OS_SYNC_IMPLEMENTATION
 
 #include "common.h"
 #include "message_manager.h"
@@ -122,6 +123,8 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	RenderParamsMessage render_params_msg = {};
 	render_params_msg.rect = update_info->rect;
 	render_params_msg.world_to_clip = world_to_clip;
+	render_params_msg.scene = scene;
+	render_params_msg.scene_edit_state = &scene_edit_state;
 	MessageManager::SendNewMessage(render_params_msg);
 }
 
@@ -155,6 +158,8 @@ HT_EXPORT void HT_LoadPlugin(HT_API* ht) {
 	RenderManager::Init();
 	AudioManager::Init();
 	
+	MessageManager::RegisterNewThread();
+
 	bool ok = ht->RegisterAssetViewerForType(ht->types->Scene__Scene, AssetViewerTabUpdate);
 	HT_ASSERT(ok);
 }
@@ -174,4 +179,30 @@ struct MyMessageB : Message {
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {
 	FG::ResetTempArena();
 	MessageManager::BeginFrame();
+
+	if (InputIsDown(ht->input_frame, HT_InputKey_P)) {
+		PlaySoundMessage play_sound = {};
+		play_sound.add_pitch = 20.f;
+		MessageManager::SendNewMessage(play_sound);
+	}
+
+	if (InputIsDown(ht->input_frame, HT_InputKey_O)) {
+		PlaySoundMessage play_sound = {};
+		play_sound.add_pitch = -5.f;
+		MessageManager::SendNewMessage(play_sound);
+	}
+
+	if (InputIsDown(ht->input_frame, HT_InputKey_I)) {
+		PlaySoundMessage play_sound = {};
+		play_sound.add_pitch = -2.f;
+		MessageManager::SendNewMessage(play_sound);
+	}
+
+	if (InputIsDown(ht->input_frame, HT_InputKey_L)) {
+		PlaySoundMessage play_sound = {};
+		play_sound.add_pitch = 10.f;
+		MessageManager::SendNewMessage(play_sound);
+	}
+
+	MessageManager::ThreadBarrierAllMessagesSent();
 }

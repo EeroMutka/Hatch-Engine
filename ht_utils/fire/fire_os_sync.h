@@ -52,7 +52,7 @@ OS_SYNC_API void OS_ConditionVarSignal(OS_ConditionVar* condition_var);
 OS_SYNC_API void OS_ConditionVarBroadcast(OS_ConditionVar* condition_var);
 
 // Add this thread to a condition variable's waiting list, unlock a mutex and block execution.
-// When a signal is given for this thread to continue execution, the mutex is locked and the function returns.
+// When a signal is given for this thread to continue execution, the mutex is locked again and the function returns.
 // * The mutex must be locked/entered exactly once prior to calling this function!
 OS_SYNC_API void OS_ConditionVarWait(OS_ConditionVar* condition_var, OS_Mutex* mutex);
 

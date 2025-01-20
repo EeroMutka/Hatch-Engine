@@ -25,6 +25,10 @@ struct RenderTexture {
 struct RenderParamsMessage : Message {
 	HT_Rect rect;
 	mat4 world_to_clip;
+	
+	// these are passed for gizmo rendering
+	Scene__Scene* scene;
+	struct SceneEditState* scene_edit_state;
 };
 
 struct RenderObjectMessage : Message {

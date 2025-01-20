@@ -38,7 +38,7 @@ data: {
 			},
 		},
 		"Torus": {
-			position: { -0.476286, -0.409469, 21.806662 },
+			position: { 6.016116, -0.409762, 25.195250 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 8.000000, 1.000000, 1.000000 },
 			components: {
@@ -55,12 +55,42 @@ data: {
 				},
 			},
 		},
+		"DirectionalLight1": {
+			position: { 0.000000, 0.000000, 5.000000 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/DirectionalLightComponent") {
+					emission: { 5.000000, 0.000000, 0.000000 },
+				},
+			},
+		},
+		"PointLight1": {
+			position: { 0, 4.000000, 20.744476 },
+			rotation: { 36.000000, 0.000000, 83.700005 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/PointLightComponent") {
+					emission: { 0.000000, 0.000000, 2.000000 },
+				},
+			},
+		},
+		"SpotLight1": {
+			position: { 9.201012, 0.000000, 22.744476 },
+			rotation: { 36.000000, 0.000000, 83.700005 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/SpotLightComponent") {
+					emission: { 5.000000, 0.000000, 0.000000 },
+				},
+			},
+		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { -0.165377, 8.491119, 25.275303 },
-			pitch: 0.416496,
-			yaw: -20.303490,
+			position: { 6.076058, 11.136295, 25.928068 },
+			pitch: 0.252498,
+			yaw: -26.846991,
 		},
 	},
 }

@@ -241,7 +241,7 @@ static void Render(HT_API* ht) {
 	vec2 rect_size = render_params.rect.max - render_params.rect.min;
 	MaybeRecreateRenderTargets((int)rect_size.x, (int)rect_size.y);
 
-	//SceneEditDrawGizmos(FG::ht, &scene_edit_state, open_scene);
+	SceneEditDrawGizmos(FG::ht, render_params.scene_edit_state, render_params.scene);
 
 	ID3D11DeviceContext* dc = FG::ht->D3D11_device_context;
 

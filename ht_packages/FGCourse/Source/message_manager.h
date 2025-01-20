@@ -8,6 +8,12 @@ public:
 	static void Init();
 	static void BeginFrame();
 	
+	static void RegisterNewThread();
+	
+	// This must be called some time during a frame. All threads meet up at this function at the same time.
+	// Alternatively, we could split this into two functions: ThreadHasSentAllMessages & ThreadWaitForAllExternalMessages
+	static void ThreadBarrierAllMessagesSent();
+	
 	template<typename T>
 	static inline void SendNewMessage(const T& message) {
 		SendNewMessageSized(typeid(message).hash_code(), message, sizeof(message));
@@ -35,8 +41,14 @@ private:
 	static void SendNewMessageSized(uint64_t type, const Message& message, size_t message_size);
 
 	static MessageManager instance;
+
+	OS_Mutex mutex;
+
+	OS_ConditionVar wait_cond_var;
+
+	int threads_waiting_at_meetup;
+	int threads_registered_count;
 	
 	// Optimization idea: instead of having one array, make a map of arrays (one per message type) and increment the starting index when popping a message
-
 	DS_DynArray<StoredMessage> messages;
 };

@@ -71,6 +71,8 @@ GIZMOS_API void DrawCuboid3D(const M_PerspectiveView* view, vec3 min, vec3 max, 
 GIZMOS_API void DrawParallelepiped3D(const M_PerspectiveView* view, vec3 min_corner, vec3 extent_x, vec3 extent_y, vec3 extent_z, float thickness, UI_Color color);
 GIZMOS_API void DrawArrow3D(const M_PerspectiveView* view, vec3 from, vec3 to, float head_length, float head_radius, int vertices, float thickness, UI_Color color);
 
+GIZMOS_API void DrawEllipse3D(const M_PerspectiveView* view, vec3 center, vec3 extent_x, vec3 extent_y, float thickness, UI_Color color);
+
 // NOTE: These will not be clipped to the viewport properly if the shape is too big. The shape should always be either fully visible or fully out of the screen.
 //       I should try to fix this.
 GIZMOS_API void DrawQuad3D(const M_PerspectiveView* view, vec3 a, vec3 b, vec3 c, vec3 d, UI_Color color);
@@ -599,6 +601,31 @@ GIZMOS_API void DrawLine3D(const M_PerspectiveView* view, vec3 a, vec3 b, float 
 
 	if (in_front) {
 		UI_DrawLine(a_ss.xy / a_ss.w, b_ss.xy / b_ss.w, thickness, color);
+	}
+}
+
+GIZMOS_API void DrawEllipse3D(const M_PerspectiveView* view, vec3 center, vec3 extent_x, vec3 extent_y, float thickness, UI_Color color) {
+	vec4 center_ss = vec4{center, 1.f} * view->ws_to_ss;
+	if (center_ss.z > 0.f && center_ss.z < center_ss.w) {
+		static const vec2 points_on_circle[8] = {
+			{1.f, 0.f},
+			{0.7071067811865475244f, 0.7071067811865475244f},
+			{0.f, 1.f},
+			{-0.7071067811865475244f, 0.7071067811865475244f},
+			{-1.f, 0.f},
+			{-0.7071067811865475244f, -0.7071067811865475244f},
+			{0.f, -1.f},
+			{0.7071067811865475244f, -0.7071067811865475244f},
+		};
+		
+		vec2 points[8];
+		UI_Color colors[8];
+		for (int i = 0; i < 8; i++) {
+			vec4 p_ss = vec4{center + extent_x*points_on_circle[i].x + extent_y*points_on_circle[i].y, 1.f} * view->ws_to_ss;
+			points[i] = p_ss.xy / p_ss.w;
+			colors[i] = color;
+		}
+		UI_DrawPolylineLoop(points, colors, 8, thickness);
 	}
 }
 

@@ -8,6 +8,7 @@
 
 //#define DS_NO_MALLOC
 #include <ht_utils/fire/fire_ds.h>
+#include "ht_utils/fire/fire_os_sync.h"
 
 #include "../fg.inc.ht"
 
