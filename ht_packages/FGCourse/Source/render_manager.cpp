@@ -22,7 +22,12 @@
 #include "ht_packages/SceneEdit/src/scene_edit.h"
 
 struct ShaderConstants {
-	mat4 world_to_clip;
+	mat4 local_to_clip;
+	mat4 local_to_world;
+	vec3 view_position;
+	int point_light_count;
+	vec4 point_lights_position[16];
+	vec4 point_lights_emission[16];
 };
 
 struct VertexShader {
@@ -246,8 +251,9 @@ static void Render(HT_API* ht) {
 	ID3D11DeviceContext* dc = FG::ht->D3D11_device_context;
 
 	ShaderConstants constants = {};
-	constants.world_to_clip = render_params.world_to_clip;
-	UpdateShaderConstants(dc, constants);
+	constants.view_position = render_params.view_position;
+	//constants.world_to_clip = render_params.world_to_clip;
+	//UpdateShaderConstants(dc, constants);
 
 	dc->PSSetSamplers(0, 1, &sampler);
 
@@ -257,6 +263,7 @@ static void Render(HT_API* ht) {
 	dc->IASetInputLayout(main_vs.input_layout);
 	dc->VSSetShader(main_vs.shader, NULL, 0);
 	dc->VSSetConstantBuffers(0, 1, &cbo);
+	dc->PSSetConstantBuffers(0, 1, &cbo);
 	dc->PSSetShader(main_ps, NULL, 0);
 
 	D3D11_VIEWPORT viewport = {};
@@ -277,10 +284,24 @@ static void Render(HT_API* ht) {
 	dc->ClearRenderTargetView(color_target_view, clear_color);
 	dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
 
+	// Add point lights
+	{
+		constants.point_light_count = 0;
+
+		AddPointLightMessage msg;
+		while (MessageManager::PopNextMessage(&msg)) {
+			int i = constants.point_light_count;
+			constants.point_lights_position[i].xyz = msg.position;
+			constants.point_lights_emission[i].xyz = msg.emission;
+			constants.point_light_count++;
+		}
+	}
+
 	RenderObjectMessage render_object;
 	while (MessageManager::PopNextMessage(&render_object)) {
 
-		constants.world_to_clip = render_object.local_to_world * render_params.world_to_clip;
+		constants.local_to_clip = render_object.local_to_world * render_params.world_to_clip;
+		constants.local_to_world = render_object.local_to_world;
 		UpdateShaderConstants(dc, constants);
 
 		const RenderMesh* mesh_data = render_object.mesh;

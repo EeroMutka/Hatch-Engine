@@ -22,9 +22,15 @@ struct RenderTexture {
 	void* texture_srv; // ID3D11ShaderResourceView
 };
 
+struct AddPointLightMessage : Message {
+	vec3 position;
+	vec3 emission;
+};
+
 struct RenderParamsMessage : Message {
 	HT_Rect rect;
 	mat4 world_to_clip;
+	vec3 view_position;
 	
 	// these are passed for gizmo rendering
 	Scene__Scene* scene;

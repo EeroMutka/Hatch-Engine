@@ -103,12 +103,20 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 			RenderTexture* color_texture = MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture);
 
 			if (mesh_data && color_texture) {
-				RenderObjectMessage render_object_msg = {};
-				render_object_msg.mesh = mesh_data;
-				render_object_msg.color_texture = color_texture;
-				render_object_msg.local_to_world = local_to_world;
-				MessageManager::SendNewMessage(render_object_msg);
+				RenderObjectMessage msg = {};
+				msg.mesh = mesh_data;
+				msg.color_texture = color_texture;
+				msg.local_to_world = local_to_world;
+				MessageManager::SendNewMessage(msg);
 			}
+		}
+
+		Scene__PointLightComponent* point_light_component = FIND_COMPONENT(ht, entity, Scene__PointLightComponent);
+		if (point_light_component) {
+			AddPointLightMessage msg = {};
+			msg.position = entity->position;
+			msg.emission = point_light_component->emission;
+			MessageManager::SendNewMessage(msg);
 		}
 
 		if (InputIsDown(ht->input_frame, HT_InputKey_Y)) {
@@ -123,6 +131,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	RenderParamsMessage render_params_msg = {};
 	render_params_msg.rect = update_info->rect;
 	render_params_msg.world_to_clip = world_to_clip;
+	render_params_msg.view_position = camera->position;
 	render_params_msg.scene = scene;
 	render_params_msg.scene_edit_state = &scene_edit_state;
 	MessageManager::SendNewMessage(render_params_msg);

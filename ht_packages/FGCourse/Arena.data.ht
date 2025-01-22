@@ -66,12 +66,22 @@ data: {
 			},
 		},
 		"PointLight1": {
-			position: { 0, 4.000000, 20.744476 },
+			position: { 4.002141, 2.375202, 23.172876 },
 			rotation: { 36.000000, 0.000000, 83.700005 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/PointLightComponent") {
-					emission: { 0.000000, 0.000000, 2.000000 },
+					emission: { 0.000000, 5.000000, 9.000000 },
+				},
+			},
+		},
+		"PointLight2": {
+			position: { 2.558826, 2.919701, 17.204308 },
+			rotation: { 36.000000, 0.000000, 83.700005 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/PointLightComponent") {
+					emission: { 5.000000, 1.000000, 0.000000 },
 				},
 			},
 		},
@@ -88,9 +98,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 6.076058, 11.136295, 25.928068 },
-			pitch: 0.252498,
-			yaw: -26.846991,
+			position: { 9.113614, 10.579793, 22.810707 },
+			pitch: 0.291496,
+			yaw: -27.113991,
 		},
 	},
 }

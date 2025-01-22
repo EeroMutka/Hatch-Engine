@@ -33,6 +33,8 @@ static void AudioThreadFunction(void* user_data)
 
     for (;;) {
         MessageManager::ThreadBarrierAllMessagesSent();
+        
+        continue;
 
         PlaySoundMessage msg;
         bool got_play_sound_msg = MessageManager::PopNextMessage(&msg);
@@ -103,7 +105,6 @@ void AudioManager::Init() {
 
     HMODULE sound_lib = LoadLibraryA("dsound.dll");
     if (sound_lib) {
-
         typedef HRESULT (WINAPI *DirectSoundCreateFn)(LPCGUID pcGuidDevice, LPDIRECTSOUND* ppDS, LPUNKNOWN pUnkOuter);
         DirectSoundCreateFn DirectSoundCreate = (DirectSoundCreateFn)GetProcAddress(sound_lib, "DirectSoundCreate");
         HT_ASSERT(DirectSoundCreate);
@@ -147,8 +148,8 @@ void AudioManager::Init() {
         }
     }
     
-    ok = sec_buffer->Play(0, 0, DSBPLAY_LOOPING) == S_OK;
-    HT_ASSERT(ok);
+    //ok = sec_buffer->Play(0, 0, DSBPLAY_LOOPING) == S_OK;
+    //HT_ASSERT(ok);
 
     OS_ThreadStart(&instance.audio_thread, AudioThreadFunction, sec_buffer, "AudioThread");
 }
