@@ -1,8 +1,11 @@
 #pragma pack_matrix(row_major)
 
+//#include "shader_constants.h"
+
 cbuffer constants : register(b0) {
     float4x4 local_to_clip;
     float4x4 local_to_world;
+    float4x4 world_to_dir_shadow;
     
     float3 view_position;
     int _pad1;
@@ -47,14 +50,15 @@ PixelInput vertex_shader(VertexInput vertex) {
     
     output.position_ws = mul(float4(vertex.position, 1.0), local_to_world).xyz;
     output.uv = vertex.uv;
-    output.normal = vertex.normal;
+    output.normal = mul(float4(vertex.normal, 0.0), local_to_world).xyz;
 	return output;
 }
 
 // -- pixel shader -----------------------------------------------------------------------------
 
-Texture2D mytexture : register(t0);
-SamplerState mysampler : register(s0);
+Texture2D t_base_color : register(t0);
+Texture2D t_dir_light_depth_map : register(t1);
+SamplerState s_nearest_wrap : register(s0);
 
 // see https://www.shadertoy.com/view/lslGzl
 float3 FilmicToneMapping(float3 color)
@@ -66,8 +70,7 @@ float3 FilmicToneMapping(float3 color)
 
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     float3 normal = normalize(pixel.normal);
-    
-    float3 base_color = mytexture.Sample(mysampler, pixel.uv * 5).rgb;
+    float3 base_color = t_base_color.Sample(s_nearest_wrap, pixel.uv * 5).rgb;
     
     float3 point_to_view = view_position - pixel.position_ws;
     float3 V = normalize(point_to_view);
@@ -110,18 +113,25 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     }
     
     {
-        float3 L = normalize(-directional_light_dir);
-        float3 R = reflect(-L, normal);
+        float3 point_in_dir_shadow = mul(float4(pixel.position_ws + normal*0.1, 1.0), world_to_dir_shadow).xyz;
+        point_in_dir_shadow.xy = point_in_dir_shadow.xy * 0.5 + 0.5;
         
-        // diffuse
-        float3 light_contribution = max(dot(normal, L), 0);
-        
-        // specular
-        //light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
-        
-        light_contribution *= directional_light_emission;
-        
-        light += light_contribution;
+        // so how do we compute what the actual value should be?
+        if (t_dir_light_depth_map.Sample(s_nearest_wrap, point_in_dir_shadow.xy).r > point_in_dir_shadow.z)
+        {
+            float3 L = normalize(-directional_light_dir);
+            float3 R = reflect(-L, normal);
+            
+            // diffuse
+            float3 light_contribution = max(dot(normal, L), 0);
+            
+            // specular
+            //light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
+            
+            light_contribution *= directional_light_emission;
+            
+            light += light_contribution;
+        }
     }
     
     // ambient light

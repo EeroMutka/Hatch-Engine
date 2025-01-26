@@ -123,7 +123,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 		Scene__DirectionalLightComponent* dir_light_component = FIND_COMPONENT(ht, entity, Scene__DirectionalLightComponent);
 		if (dir_light_component) {
 			AddDirectionalLightMessage msg = {};
-			msg.direction = local_to_world.row[2].xyz * -1.f;
+			msg.rotation = entity->rotation;
 			msg.emission = dir_light_component->emission;
 			MessageManager::SendNewMessage(msg);
 		}

@@ -96,6 +96,48 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 static void GenerateMeshCollisionData(HT_Asset mesh_asset, Scene__SceneEntity* entity, MeshCollisionData* result) {
 }
 
+// Euler angles defined in XYZ order, in degrees
+static vec3 QuatToEulerAnglesXYZ(JPH_Quat q) {
+	// Source: https://github.com/ralphtandetzky/num-quaternion/blob/master/src/unit_quaternion.rs (MIT-license, Ralph Tandetzky)
+	float sin_pitch = 2.f * (q.w * q.y - q.z * q.x);
+
+	vec3 xyz;
+	if (sin_pitch >= 0.99999f) { // Check for gimbal lock, which occurs when sin_pitch is close to 1 or -1
+		xyz.x = 0.f;
+		xyz.y = M_PI/2.f; // 90 degrees
+		xyz.z = -2.f * atan2f(q.x, q.w);
+	} else if (sin_pitch <= -0.99999f) {
+		xyz.x = 0.f;
+		xyz.y = -M_PI/2.f; // -90 degrees
+		xyz.z = 2.f * atan2f(q.x, q.w);
+	} else {
+		xyz.y = asinf(sin_pitch);
+		xyz.x = atan2f(2.f * (q.w * q.x + q.y * q.z), 1.f - 2.f * (q.x * q.x + q.y * q.y));
+		xyz.z = atan2f(2.f * (q.w * q.z + q.x * q.y), 1.f - 2.f * (q.y * q.y + q.z * q.z));
+	}
+	xyz *= M_RadToDeg;
+	return xyz;
+}
+
+// Euler angles defined in XYZ order, in degrees
+static JPH_Quat EulerAnglesXYZToQuat(vec3 xyz) {
+	xyz *= M_DegToRad;
+	// Source: https://github.com/ralphtandetzky/num-quaternion/blob/master/src/unit_quaternion.rs (MIT-license, Ralph Tandetzky)
+	float half = 0.5f;
+	float sr = sinf(xyz.x * 0.5f);
+	float cr = cosf(xyz.x * half);
+	float sp = sinf(xyz.y * 0.5f);
+	float cp = cosf(xyz.y * 0.5f);
+	float sy = sinf(xyz.z * 0.5f);
+	float cy = cosf(xyz.z * 0.5f);
+	return {
+		sr * cp * cy - cr * sp * sy,
+		cr * sp * cy + sr * cp * sy,
+		cr * cp * sy - sr * sp * cy,
+		cr * cp * cy + sr * sp * sy,
+	};
+}
+
 static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
 #ifdef HAS_JOLT
 	bool ok = JPH_Init();
@@ -153,6 +195,8 @@ static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
 			//	GenerateMeshCollisionData(mesh_component->mesh, entity, coll_data);
 			//}
 
+			JPH_Quat rotation = EulerAnglesXYZToQuat(entity->rotation);
+
 			JPH_Shape* shape = NULL;
 //			if (box_collision_component) {
 				JPH_RVec3 half_extent = { 0.5f*entity->scale.x, 0.5f*entity->scale.y, 0.5f*entity->scale.z };
@@ -166,7 +210,7 @@ static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
 			JPH_BodyCreationSettings* body_settings = JPH_BodyCreationSettings_Create3(
 				shape,
 				&position,
-				NULL, // Identity, 
+				&rotation,
 				body_component->dynamic ? JPH_MotionType_Dynamic : JPH_MotionType_Static,
 				body_component->dynamic ? LAYER_MOVING : LAYER_NON_MOVING);
 
@@ -192,29 +236,6 @@ static void EndSimulation(HT_API* ht, Scene__Scene* scene) {
 	jolt_system = NULL;
 	jolt_bodyInterface = NULL;
 #endif
-}
-
-// Euler angles defined in XYZ order, in degrees
-static vec3 QuatToEulerAnglesXYZ(JPH_Quat q) {
-	// Source: https://github.com/ralphtandetzky/num-quaternion/blob/master/src/unit_quaternion.rs (MIT-license, Ralph Tandetzky)
-	float sin_pitch = 2.f * (q.w * q.y - q.z * q.x);
-
-	vec3 xyz;
-	if (sin_pitch >= 0.99999f) { // Check for gimbal lock, which occurs when sin_pitch is close to 1 or -1
-		xyz.x = 0.f;
-		xyz.y = M_PI/2.f; // 90 degrees
-		xyz.z = -2.f * atan2f(q.x, q.w);
-	} else if (sin_pitch <= -0.99999f) {
-		xyz.x = 0.f;
-		xyz.y = -M_PI/2.f; // -90 degrees
-		xyz.z = 2.f * atan2f(q.x, q.w);
-	} else {
-		xyz.y = asinf(sin_pitch);
-		xyz.x = atan2f(2.f * (q.w * q.x + q.y * q.z), 1.f - 2.f * (q.x * q.x + q.y * q.y));
-		xyz.z = atan2f(2.f * (q.w * q.z + q.x * q.y), 1.f - 2.f * (q.y * q.y + q.z * q.z));
-	}
-	xyz *= M_RadToDeg;
-	return xyz;
 }
 
 static void SimulateScene(HT_API* ht, Scene__Scene* scene) {

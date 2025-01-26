@@ -4,7 +4,7 @@ data: {
 		"Terrain": {
 			position: { 3.380898, -0.000317, 15.340795 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 5.000000, 5.000000, 1.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/Terrain",
@@ -20,9 +20,9 @@ data: {
 			},
 		},
 		"BigBox": {
-			position: { 3.380898, -0.000317, 15.340795 },
-			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 5.000000, 5.000000, 1.000000 },
+			position: { 3.381161, -0.000564, 16.046049 },
+			rotation: { 0.000000, 0.000000, 32.000000 },
+			scale: { 3.000000, 3.000000, 3.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
@@ -38,8 +38,8 @@ data: {
 			},
 		},
 		"Box1": {
-			position: { 2.048789, -0.879172, 23.469526 },
-			rotation: { 0.000000, 0.000000, 0.000000 },
+			position: { 3.680752, 1.686822, 18.075520 },
+			rotation: { 0.000000, 0.000000, 45.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
@@ -56,9 +56,9 @@ data: {
 			},
 		},
 		"Box2": {
-			position: { 6.016116, -0.409762, 25.195250 },
-			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 8.000000, 1.000000, 1.000000 },
+			position: { 2.214828, 1.321685, 20.078213 },
+			rotation: { 5.000000, 22.000000, 0.000000 },
+			scale: { 2.000000, 2.000000, 2.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
 				},
@@ -75,16 +75,16 @@ data: {
 		},
 		"DirectionalLight": {
 			position: { 0.000000, 0.000000, 25.000000 },
-			rotation: { 34.000000, 23.000000, 55.000000 },
+			rotation: { -23.500004, 0.000000, 57.500000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/DirectionalLightComponent") {
-					emission: { 0.800000, 0.700000, 0.500000 },
+					emission: { 0.500000, 0.500000, 0.300000 },
 				},
 			},
 		},
 		"PointLight1": {
-			position: { 4.002141, 2.375202, 23.172876 },
+			position: { 5.622256, 1.899364, 12.177436 },
 			rotation: { 36.000000, 0.000000, 83.700005 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -94,7 +94,7 @@ data: {
 			},
 		},
 		"PointLight2": {
-			position: { 2.558826, 2.919701, 17.204308 },
+			position: { 3.213247, 1.817449, 13.400449 },
 			rotation: { 36.000000, 0.000000, 83.700005 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -104,7 +104,7 @@ data: {
 			},
 		},
 		"SpotLight1": {
-			position: { 13.134360, -16.823982, 12.430893 },
+			position: { 14.202673, -1.398240, 15.262719 },
 			rotation: { 93.500000, 0.000000, 162.199997 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -114,7 +114,7 @@ data: {
 			},
 		},
 		"SpotLight2": {
-			position: { 30.747974, -29.216221, 15.175419 },
+			position: { 15.913340, -5.170761, 15.595815 },
 			rotation: { 57.250000, 0.000000, 73.999992 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -126,9 +126,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 4.465147, 18.619629, 21.523766 },
-			pitch: 0.193996,
-			yaw: -26.598982,
+			position: { 21.514139, 3.166534, 20.718563 },
+			pitch: 0.279495,
+			yaw: -27.864008,
 		},
 	},
 }

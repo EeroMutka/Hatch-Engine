@@ -21,9 +21,14 @@
 #include "ht_packages/SceneEdit/src/camera.h"
 #include "ht_packages/SceneEdit/src/scene_edit.h"
 
+#include "../Shaders/shader_constants.h"
+
+#define DEPTH_MAP_RES 2048
+
 struct ShaderConstants {
 	mat4 local_to_clip;
 	mat4 local_to_world;
+	mat4 world_to_dir_shadow; // world to directional light space for shadow map
 	
 	vec3 view_position;
 	int _pad1;
@@ -76,6 +81,10 @@ static ID3D11Texture2D* depth_target;
 static ID3D11ShaderResourceView* color_target_srv;
 static ID3D11RenderTargetView* color_target_view;
 static ID3D11DepthStencilView* depth_target_view;
+
+static ID3D11Texture2D* g_dir_light_shadow_map;
+static ID3D11DepthStencilView* g_dir_light_shadow_map_dsv;
+static ID3D11ShaderResourceView* g_dir_light_shadow_map_srv;
 
 // ----------------------------------------------
 
@@ -272,33 +281,16 @@ static void Render(HT_API* ht) {
 	//UpdateShaderConstants(dc, constants);
 
 	dc->PSSetSamplers(0, 1, &sampler);
-
-	dc->ClearDepthStencilView(depth_target_view, D3D11_CLEAR_DEPTH, 1.0f, 0);		
-
+	
 	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	dc->IASetInputLayout(main_vs.input_layout);
-	dc->VSSetShader(main_vs.shader, NULL, 0);
 	dc->VSSetConstantBuffers(0, 1, &cbo);
 	dc->PSSetConstantBuffers(0, 1, &cbo);
-	dc->PSSetShader(main_ps, NULL, 0);
-
-	D3D11_VIEWPORT viewport = {};
-	viewport.TopLeftX = 0;
-	viewport.TopLeftY = 0;
-	viewport.Width = rect_size.x;
-	viewport.Height = rect_size.y;
-	viewport.MinDepth = 0.f;
-	viewport.MaxDepth = 1.f;
-	dc->RSSetViewports(1, &viewport);
 
 	// keep from hatch
 	// dc->OMSetBlendState(s->blend_state, NULL, 0xffffffff);
 
 	///////////////////////////////////////////////////////////////////////////////////////////
-
-	float clear_color[] = {0.2f, 0.4f, 0.8f, 1.f};
-	dc->ClearRenderTargetView(color_target_view, clear_color);
-	dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
 
 	// Add point lights
 	{
@@ -333,20 +325,101 @@ static void Render(HT_API* ht) {
 		
 		AddDirectionalLightMessage msg;
 		while (MessageManager::PopNextMessage(&msg)) {
-			constants.directional_light_dir = msg.direction;
+			// come up with a directional light matrix...
+			// so we basically want to transform the unit box to be around the directional light.
+			constants.world_to_dir_shadow =
+				M_MatRotateZ(msg.rotation.z * -M_DegToRad) *
+				M_MatRotateY(msg.rotation.y * -M_DegToRad) *
+				M_MatRotateX(msg.rotation.x * -M_DegToRad) *
+				M_MatScale({0.01f, 0.01f, -0.01f}) *
+				M_MatTranslate({0, 0, 0.5f});
+
+			mat4 dir_shadow_to_world =
+				M_MatRotateX(msg.rotation.x * M_DegToRad) *
+				M_MatRotateY(msg.rotation.y * M_DegToRad) *
+				M_MatRotateZ(msg.rotation.z * M_DegToRad);
+
+			constants.directional_light_dir = dir_shadow_to_world.row[2].xyz * -1.f;
 			constants.directional_light_emission = msg.emission;
 		}
 	}
+	
+	DS_DynArray(RenderObjectMessage) render_objects = { FG::mem.temp };
+	for (RenderObjectMessage obj; MessageManager::PopNextMessage(&obj);) {
+		DS_ArrPush(&render_objects, obj);
+	}
 
-	RenderObjectMessage render_object;
-	while (MessageManager::PopNextMessage(&render_object)) {
 
-		constants.local_to_clip = render_object.local_to_world * render_params.world_to_clip;
-		constants.local_to_world = render_object.local_to_world;
+	ID3D11ShaderResourceView* shader_resources[2] = {};
+
+	// -- shadow pass ----------------------------------------------------------
+
+	{
+		D3D11_VIEWPORT viewport = {};
+		viewport.TopLeftX = 0;
+		viewport.TopLeftY = 0;
+		viewport.Width = DEPTH_MAP_RES;
+		viewport.Height = DEPTH_MAP_RES;
+		viewport.MinDepth = 0.f;
+		viewport.MaxDepth = 1.f;
+		dc->RSSetViewports(1, &viewport);
+
+		dc->ClearDepthStencilView(g_dir_light_shadow_map_dsv, D3D11_CLEAR_DEPTH, 1.0f, 0);		
+		dc->OMSetRenderTargets(0, NULL, g_dir_light_shadow_map_dsv);
+
+		dc->VSSetShader(main_vs.shader, NULL, 0);
+		dc->PSSetShader(NULL, NULL, 0);
+		for (int obj_i = 0; obj_i < render_objects.count; obj_i++)
+		{
+			RenderObjectMessage* render_object = &render_objects[obj_i];
+			constants.local_to_clip = render_object->local_to_world * constants.world_to_dir_shadow;
+			constants.local_to_world = render_object->local_to_world;
+			UpdateShaderConstants(dc, constants);
+
+			const RenderMesh* mesh_data = render_object->mesh;
+
+			for (int i = 0; i < mesh_data->parts.count; i++) {
+				RenderMeshPart part = mesh_data->parts[i];
+				u32 vbo_offset = 0;
+				u32 vbo_stride = sizeof(Vertex);
+				dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);
+				dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
+				dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
+			}
+		}
+	}
+
+	// -- main pass ----------------------------------------------------------
+	
+	dc->ClearDepthStencilView(depth_target_view, D3D11_CLEAR_DEPTH, 1.0f, 0);
+
+	D3D11_VIEWPORT viewport = {};
+	viewport.TopLeftX = 0;
+	viewport.TopLeftY = 0;
+	viewport.Width = rect_size.x;
+	viewport.Height = rect_size.y;
+	viewport.MinDepth = 0.f;
+	viewport.MaxDepth = 1.f;
+	dc->RSSetViewports(1, &viewport);
+
+	shader_resources[1] = g_dir_light_shadow_map_srv;
+
+	float clear_color[] = {0.2f, 0.4f, 0.8f, 1.f};
+	dc->ClearRenderTargetView(color_target_view, clear_color);
+	dc->OMSetRenderTargets(1, &color_target_view, depth_target_view);
+
+	dc->VSSetShader(main_vs.shader, NULL, 0);
+	dc->PSSetShader(main_ps, NULL, 0);
+	
+	for (int obj_i = 0; obj_i < render_objects.count; obj_i++)
+	{
+		RenderObjectMessage* render_object = &render_objects[obj_i];
+		constants.local_to_clip = render_object->local_to_world * render_params.world_to_clip;
+		constants.local_to_world = render_object->local_to_world;
 		UpdateShaderConstants(dc, constants);
 
-		const RenderMesh* mesh_data = render_object.mesh;
-		const RenderTexture* color_texture = render_object.color_texture;
+		const RenderMesh* mesh_data = render_object->mesh;
+		const RenderTexture* color_texture = render_object->color_texture;
 
 		for (int i = 0; i < mesh_data->parts.count; i++) {
 			RenderMeshPart part = mesh_data->parts[i];
@@ -355,32 +428,15 @@ static void Render(HT_API* ht) {
 			dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);
 			dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
 
-			dc->PSSetShaderResources(0, 1, (ID3D11ShaderResourceView**)&color_texture->texture_srv);
+			shader_resources[0] = (ID3D11ShaderResourceView*)color_texture->texture_srv;
+			dc->PSSetShaderResources(0, _countof(shader_resources), shader_resources);
 			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 		}
-
-		/*
-		if (mesh_component) {
-		Mesh mesh_data;
-		Texture color_texture;
-		bool ok =
-		MeshManager::GetMeshFromMeshAsset(mesh_component->mesh, &mesh_data) &&
-		MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture, &color_texture);
-
-		if (ok) {
-		for (int i = 0; i < mesh_data.parts.count; i++) {
-		MeshPart part = mesh_data.parts[i];
-		u32 vbo_offset = 0;
-		u32 vbo_stride = sizeof(Vertex);
-		dc->IASetVertexBuffers(0, 1, &mesh_data.vbo, &vbo_stride, &vbo_offset);
-		dc->IASetIndexBuffer(mesh_data.ibo, DXGI_FORMAT_R32_UINT, 0);
-
-		dc->PSSetShaderResources(0, 1, &color_texture.texture_srv);
-		dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-		}
-		}
-		}*/
 	}
+
+	// clear bound resources
+	memset(shader_resources, 0, sizeof(shader_resources));
+	dc->PSSetShaderResources(0, _countof(shader_resources), shader_resources);
 
 	{
 		D3D11_VIEWPORT present_viewport = {};
@@ -453,6 +509,33 @@ void RenderManager::Init() {
 
 	present_vs = LoadVertexShader(present_shader_path, NULL, 0);
 	present_ps = LoadPixelShader(present_shader_path);
+	
+	{
+		D3D11_TEXTURE2D_DESC desc = {};
+		desc.Width = DEPTH_MAP_RES;
+		desc.Height = DEPTH_MAP_RES;
+		desc.MipLevels = 1;
+		desc.ArraySize = 1;
+		desc.SampleDesc.Count = 1;
+		desc.Format = DXGI_FORMAT_R32_TYPELESS;
+		desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+
+		bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, NULL, &g_dir_light_shadow_map) == S_OK;
+		HT_ASSERT(ok);
+
+		D3D11_DEPTH_STENCIL_VIEW_DESC dsv_desc = {};
+		dsv_desc.Format = DXGI_FORMAT_D32_FLOAT;
+		dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+		ok = FG::ht->D3D11_device->CreateDepthStencilView(g_dir_light_shadow_map, &dsv_desc, &g_dir_light_shadow_map_dsv) == S_OK;
+		HT_ASSERT(ok);
+		
+		D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
+		srv_desc.Format = DXGI_FORMAT_R32_FLOAT;
+		srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srv_desc.Texture2D.MipLevels = 1;
+		ok = FG::ht->D3D11_device->CreateShaderResourceView(g_dir_light_shadow_map, &srv_desc, &g_dir_light_shadow_map_srv) == S_OK;
+		HT_ASSERT(ok);
+	}
 
 	FG::ht->D3D11_SetRenderProc(Render);
 }

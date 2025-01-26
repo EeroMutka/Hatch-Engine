@@ -28,7 +28,7 @@ struct AddPointLightMessage : Message {
 };
 
 struct AddDirectionalLightMessage : Message {
-	vec3 direction;
+	vec3 rotation;
 	vec3 emission;
 };
 
