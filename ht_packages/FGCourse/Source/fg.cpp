@@ -90,14 +90,15 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 	for (HT_ItemGroupEach(&scene->entities, i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, i);
 
+		mat4 local_to_world =
+			M_MatScale(entity->scale) *
+			M_MatRotateX(entity->rotation.x * M_DegToRad) *
+			M_MatRotateY(entity->rotation.y * M_DegToRad) *
+			M_MatRotateZ(entity->rotation.z * M_DegToRad) *
+			M_MatTranslate(entity->position);
+
 		Scene__MeshComponent* mesh_component = FIND_COMPONENT(ht, entity, Scene__MeshComponent);
 		if (mesh_component) {
-			mat4 local_to_world =
-				M_MatScale(entity->scale) *
-				M_MatRotateX(entity->rotation.x * M_DegToRad) *
-				M_MatRotateY(entity->rotation.y * M_DegToRad) *
-				M_MatRotateZ(entity->rotation.z * M_DegToRad) *
-				M_MatTranslate(entity->position);
 
 			RenderMesh* mesh_data = MeshManager::GetMeshFromMeshAsset(mesh_component->mesh);
 			RenderTexture* color_texture = MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture);
@@ -118,13 +119,22 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 			msg.emission = point_light_component->emission;
 			MessageManager::SendNewMessage(msg);
 		}
-
-		if (InputIsDown(ht->input_frame, HT_InputKey_Y)) {
-			entity->position.x += 0.1f;
+		
+		Scene__DirectionalLightComponent* dir_light_component = FIND_COMPONENT(ht, entity, Scene__DirectionalLightComponent);
+		if (dir_light_component) {
+			AddDirectionalLightMessage msg = {};
+			msg.direction = local_to_world.row[2].xyz * -1.f;
+			msg.emission = dir_light_component->emission;
+			MessageManager::SendNewMessage(msg);
 		}
 
-		if (InputIsDown(ht->input_frame, HT_InputKey_T)) {
-			entity->position.x -= 0.1f;
+		Scene__SpotLightComponent* spot_light_component = FIND_COMPONENT(ht, entity, Scene__SpotLightComponent);
+		if (spot_light_component) {
+			AddSpotLightMessage msg = {};
+			msg.position = entity->position;
+			msg.direction = local_to_world.row[2].xyz * -1.f;
+			msg.emission = spot_light_component->emission;
+			MessageManager::SendNewMessage(msg);
 		}
 	}
 

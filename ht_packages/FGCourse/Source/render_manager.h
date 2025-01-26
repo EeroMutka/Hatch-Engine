@@ -27,6 +27,17 @@ struct AddPointLightMessage : Message {
 	vec3 emission;
 };
 
+struct AddDirectionalLightMessage : Message {
+	vec3 direction;
+	vec3 emission;
+};
+
+struct AddSpotLightMessage : Message {
+	vec3 position;
+	vec3 direction;
+	vec3 emission;
+};
+
 struct RenderParamsMessage : Message {
 	HT_Rect rect;
 	mat4 world_to_clip;

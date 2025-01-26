@@ -24,10 +24,26 @@
 struct ShaderConstants {
 	mat4 local_to_clip;
 	mat4 local_to_world;
+	
 	vec3 view_position;
+	int _pad1;
+	
 	int point_light_count;
+	int spot_light_count;
+	int _pad2;
+	int _pad3;
+
+	vec3 directional_light_dir;
+	int _pad4;
+	vec3 directional_light_emission;
+	int _pad5;
+
 	vec4 point_lights_position[16];
 	vec4 point_lights_emission[16];
+
+	vec4 spot_lights_direction[16];
+	vec4 spot_lights_position[16];
+	vec4 spot_lights_emission[16];
 };
 
 struct VertexShader {
@@ -294,6 +310,31 @@ static void Render(HT_API* ht) {
 			constants.point_lights_position[i].xyz = msg.position;
 			constants.point_lights_emission[i].xyz = msg.emission;
 			constants.point_light_count++;
+		}
+	}
+	
+	// Add spot lights
+	{
+		constants.spot_light_count = 0;
+
+		AddSpotLightMessage msg;
+		while (MessageManager::PopNextMessage(&msg)) {
+			int i = constants.spot_light_count;
+			constants.spot_lights_position[i].xyz = msg.position;
+			constants.spot_lights_direction[i].xyz = msg.direction;
+			constants.spot_lights_emission[i].xyz = msg.emission;
+			constants.spot_light_count++;
+		}
+	}
+	
+	// Add directional light
+	{
+		constants.directional_light_emission = {};
+		
+		AddDirectionalLightMessage msg;
+		while (MessageManager::PopNextMessage(&msg)) {
+			constants.directional_light_dir = msg.direction;
+			constants.directional_light_emission = msg.emission;
 		}
 	}
 
