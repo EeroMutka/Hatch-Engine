@@ -66,7 +66,8 @@ struct UIBackend {
 static UIBackend G_UI;
 
 static ID3D11Buffer* cbo;
-static ID3D11SamplerState* sampler;
+static ID3D11SamplerState* g_sampler;
+static ID3D11SamplerState* g_sampler_percentage_closer;
 
 static VertexShader main_vs;
 static ID3D11PixelShader* main_ps;
@@ -186,9 +187,14 @@ static VertexShader LoadVertexShader(HT_StringView shader_path, D3D11_INPUT_ELEM
 }
 
 static ID3D11PixelShader* LoadPixelShader(HT_StringView shader_path) {
+	ID3DBlob* errors = NULL;
+
 	ID3DBlob* ps_blob;
-	bool ok = FG::ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "pixel_shader", "ps_5_0", 0, 0, &ps_blob, NULL) == S_OK;
-	HT_ASSERT(ok);
+	bool ok = FG::ht->D3D11_CompileFromFile(shader_path, NULL, NULL, "pixel_shader", "ps_5_0", 0, 0, &ps_blob, &errors) == S_OK;
+	if (!ok) {
+		char* err = (char*)errors->GetBufferPointer();
+		HT_ASSERT(0);
+	}
 
 	ID3D11PixelShader* shader;
 	ok = FG::ht->D3D11_device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), NULL, &shader) == S_OK;
@@ -280,7 +286,8 @@ static void Render(HT_API* ht) {
 	//constants.world_to_clip = render_params.world_to_clip;
 	//UpdateShaderConstants(dc, constants);
 
-	dc->PSSetSamplers(0, 1, &sampler);
+	ID3D11SamplerState* samplers[2] = { g_sampler, g_sampler_percentage_closer };
+	dc->PSSetSamplers(0, 2, samplers);
 	
 	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	dc->IASetInputLayout(main_vs.input_layout);
@@ -487,14 +494,24 @@ void RenderManager::Init() {
 	cbo_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 	FG::ht->D3D11_device->CreateBuffer(&cbo_desc, nullptr, &cbo);
 
-	// create sampler
-	D3D11_SAMPLER_DESC sampler_desc = {};
-	sampler_desc.Filter         = D3D11_FILTER_MIN_MAG_MIP_POINT;
-	sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-	FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &sampler);
+	{
+		D3D11_SAMPLER_DESC sampler_desc = {};
+		sampler_desc.Filter         = D3D11_FILTER_MIN_MAG_MIP_POINT;
+		sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler);
+	}
+	{
+		D3D11_SAMPLER_DESC sampler_desc = {};
+		sampler_desc.Filter         = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+		sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
+		sampler_desc.ComparisonFunc = D3D11_COMPARISON_LESS;
+		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler_percentage_closer);
+	}
 
 	HT_StringView main_shader_path = "../../ht_packages/FGCourse/Shaders/main_shader.hlsl";
 	HT_StringView present_shader_path = "../../ht_packages/FGCourse/Shaders/present_shader.hlsl";

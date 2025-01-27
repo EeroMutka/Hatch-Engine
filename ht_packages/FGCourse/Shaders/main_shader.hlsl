@@ -59,6 +59,7 @@ PixelInput vertex_shader(VertexInput vertex) {
 Texture2D t_base_color : register(t0);
 Texture2D t_dir_light_depth_map : register(t1);
 SamplerState s_nearest_wrap : register(s0);
+SamplerComparisonState s_percentage_closer : register(s1);
 
 // see https://www.shadertoy.com/view/lslGzl
 float3 FilmicToneMapping(float3 color)
@@ -94,9 +95,9 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         light += light_contribution;
     }
     
-    for (int i = 0; i < spot_light_count; i++)
+    for (int i2 = 0; i2 < spot_light_count; i2++)
     {
-        float3 point_to_light = spot_lights_position[i].xyz - pixel.position_ws;
+        float3 point_to_light = spot_lights_position[i2].xyz - pixel.position_ws;
         float3 L = normalize(point_to_light);
         float3 R = reflect(-L, normal);
         float dist = length(point_to_light);
@@ -107,7 +108,7 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         // specular
         light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
         
-        light_contribution *= spot_lights_emission[i].xyz * max(dot(L, -spot_lights_direction[i].xyz), 0) / (dist * dist);
+        light_contribution *= spot_lights_emission[i2].xyz * max(dot(L, -spot_lights_direction[i2].xyz), 0) / (dist * dist);
         
         light += light_contribution;
     }
@@ -116,8 +117,17 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         float3 point_in_dir_shadow = mul(float4(pixel.position_ws + normal*0.1, 1.0), world_to_dir_shadow).xyz;
         point_in_dir_shadow.xy = point_in_dir_shadow.xy * 0.5 + 0.5;
         
-        // so how do we compute what the actual value should be?
-        if (t_dir_light_depth_map.Sample(s_nearest_wrap, point_in_dir_shadow.xy).r > point_in_dir_shadow.z)
+        float shadow_map_w, shadow_map_h;
+        t_dir_light_depth_map.GetDimensions(shadow_map_w, shadow_map_h);
+        
+        float off = 0.75f / shadow_map_w; // offset
+        float shadowness =
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(off, 0.5f * off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-0.5f * off, off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-off, -0.5f * off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(0.5f * off, -off), point_in_dir_shadow.z).r;
+        shadowness /= 4.f;
+        
         {
             float3 L = normalize(-directional_light_dir);
             float3 R = reflect(-L, normal);
@@ -130,7 +140,7 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
             
             light_contribution *= directional_light_emission;
             
-            light += light_contribution;
+            light += shadowness * light_contribution;
         }
     }
     
