@@ -66,7 +66,8 @@ struct UIBackend {
 static UIBackend G_UI;
 
 static ID3D11Buffer* cbo;
-static ID3D11SamplerState* g_sampler;
+static ID3D11SamplerState* g_sampler_nearest;
+static ID3D11SamplerState* g_sampler_linear;
 static ID3D11SamplerState* g_sampler_percentage_closer;
 
 static VertexShader main_vs;
@@ -108,24 +109,33 @@ void RenderManager::CreateTexture(RenderTexture* target, int width, int height, 
 	ID3D11Texture2D* texture;
 	ID3D11ShaderResourceView* texture_srv;
 
-	D3D11_SUBRESOURCE_DATA texture_initial_data = {};
-	texture_initial_data.pSysMem = data;
-	texture_initial_data.SysMemPitch = width * 4; // 4 bytes per pixel
+	int mip_levels = 1;
+	for (int w = width < height ? width : height; w > 2; w /= 2) mip_levels++;
+	
+	D3D11_SUBRESOURCE_DATA texture_initial_data[16];
+	for (int i = 0; i < mip_levels; i++) {
+		texture_initial_data[i].pSysMem = data;
+		texture_initial_data[i].SysMemPitch = width * 4; // 4 bytes per pixel
+	}
 
 	D3D11_TEXTURE2D_DESC desc = {};
 	desc.Usage = D3D11_USAGE_DEFAULT;
 	desc.Width = width;
 	desc.Height = height;
-	desc.MipLevels = 1;
+	desc.MipLevels = mip_levels;
 	desc.ArraySize = 1;
 	desc.SampleDesc.Count = 1;
 	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-	bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
+	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; // Using GenMipmaps requires BIND_RENDER_TARGET
+	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+	bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, texture_initial_data, &texture) == S_OK;
+	//bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
 	HT_ASSERT(ok);
 
 	ok = FG::ht->D3D11_device->CreateShaderResourceView(texture, NULL, &texture_srv) == S_OK;
 	HT_ASSERT(ok);
+
+	FG::ht->D3D11_device_context->GenerateMips(texture_srv);
 	
 	target->texture = texture;
 	target->texture_srv = texture_srv;
@@ -286,8 +296,8 @@ static void Render(HT_API* ht) {
 	//constants.world_to_clip = render_params.world_to_clip;
 	//UpdateShaderConstants(dc, constants);
 
-	ID3D11SamplerState* samplers[2] = { g_sampler, g_sampler_percentage_closer };
-	dc->PSSetSamplers(0, 2, samplers);
+	ID3D11SamplerState* samplers[] = { g_sampler_nearest, g_sampler_linear, g_sampler_percentage_closer };
+	dc->PSSetSamplers(0, _countof(samplers), samplers);
 	
 	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	dc->IASetInputLayout(main_vs.input_layout);
@@ -501,7 +511,18 @@ void RenderManager::Init() {
 		sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
 		sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
 		sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
-		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler);
+		sampler_desc.MaxLOD = 1000.f;
+		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler_nearest);
+	}
+	{
+		D3D11_SAMPLER_DESC sampler_desc = {};
+		sampler_desc.Filter         = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler_desc.AddressU       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_WRAP;
+		sampler_desc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+		sampler_desc.MaxLOD = 1000.f;
+		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler_linear);
 	}
 	{
 		D3D11_SAMPLER_DESC sampler_desc = {};
@@ -510,6 +531,7 @@ void RenderManager::Init() {
 		sampler_desc.AddressV       = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_desc.AddressW       = D3D11_TEXTURE_ADDRESS_CLAMP;
 		sampler_desc.ComparisonFunc = D3D11_COMPARISON_LESS;
+		sampler_desc.MaxLOD = 1000.f;
 		FG::ht->D3D11_device->CreateSamplerState(&sampler_desc, &g_sampler_percentage_closer);
 	}
 

@@ -59,7 +59,8 @@ PixelInput vertex_shader(VertexInput vertex) {
 Texture2D t_base_color : register(t0);
 Texture2D t_dir_light_depth_map : register(t1);
 SamplerState s_nearest_wrap : register(s0);
-SamplerComparisonState s_percentage_closer : register(s1);
+SamplerState s_linear_wrap : register(s1);
+SamplerComparisonState s_percentage_closer : register(s2);
 
 // see https://www.shadertoy.com/view/lslGzl
 float3 FilmicToneMapping(float3 color)
@@ -71,7 +72,7 @@ float3 FilmicToneMapping(float3 color)
 
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     float3 normal = normalize(pixel.normal);
-    float3 base_color = t_base_color.Sample(s_nearest_wrap, pixel.uv * 5).rgb;
+    float3 base_color = t_base_color.Sample(s_linear_wrap, pixel.uv * 5).rgb;
     
     float3 point_to_view = view_position - pixel.position_ws;
     float3 V = normalize(point_to_view);
@@ -120,12 +121,12 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         float shadow_map_w, shadow_map_h;
         t_dir_light_depth_map.GetDimensions(shadow_map_w, shadow_map_h);
         
-        float off = 0.75f / shadow_map_w; // offset
+        float off = 0.5f / shadow_map_w; // offset
         float shadowness =
-            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(off, 0.5f * off), point_in_dir_shadow.z).r +
-            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-0.5f * off, off), point_in_dir_shadow.z).r +
-            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-off, -0.5f * off), point_in_dir_shadow.z).r +
-            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(0.5f * off, -off), point_in_dir_shadow.z).r;
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(off, off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-off, off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(-off, -off), point_in_dir_shadow.z).r +
+            t_dir_light_depth_map.SampleCmpLevelZero(s_percentage_closer, point_in_dir_shadow.xy + float2(off, -off), point_in_dir_shadow.z).r;
         shadowness /= 4.f;
         
         {
