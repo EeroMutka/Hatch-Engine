@@ -35,7 +35,7 @@ struct ShaderConstants {
 	
 	int point_light_count;
 	int spot_light_count;
-	int _pad2;
+	float use_specular_value; // negative value means use texture
 	int _pad3;
 
 	vec3 directional_light_dir;
@@ -105,17 +105,19 @@ static UI_CachedGlyph UIGetCachedGlyph(u32 codepoint, UI_Font font) {
 	return *(UI_CachedGlyph*)&glyph;
 }
 
-void RenderManager::CreateTexture(RenderTexture* target, int width, int height, void* data) {
+void RenderManager::CreateTexture(RenderTexture* target, RenderTextureFormat format, int width, int height, void* data) {
 	ID3D11Texture2D* texture;
 	ID3D11ShaderResourceView* texture_srv;
 
 	int mip_levels = 1;
 	for (int w = width < height ? width : height; w > 2; w /= 2) mip_levels++;
 	
+	int bytes_per_pixel = format == RenderTextureFormat::RGBA8 ? 4 : 1;
+
 	D3D11_SUBRESOURCE_DATA texture_initial_data[16];
 	for (int i = 0; i < mip_levels; i++) {
 		texture_initial_data[i].pSysMem = data;
-		texture_initial_data[i].SysMemPitch = width * 4; // 4 bytes per pixel
+		texture_initial_data[i].SysMemPitch = width * bytes_per_pixel;
 	}
 
 	D3D11_TEXTURE2D_DESC desc = {};
@@ -125,11 +127,10 @@ void RenderManager::CreateTexture(RenderTexture* target, int width, int height, 
 	desc.MipLevels = mip_levels;
 	desc.ArraySize = 1;
 	desc.SampleDesc.Count = 1;
-	desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	desc.Format = format == RenderTextureFormat::RGBA8 ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_R8_UNORM;
 	desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET; // Using GenMipmaps requires BIND_RENDER_TARGET
 	desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 	bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, texture_initial_data, &texture) == S_OK;
-	//bool ok = FG::ht->D3D11_device->CreateTexture2D(&desc, &texture_initial_data, &texture) == S_OK;
 	HT_ASSERT(ok);
 
 	ok = FG::ht->D3D11_device->CreateShaderResourceView(texture, NULL, &texture_srv) == S_OK;
@@ -366,8 +367,7 @@ static void Render(HT_API* ht) {
 		DS_ArrPush(&render_objects, obj);
 	}
 
-
-	ID3D11ShaderResourceView* shader_resources[2] = {};
+	ID3D11ShaderResourceView* shader_resources[3] = {};
 
 	// -- shadow pass ----------------------------------------------------------
 
@@ -419,7 +419,7 @@ static void Render(HT_API* ht) {
 	viewport.MaxDepth = 1.f;
 	dc->RSSetViewports(1, &viewport);
 
-	shader_resources[1] = g_dir_light_shadow_map_srv;
+	shader_resources[2] = g_dir_light_shadow_map_srv;
 
 	float clear_color[] = {0.2f, 0.4f, 0.8f, 1.f};
 	dc->ClearRenderTargetView(color_target_view, clear_color);
@@ -433,10 +433,12 @@ static void Render(HT_API* ht) {
 		RenderObjectMessage* render_object = &render_objects[obj_i];
 		constants.local_to_clip = render_object->local_to_world * render_params.world_to_clip;
 		constants.local_to_world = render_object->local_to_world;
+		constants.use_specular_value = render_object->specular_texture ? -1.f : render_object->specular_value;
 		UpdateShaderConstants(dc, constants);
 
 		const RenderMesh* mesh_data = render_object->mesh;
 		const RenderTexture* color_texture = render_object->color_texture;
+		const RenderTexture* specular_texture = render_object->specular_texture;
 
 		for (int i = 0; i < mesh_data->parts.count; i++) {
 			RenderMeshPart part = mesh_data->parts[i];
@@ -446,6 +448,8 @@ static void Render(HT_API* ht) {
 			dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
 
 			shader_resources[0] = (ID3D11ShaderResourceView*)color_texture->texture_srv;
+			shader_resources[1] = (ID3D11ShaderResourceView*)(specular_texture ? specular_texture->texture_srv : color_texture->texture_srv);
+			
 			dc->PSSetShaderResources(0, _countof(shader_resources), shader_resources);
 			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 		}

@@ -101,12 +101,17 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 		if (mesh_component) {
 
 			RenderMesh* mesh_data = MeshManager::GetMeshFromMeshAsset(mesh_component->mesh);
-			RenderTexture* color_texture = MeshManager::GetColorTextureFromTextureAsset(mesh_component->color_texture);
+			RenderTexture* color_texture = MeshManager::GetTextureFromTextureAsset(mesh_component->color_texture, RenderTextureFormat::RGBA8);
+			
+			RenderTexture* specular_texture = mesh_component->specular_texture ?
+				MeshManager::GetTextureFromTextureAsset(mesh_component->specular_texture, RenderTextureFormat::R8) : NULL;
 
 			if (mesh_data && color_texture) {
 				RenderObjectMessage msg = {};
 				msg.mesh = mesh_data;
 				msg.color_texture = color_texture;
+				msg.specular_texture = specular_texture;
+				msg.specular_value = mesh_component->specular_value;
 				msg.local_to_world = local_to_world;
 				MessageManager::SendNewMessage(msg);
 			}

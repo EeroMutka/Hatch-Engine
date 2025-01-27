@@ -146,7 +146,7 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 	return *cached;
 }
 
-RenderTexture* MeshManager::GetColorTextureFromTextureAsset(HT_Asset texture_asset) {
+RenderTexture* MeshManager::GetTextureFromTextureAsset(HT_Asset texture_asset, RenderTextureFormat format) {
 	RenderTexture** cached = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&instance.textures, texture_asset, &cached);
 	if (added_new) {
@@ -157,10 +157,11 @@ RenderTexture* MeshManager::GetColorTextureFromTextureAsset(HT_Asset texture_ass
 		const char* file_path_cstr = TempCString(file_path);
 		int size_x, size_y, num_components;
 
-		u8* img_data = stbi_load(file_path_cstr, &size_x, &size_y, &num_components, 4);
+		int want_channels = format == RenderTextureFormat::RGBA8 ? 4 : 1;
+		u8* img_data = stbi_load(file_path_cstr, &size_x, &size_y, &num_components, want_channels);
 
 		RenderTexture* texture = new RenderTexture();
-		RenderManager::CreateTexture(texture, size_x, size_y, img_data);
+		RenderManager::CreateTexture(texture, format, size_x, size_y, img_data);
 
 		stbi_image_free(img_data);
 

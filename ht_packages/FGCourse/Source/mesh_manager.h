@@ -4,7 +4,7 @@ public:
 	static void Init();
 	
 	static RenderMesh* GetMeshFromMeshAsset(HT_Asset mesh_asset);
-	static RenderTexture* GetColorTextureFromTextureAsset(HT_Asset texture_asset);
+	static RenderTexture* GetTextureFromTextureAsset(HT_Asset texture_asset, RenderTextureFormat format);
 
 private:
 	static MeshManager instance;

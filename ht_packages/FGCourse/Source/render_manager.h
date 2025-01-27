@@ -14,7 +14,7 @@ struct RenderMeshPart {
 struct RenderMesh {
 	void* vbo; // ID3D11Buffer
 	void* ibo; // ID3D11Buffer
-	DS_DynArray(RenderMeshPart) parts;
+	DS_DynArray<RenderMeshPart> parts;
 };
 
 struct RenderTexture {
@@ -52,13 +52,20 @@ struct RenderObjectMessage : Message {
 	mat4 local_to_world;
 	const RenderMesh* mesh;
 	const RenderTexture* color_texture;
+	const RenderTexture* specular_texture; // may be null
+	float specular_value; // used if specular_texture is null
+};
+
+enum class RenderTextureFormat {
+	RGBA8,
+	R8,
 };
 
 class RenderManager {
 public:
 	static void Init();
 
-	static void CreateTexture(RenderTexture* target, int width, int height, void* data);
+	static void CreateTexture(RenderTexture* target, RenderTextureFormat format, int width, int height, void* data);
 	
 	// Fills in the `vbo` and `ibo` fields of the target mesh
 	static void CreateMesh(RenderMesh* target, Vertex* vertices, int num_vertices, u32* indices, int num_indices);

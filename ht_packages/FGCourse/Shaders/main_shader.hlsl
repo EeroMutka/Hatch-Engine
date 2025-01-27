@@ -12,7 +12,7 @@ cbuffer constants : register(b0) {
     
     int point_light_count;
     int spot_light_count;
-    int _pad2;
+    float use_specular_value;
     int _pad3;
     
     float3 directional_light_dir;
@@ -57,7 +57,8 @@ PixelInput vertex_shader(VertexInput vertex) {
 // -- pixel shader -----------------------------------------------------------------------------
 
 Texture2D t_base_color : register(t0);
-Texture2D t_dir_light_depth_map : register(t1);
+Texture2D t_specular : register(t1);
+Texture2D t_dir_light_depth_map : register(t2);
 SamplerState s_nearest_wrap : register(s0);
 SamplerState s_linear_wrap : register(s1);
 SamplerComparisonState s_percentage_closer : register(s2);
@@ -72,12 +73,18 @@ float3 FilmicToneMapping(float3 color)
 
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     float3 normal = normalize(pixel.normal);
-    float3 base_color = t_base_color.Sample(s_linear_wrap, pixel.uv * 5).rgb;
+    
+    float3 base_color = pow(t_base_color.Sample(s_linear_wrap, pixel.uv).rgb, 2.2); // convert srgb to linear
+    float specular = use_specular_value < 0.0 ? t_specular.Sample(s_linear_wrap, pixel.uv).r : use_specular_value;
     
     float3 point_to_view = view_position - pixel.position_ws;
     float3 V = normalize(point_to_view);
     
     float3 light = 0;
+    
+    const float specular_intensity = 5.0;
+    const float specular_diffuse_drop = 0.5;
+    
     for (int i = 0; i < point_light_count; i++)
     {
         float3 point_to_light = point_lights_position[i].xyz - pixel.position_ws;
@@ -86,10 +93,10 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         float dist = length(point_to_light);
         
         // diffuse
-        float3 light_contribution = max(dot(normal, L), 0);
+        float3 light_contribution = (1.0 - specular_diffuse_drop*specular) * max(dot(normal, L), 0);
         
         // specular
-        light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
+        light_contribution += specular_intensity * specular * pow(max(dot(V, R), 0.), 32.);
         
         light_contribution *= point_lights_emission[i].xyz / (dist * dist);
         
@@ -104,10 +111,10 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         float dist = length(point_to_light);
         
         // diffuse
-        float3 light_contribution = max(dot(normal, L), 0);
+        float3 light_contribution = (1.0 - specular_diffuse_drop*specular) * max(dot(normal, L), 0);
         
         // specular
-        light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
+        light_contribution += specular_intensity * specular * pow(max(dot(V, R), 0.), 32.);
         
         light_contribution *= spot_lights_emission[i2].xyz * max(dot(L, -spot_lights_direction[i2].xyz), 0) / (dist * dist);
         
@@ -134,10 +141,10 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
             float3 R = reflect(-L, normal);
             
             // diffuse
-            float3 light_contribution = max(dot(normal, L), 0);
+            float3 light_contribution = (1.0 - specular_diffuse_drop*specular) * max(dot(normal, L), 0);
             
             // specular
-            //light_contribution += 1.0 * pow(max(dot(V, R), 0.), 32.);
+            light_contribution += specular_intensity * specular * pow(max(dot(V, R), 0.), 32.);
             
             light_contribution *= directional_light_emission;
             
@@ -146,13 +153,13 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     }
     
     // ambient light
-    light += 0.3*float3(0.12, 0.15, 0.17);
+    light += 0.5*float3(0.12, 0.15, 0.17);
     
     light *= base_color;
     
     //float lightness = max(dot(normal, float3(0, 0, 1)), 0.3);
     //float3 normal = normalize(cross(ddx(pixel.position_ws), ddy(pixel.position_ws)));
     //return float4(normal*0.5  + 0.5, 1);
-    //return float4(pixel.position_ws, 1);
+    //return float4(specular, specular, specular, 1);
     return float4(FilmicToneMapping(light), 1);
 }

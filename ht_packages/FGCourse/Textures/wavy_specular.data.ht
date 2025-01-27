@@ -1,0 +1,4 @@
+type: "$Scene/types/Texture"
+data: {
+	texture_source: "Textures/wavy_specular.png",
+}

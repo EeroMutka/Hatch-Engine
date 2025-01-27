@@ -1,4 +1,6 @@
 struct: {
 	mesh: Asset,
 	color_texture: Asset,
+	specular_texture: Asset,
+	specular_value: Float,
 }

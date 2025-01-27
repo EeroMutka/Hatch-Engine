@@ -674,9 +674,11 @@ static void ParseMetadeskValue(AssetTree* tree, Asset* package, void* dst, HT_Ty
 		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
 			StructMember member = struct_asset->struct_type.members[i];
 
-			ASSERT(!MD_NodeIsNil(p->node));
-			ASSERT(MD_S8Match(p->node->string, StrToMD(member.name), 0));
-
+			STR_View node_str = StrFromMD(p->node->string);
+			STR_View member_name = member.name.view;
+			EXPECT_OR_USER_ERROR(MD_S8Match(p->node->string, StrToMD(member.name), 0), "Unexpected end of struct, expected member: \"%.*s\"", StrArg(member_name));
+			EXPECT_OR_USER_ERROR(MD_S8Match(p->node->string, StrToMD(member.name), 0), "Unexpected struct member \"%.*s\", expected \"%.*s\"", StrArg(node_str), StrArg(member_name));
+			
 			MDParser child_p = {p->node->first_child};
 			ParseMetadeskValue(tree, package, (char*)dst + member.offset, &member.type, &child_p);
 			p->node = p->node->next;
