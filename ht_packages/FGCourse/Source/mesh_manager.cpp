@@ -335,7 +335,11 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 
 		MEMORYSTATUS mem_status;
 		GlobalMemoryStatus(&mem_status);
-		HT_LogInfo("Loading mesh \"%s\" - using memory %f MB (total: %f MB)", mesh_source_file_str.c_str(), (float)(*cached)->memory_usage / (1024.f*1024.f), (float)mem_status.dwTotalPhys / (1024.f*1024.f));
+		HT_LogInfo("Loading mesh \"%s\" - using memory %f MB (avail: %f MB, total: %f MB)",
+			mesh_source_file_str.c_str(),
+			(float)(*cached)->memory_usage / (1024.f*1024.f),
+			(float)mem_status.dwAvailPhys / (1024.f*1024.f),
+			(float)mem_status.dwTotalPhys / (1024.f*1024.f));
 	}
 	return *cached;
 }

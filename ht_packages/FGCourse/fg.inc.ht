@@ -62,6 +62,8 @@ typedef struct SceneEdit__EditorCamera {
 	vec3 position;
 	float pitch;
 	float yaw;
+	float fov;
+	int orthographic;
 } SceneEdit__EditorCamera;
 typedef struct SceneEdit__SceneEditParams {
 } SceneEdit__SceneEditParams;

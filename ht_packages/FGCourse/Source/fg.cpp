@@ -71,7 +71,15 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 					0.f, -1.f,  0.f, 0.f,
 					0.f,  0.f,  0.f, 1.f,
 				};
-			world_to_clip = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*70.f, (float)rect_size.x / (float)rect_size.y, 0.1f, 1000.f);
+			
+			if (camera->orthographic)
+			{
+				world_to_clip = ws_to_vs * M_MatScale(vec3{1.f / camera->fov, 1.f / camera->fov, 0.001f});
+			}
+			else
+			{
+				world_to_clip = ws_to_vs * M_MakePerspectiveMatrix(M_DegToRad*camera->fov, (float)rect_size.x / (float)rect_size.y, 0.1f, 1000.f);
+			}
 			break;
 		}
 	}

@@ -61,7 +61,7 @@ static mat4 M_MakePerspectiveMatrix(float fov_y, float aspect, float near, float
 	// See equation 15.5 - DirectX-style clip matrix (F.Dunn, I.Parberry: 3D Math Primer for Graphics and Game Development)
 	float f = 1.0f / tanf(fov_y * 0.5f);
 	mat4 result = {
-		f/aspect,  0.f,                   0.f,  0.f,
+		f/aspect,  0.f,              0.f,  0.f,
 		0.f,    f,                   0.f,  0.f,
 		0.f,  0.f,        far/(far-near),  1.f,
 		0.f,  0.f, (near*far)/(near-far),  0.f,

@@ -2,4 +2,6 @@ struct: {
 	position: Vec3,
 	pitch: Float,
 	yaw: Float,
+	fov: Float,
+	orthographic: Int,
 }
