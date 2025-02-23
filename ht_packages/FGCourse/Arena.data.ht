@@ -10,7 +10,7 @@ data: {
 					mesh: "Meshes/Terrain",
 					color_texture: "Textures/Grass_01",
 					specular_texture: "Textures/wavy_specular",
-					specular_value: 1.000000,
+					specular_value: 0.000000,
 				},
 				@Type("$JoltPhysics/Components/PhysicsComponent") {
 					enabled: true,
@@ -42,17 +42,17 @@ data: {
 			},
 		},
 		"Box1": {
-			position: { 3.680752, 1.686822, 18.075520 },
+			position: { 3.467139, 0.068096, 24.308788 },
 			rotation: { 0.000000, 0.000000, 45.000000 },
-			scale: { 1.000000, 1.000000, 1.000000 },
+			scale: { 2.000000, 2.000000, 2.000000 },
 			components: {
 				@Type("$Scene/Components/BoxComponent") {
 				},
 				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/UnitBox",
+					mesh: "Meshes/Monkey",
 					color_texture: "Textures/cockdragon",
-					specular_texture: "",
-					specular_value: 0.500000,
+					specular_texture: "Textures/wavy_specular",
+					specular_value: 1.000000,
 				},
 				@Type("$JoltPhysics/Components/PhysicsComponent") {
 					enabled: true,
@@ -62,7 +62,7 @@ data: {
 			},
 		},
 		"Box2": {
-			position: { 2.884664, 0.713361, 20.421825 },
+			position: { 2.884499, 1.492581, 21.948772 },
 			rotation: { 5.000000, 22.000000, 0.000000 },
 			scale: { 2.000000, 2.000000, 2.000000 },
 			components: {
@@ -82,8 +82,8 @@ data: {
 			},
 		},
 		"DirectionalLight": {
-			position: { 0.000000, 0.000000, 25.000000 },
-			rotation: { -23.500004, 0.000000, 57.500000 },
+			position: { -4.863818, 0.000000, 25.734104 },
+			rotation: { -37.200005, 0.000000, 144.550003 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/DirectionalLightComponent") {
@@ -92,8 +92,8 @@ data: {
 			},
 		},
 		"PointLight1": {
-			position: { 5.622256, 1.899364, 12.177436 },
-			rotation: { 36.000000, 0.000000, 83.700005 },
+			position: { 5.738784, 1.899364, 13.248459 },
+			rotation: { 36.000000, 0.000000, 153.200012 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/PointLightComponent") {
@@ -102,18 +102,18 @@ data: {
 			},
 		},
 		"PointLight2": {
-			position: { 1.314829, 5.054527, 16.599995 },
+			position: { -13.338329, -16.139349, 17.156223 },
 			rotation: { 36.000000, 0.000000, 83.700005 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/PointLightComponent") {
-					emission: { 115.500000, 20.049999, 50.450001 },
+					emission: { 100.000000, 0.000000, 0.000000 },
 				},
 			},
 		},
 		"SpotLight1": {
-			position: { 15.778486, -5.920453, 17.505669 },
-			rotation: { 93.500000, 0.000000, 162.199997 },
+			position: { 15.778486, -6.641587, 17.031715 },
+			rotation: { 93.500000, 0.000000, 190.599991 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/SpotLightComponent") {
@@ -122,21 +122,21 @@ data: {
 			},
 		},
 		"SpotLight2": {
-			position: { 23.568298, 13.793102, 18.097473 },
-			rotation: { 57.250000, 0.000000, 73.999992 },
+			position: { 19.935335, -1.915128, 16.388561 },
+			rotation: { -76.550003, 10.850000, 20.649992 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/SpotLightComponent") {
-					emission: { 0.000000, 0.000000, 100.000000 },
+					emission: { 75.599998, 105.300003, 0.000000 },
 				},
 			},
 		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 17.091347, 1.027537, 18.768629 },
-			pitch: 0.162500,
-			yaw: -34.555138,
+			position: { 11.059837, -27.710773, 23.903721 },
+			pitch: 6.409096,
+			yaw: -17.024122,
 		},
 	},
 }

@@ -13,6 +13,7 @@ SunTempleAssets/
 *.obj
 *.ilk
 *.sln
+*.mesh_binary
 *.vcxproj
 *vcxproj.filters
 *vcxproj.user

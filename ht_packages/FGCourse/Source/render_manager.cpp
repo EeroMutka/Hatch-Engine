@@ -395,14 +395,12 @@ static void Render(HT_API* ht) {
 
 			const RenderMesh* mesh_data = render_object->mesh;
 
-			for (int i = 0; i < mesh_data->parts.count; i++) {
-				RenderMeshPart part = mesh_data->parts[i];
-				u32 vbo_offset = 0;
-				u32 vbo_stride = sizeof(Vertex);
-				dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);
-				dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
-				dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
-			}
+			RenderMeshPart part = mesh_data->part;
+			u32 vbo_offset = 0;
+			u32 vbo_stride = sizeof(Vertex);
+			dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);
+			dc->IASetIndexBuffer((ID3D11Buffer*)mesh_data->ibo, DXGI_FORMAT_R32_UINT, 0);
+			dc->DrawIndexed(part.index_count, part.base_index_location, part.base_vertex_location);
 		}
 	}
 
@@ -440,8 +438,8 @@ static void Render(HT_API* ht) {
 		const RenderTexture* color_texture = render_object->color_texture;
 		const RenderTexture* specular_texture = render_object->specular_texture;
 
-		for (int i = 0; i < mesh_data->parts.count; i++) {
-			RenderMeshPart part = mesh_data->parts[i];
+		{
+			RenderMeshPart part = mesh_data->part;
 			u32 vbo_offset = 0;
 			u32 vbo_stride = sizeof(Vertex);
 			dc->IASetVertexBuffers(0, 1, (ID3D11Buffer**)&mesh_data->vbo, &vbo_stride, &vbo_offset);

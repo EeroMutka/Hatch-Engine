@@ -1,4 +1,4 @@
 type: "$Scene/types/Mesh"
 data: {
-	mesh_source: "Meshes/Terrain.fbx",
+	mesh_source: "Meshes/Terrain.obj",
 }

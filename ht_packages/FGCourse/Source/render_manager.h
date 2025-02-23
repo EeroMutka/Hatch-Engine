@@ -14,7 +14,8 @@ struct RenderMeshPart {
 struct RenderMesh {
 	void* vbo; // ID3D11Buffer
 	void* ibo; // ID3D11Buffer
-	DS_DynArray<RenderMeshPart> parts;
+	RenderMeshPart part;
+	// DS_DynArray<RenderMeshPart> parts; // TODO
 };
 
 struct RenderTexture {

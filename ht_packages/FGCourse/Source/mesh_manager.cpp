@@ -1,12 +1,20 @@
+#define _CRT_SECURE_NO_WARNINGS
 #define HT_NO_STATIC_PLUGIN_EXPORTS
 
 #include "common.h"
 #include "ThirdParty/ufbx.h"
 #include "ThirdParty/stb_image.h"
+#include "ht_utils/math/math_core.h"
 
 #include "message_manager.h"
 #include "render_manager.h"
 #include "mesh_manager.h"
+
+#include <unordered_map>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <vector>
 
 MeshManager MeshManager::instance{};
 
@@ -22,9 +30,166 @@ static char* TempCString(HT_StringView str) {
 	return data;
 }
 
+static void SerializeMesh(RenderMesh* mesh, FILE* file)
+{
+	//mesh->part.
+}
+
+struct SerializedMeshHeader
+{
+	uint32_t vertices_count;
+	uint32_t indices_count;
+};
+
+static RenderMesh* DeserializeMesh(FILE* file)
+{
+	RenderMesh* result = new RenderMesh();
+	SerializedMeshHeader header = {};
+	
+	HT_ASSERT(file);
+	fread(&header, 1, sizeof(header), file);
+
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+	vertices.resize(header.vertices_count);
+	indices.resize(header.indices_count);
+
+	fread(vertices.data(), 1, sizeof(Vertex) * vertices.size(), file);
+	fread(indices.data(), 1, sizeof(uint32_t) * indices.size(), file);
+	
+	RenderManager::CreateMesh(result, vertices.data(), (uint32_t)vertices.size(), indices.data(), (uint32_t)indices.size());
+	
+	result->part.index_count = (uint32_t)indices.size();
+	return result;
+}
+
+static RenderMesh* ImportOBJMeshAndSerializeToBinary(HT_API* ht, HT_StringView file_path, const char* binary_file_path) {
+	RenderMesh* result = new RenderMesh();
+
+	std::string file_path_str(file_path.data, file_path.size);
+
+	std::ifstream file(file_path_str);
+	std::string line;
+
+	HT_ASSERT(file.is_open());
+
+	std::vector<vec3> positions;
+	std::vector<vec2> uvs;
+	std::vector<vec3> normals;
+	std::vector<uint32_t> position_indices;
+	std::vector<uint32_t> uv_indices;
+	std::vector<uint32_t> normal_indices;
+
+	while (std::getline(file, line)) {
+		std::istringstream iss(line);
+		std::string prefix;
+		iss >> prefix;
+		if (prefix == "v") {
+			vec3 v;
+			iss >> v.x >> v.y >> v.z;
+			positions.push_back(v);
+		}
+
+		if (prefix == "vt") {
+			vec2 vt;
+			iss >> vt.x >> vt.y;
+			uvs.push_back(vt);
+		}
+
+		if (prefix == "vn") {
+			vec3 vn;
+			iss >> vn.x >> vn.y >> vn.z;
+			normals.push_back(vn);
+		}
+
+		if (prefix == "f") {
+			for (int i = 0; i < 3; i++) {
+				std::string vert_word_str;
+				iss >> vert_word_str;
+				if (vert_word_str.size() == 0) break;
+
+				std::istringstream vert_word(vert_word_str);
+				int position_index;
+				int uv_index;
+				int normal_index;
+
+				vert_word >> position_index;
+				vert_word.ignore(1);
+				vert_word >> uv_index;
+				vert_word.ignore(1);
+				vert_word >> normal_index;
+				vert_word.ignore(1);
+
+				position_indices.push_back(position_index - 1);
+				uv_indices.push_back(uv_index - 1);
+				normal_indices.push_back(normal_index - 1);
+			}
+		}
+	}
+
+	file.close();
+
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+
+	struct VertexIndices {
+		uint16_t a, b, c, d;
+	};
+	std::unordered_map<int64_t, int> map;
+
+	for (int i = 0; i < position_indices.size(); i++) {
+		int pos_i = position_indices[i];
+		int uv_i = uv_indices[i];
+		int normal_i = normal_indices[i];
+
+		VertexIndices ii = {
+			(uint16_t)pos_i,
+			(uint16_t)uv_i,
+			(uint16_t)normal_i,
+			0,
+		};
+		uint64_t ii_as_u64 = *(uint64_t*)&ii;
+
+		vec3 pos = positions[pos_i];
+		vec2 uv = uvs[uv_i];
+		vec3 normal = normals[normal_i];
+		Vertex v = { pos, uv, normal };
+
+		auto found = map.find(ii_as_u64);
+		if (found == map.end()) {
+			map[ii_as_u64] = (uint32_t)vertices.size();
+			indices.push_back((uint32_t)vertices.size());
+			vertices.push_back(v);
+		}
+		else {
+			indices.push_back(found->second);
+		}
+	}
+
+	RenderManager::CreateMesh(result, vertices.data(), (uint32_t)vertices.size(), indices.data(), (uint32_t)indices.size());
+
+	result->part.index_count = (uint32_t)indices.size();
+
+	// Serialize to binary
+	{
+		SerializedMeshHeader header = {};
+		header.indices_count = (uint32_t)indices.size();
+		header.vertices_count = (uint32_t)vertices.size();
+		
+		FILE* f = fopen(binary_file_path, "wb");
+		HT_ASSERT(f);
+		fwrite(&header, 1, sizeof(header), f);
+		fwrite(vertices.data(), 1, sizeof(Vertex) * vertices.size(), f);
+		fwrite(indices.data(), 1, sizeof(uint32_t) * indices.size(), f);
+		fclose(f);
+	}
+
+	return result;
+}
+
+#if 0
 static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView file_path) {
 	RenderMesh* result = new RenderMesh();
-	DS_ArrInit(&result->parts, allocator);
 
 	ufbx_error error; // Optional, pass NULL if you don't care about errors
 
@@ -108,7 +273,10 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 				loaded_part.base_index_location = total_num_indices;
 				loaded_part.base_vertex_location = total_num_vertices;
 				loaded_part.index_count = num_indices;
-				DS_ArrPush(&result->parts, loaded_part);
+				
+				HT_ASSERT(temp_parts.count == 1); // TODO: multiple parts
+				result->part = loaded_part;
+				//DS_ArrPush(&result->parts, loaded_part);
 
 				total_num_indices += num_indices;
 				total_num_vertices += num_vertices;
@@ -131,8 +299,11 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 
 	RenderManager::CreateMesh(result, combined_vertices, total_num_vertices, combined_indices, total_num_indices);
 
+	HT_ASSERT(temp_parts.count == 1);
+
 	return result;
 }
+#endif
 
 RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 	RenderMesh** cached = NULL;
@@ -140,8 +311,25 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 	if (added_new) {
 		Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, FG::ht, mesh_asset);
 		HT_ASSERT(mesh_data);
+		
 		HT_StringView mesh_source_file = FG::ht->AssetGetFilepath(mesh_data->mesh_source);
-		*cached = ImportMesh(FG::ht, FG::mem.heap, mesh_source_file);
+		
+		std::string mesh_source_file_str(mesh_source_file.data, mesh_source_file.size);
+		std::string mesh_bin_filepath = mesh_source_file_str.substr(0, mesh_source_file_str.find('.')) + ".mesh_binary";
+		
+		FILE* mesh_bin_file = fopen(mesh_bin_filepath.c_str(), "rb");
+		if (mesh_bin_file)
+		{
+			*cached = DeserializeMesh(mesh_bin_file);
+			fclose(mesh_bin_file);
+		}
+		else
+		{
+			*cached = ImportOBJMeshAndSerializeToBinary(FG::ht, mesh_source_file, mesh_bin_filepath.c_str());
+			
+			
+			//*cached = ImportMesh(FG::ht, FG::mem.heap, mesh_source_file);
+		}
 	}
 	return *cached;
 }
