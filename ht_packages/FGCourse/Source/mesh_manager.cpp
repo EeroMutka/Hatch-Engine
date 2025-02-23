@@ -16,6 +16,8 @@
 #include <sstream>
 #include <vector>
 
+#include <Windows.h> // for GlobalMemoryStatus
+
 MeshManager MeshManager::instance{};
 
 void MeshManager::Init() {
@@ -60,6 +62,7 @@ static RenderMesh* DeserializeMesh(FILE* file)
 	RenderManager::CreateMesh(result, vertices.data(), (uint32_t)vertices.size(), indices.data(), (uint32_t)indices.size());
 	
 	result->part.index_count = (uint32_t)indices.size();
+	result->memory_usage = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t);
 	return result;
 }
 
@@ -168,8 +171,6 @@ static RenderMesh* ImportOBJMeshAndSerializeToBinary(HT_API* ht, HT_StringView f
 
 	RenderManager::CreateMesh(result, vertices.data(), (uint32_t)vertices.size(), indices.data(), (uint32_t)indices.size());
 
-	result->part.index_count = (uint32_t)indices.size();
-
 	// Serialize to binary
 	{
 		SerializedMeshHeader header = {};
@@ -184,6 +185,8 @@ static RenderMesh* ImportOBJMeshAndSerializeToBinary(HT_API* ht, HT_StringView f
 		fclose(f);
 	}
 
+	result->part.index_count = (uint32_t)indices.size();
+	result->memory_usage = vertices.size() * sizeof(Vertex) + indices.size() * sizeof(uint32_t);
 	return result;
 }
 
@@ -327,9 +330,12 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 		{
 			*cached = ImportOBJMeshAndSerializeToBinary(FG::ht, mesh_source_file, mesh_bin_filepath.c_str());
 			
-			
 			//*cached = ImportMesh(FG::ht, FG::mem.heap, mesh_source_file);
 		}
+
+		MEMORYSTATUS mem_status;
+		GlobalMemoryStatus(&mem_status);
+		HT_LogInfo("Loading mesh \"%s\" - using memory %f MB (total: %f MB)", mesh_source_file_str.c_str(), (float)(*cached)->memory_usage / (1024.f*1024.f), (float)mem_status.dwTotalPhys / (1024.f*1024.f));
 	}
 	return *cached;
 }

@@ -16,6 +16,7 @@ struct RenderMesh {
 	void* ibo; // ID3D11Buffer
 	RenderMeshPart part;
 	// DS_DynArray<RenderMeshPart> parts; // TODO
+	size_t memory_usage;
 };
 
 struct RenderTexture {
