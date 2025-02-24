@@ -113,12 +113,12 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 	
 	static const vec4 cube_corners[8] = {
 		{-0.5f, -0.5f, -0.5f, 1.f},
-		{-0.5f, +0.5f, -0.5f, 1.f},
 		{+0.5f, -0.5f, -0.5f, 1.f},
+		{-0.5f, +0.5f, -0.5f, 1.f},
 		{+0.5f, +0.5f, -0.5f, 1.f},
 		{-0.5f, -0.5f, +0.5f, 1.f},
-		{-0.5f, +0.5f, +0.5f, 1.f},
 		{+0.5f, -0.5f, +0.5f, 1.f},
+		{-0.5f, +0.5f, +0.5f, 1.f},
 		{+0.5f, +0.5f, +0.5f, 1.f},
 	};
 	
@@ -141,7 +141,7 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 	a_planes[4].xyz = a_local_to_world.row[1].xyz * -1.f; // -Y plane
 	a_planes[4].w = -M_Dot3(a_planes[4].xyz, a_corners[0]); // solve d
 	a_planes[5].xyz = a_local_to_world.row[2].xyz * -1.f; // -Z plane
-	a_planes[5].w = -M_Dot3(a_planes[0].xyz, a_corners[0]); // solve d
+	a_planes[5].w = -M_Dot3(a_planes[5].xyz, a_corners[0]); // solve d
 
 	b_planes[0].xyz = b_local_to_world.row[0].xyz; // +X plane
 	b_planes[0].w = -M_Dot3(b_planes[0].xyz, b_corners[7]); // solve d from the positive X,Y,Z corner point (dot(plane_abc, corner_point) + d = 0)
@@ -154,44 +154,70 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 	b_planes[4].xyz = b_local_to_world.row[1].xyz * -1.f; // -Y plane
 	b_planes[4].w = -M_Dot3(b_planes[4].xyz, b_corners[0]); // solve d
 	b_planes[5].xyz = b_local_to_world.row[2].xyz * -1.f; // -Z plane
-	b_planes[5].w = -M_Dot3(b_planes[0].xyz, a_corners[0]); // solve d
+	b_planes[5].w = -M_Dot3(b_planes[5].xyz, b_corners[0]); // solve d
+
+	float b_corner_min_dist[8];
+	float b_corner_max_dist[8];
+	float a_corner_min_dist[8];
+	float a_corner_max_dist[8];
+	int b_corner_max_dist_plane[8];
+	int a_corner_max_dist_plane[8];
+	for (int i = 0; i < 8; i++) b_corner_min_dist[i] = +1000000.f;
+	for (int i = 0; i < 8; i++) b_corner_max_dist[i] = -1000000.f;
+	for (int i = 0; i < 8; i++) a_corner_min_dist[i] = +1000000.f;
+	for (int i = 0; i < 8; i++) a_corner_max_dist[i] = -1000000.f;
 
 	bool a_has_separating_plane = false;
+	bool b_has_separating_plane = false;
+
 	for (int i = 0; i < 6; i++)
 	{
 		vec4 a_plane = a_planes[i];
 
-		int j = 0;
-		for (; j < 8; j++)
+		bool all_points_are_outside = true;
+		for (int j = 0; j < 8; j++)
 		{
 			vec3 b_point = b_corners[j];
 			float d = M_Dot3(a_plane.xyz, b_point) + a_plane.w;
+			if (d > b_corner_max_dist[j]) {
+				b_corner_max_dist[j] = d;
+				b_corner_max_dist_plane[j] = i;
+			}
+			if (d < b_corner_min_dist[j])
+				b_corner_min_dist[j] = d;
+
 			if (d < 0)
-				break;
+				all_points_are_outside = false;
 		}
 
-		if (j == 8)
+		if (all_points_are_outside)
 		{
 			a_has_separating_plane = true;
 			break;
 		}
 	}
 
-	bool b_has_separating_plane = false;
 	for (int i = 0; i < 6; i++)
 	{
 		vec4 b_plane = b_planes[i];
 
-		int j = 0;
-		for (; j < 8; j++)
+		bool all_points_are_outside = true;
+		for (int j = 0; j < 8; j++)
 		{
 			vec3 a_point = a_corners[j];
 			float d = M_Dot3(b_plane.xyz, a_point) + b_plane.w;
+			if (d > a_corner_max_dist[j]) {
+				a_corner_max_dist[j] = d;
+				a_corner_max_dist_plane[j] = i;
+			}
+			if (d < a_corner_min_dist[j])
+				a_corner_min_dist[j] = d;
+
 			if (d < 0)
-				break;
+				all_points_are_outside = false;
 		}
 
-		if (j == 8)
+		if (all_points_are_outside)
 		{
 			b_has_separating_plane = true;
 			break;
@@ -200,7 +226,26 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 
 	if (!a_has_separating_plane && !b_has_separating_plane)
 	{
-		a.entity->position.z += 0.001f;
+		vec3 max_dist_plane_n = {};
+		float max_dist = -1000000.f;
+		for (int i = 0; i < 8; i++)
+		{
+			if (b_corner_max_dist[i] < 0.f && b_corner_max_dist[i] > max_dist)
+			{
+				max_dist = b_corner_max_dist[i];
+				max_dist_plane_n = a_planes[b_corner_max_dist_plane[i]].xyz;
+			}
+		}
+		for (int i = 0; i < 8; i++)
+		{
+			if (a_corner_max_dist[i] < 0.f && a_corner_max_dist[i] > max_dist)
+			{
+				max_dist = a_corner_max_dist[i];
+				max_dist_plane_n = b_planes[a_corner_max_dist_plane[i]].xyz * -1.f;
+			}
+		}
+
+		a.entity->position += max_dist_plane_n * max_dist;
 		//a.position.z += 0.01f;
 	}
 }

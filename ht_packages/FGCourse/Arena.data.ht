@@ -2,8 +2,8 @@ type: "$Scene/types/Scene"
 data: {
 	entities: {
 		"BigBox": {
-			position: { 3.680930, -0.503266, 17.591450 },
-			rotation: { 32.549999, 41.250000, 0.000000 },
+			position: { 3.636320, 0.558968, 18.081854 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
@@ -21,8 +21,8 @@ data: {
 			},
 		},
 		"Box2": {
-			position: { 3.402698, -0.299436, 18.277855 },
-			rotation: { 0.000000, -53.600002, 45.600002 },
+			position: { 3.257906, -0.416076, 18.048491 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
@@ -42,9 +42,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 6.568200, -0.864531, 18.890816 },
-			pitch: 6.621076,
-			yaw: -15.797219,
+			position: { 1.591529, -0.253830, 18.888859 },
+			pitch: 6.485065,
+			yaw: -18.694212,
 			fov: 70.000000,
 			orthographic: 0,
 		},
