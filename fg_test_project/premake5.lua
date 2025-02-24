@@ -35,13 +35,12 @@ project "fg_test_project"
 
 	files "C:/dev/Hatch/ht_packages/Scene/**"
 	files "C:/dev/Hatch/ht_packages/SceneEdit/**"
-	files "C:/dev/Hatch/ht_packages/JoltPhysics/**"
+	files "C:/dev/Hatch/ht_packages/FGPhysics/**"
 	files "C:/dev/Hatch/ht_packages/FGCourse/**"
-	links "C:/dev/Hatch/ht_packages/JoltPhysics/Lib/Jolt.lib"
 
 	defines { "HT_ALL_STATIC_EXPORTS="
 		..",HT_STATIC_EXPORTS__SceneEdit"
-		..",HT_STATIC_EXPORTS__JoltPhysics"
+		..",HT_STATIC_EXPORTS__FGPhysics"
 		..",HT_STATIC_EXPORTS__fg"
 		}
 

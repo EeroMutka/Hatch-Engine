@@ -171,16 +171,10 @@ void FG::Init(HT_API* ht_api) {
 	mem.temp = &mem.temp_arena;
 	mem.ds = &mem.ds_info;
 	mem.heap = (DS_Allocator*)&mem.heap_allocator;
-	
-	//temp_allocator_wrapper = {{TempAllocatorProc}, ht};
-	//heap_allocator_wrapper = {{HeapAllocatorProc}, ht};
-	//temp = &temp_arena;
-	//heap = (DS_Allocator*)&heap_allocator_wrapper;
 }
 
 void FG::ResetTempArena() {
 	DS_ArenaReset(&mem.temp_arena);
-	//DS_ArenaInit(&temp_arena, 0, (DS_Allocator*)&temp_allocator_wrapper);
 }
 
 HT_EXPORT void HT_LoadPlugin(HT_API* ht) {

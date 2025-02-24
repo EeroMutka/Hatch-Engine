@@ -1,30 +1,10 @@
 type: "$Scene/types/Scene"
 data: {
 	entities: {
-		"Terrain": {
-			position: { 3.380898, -0.000317, 15.340795 },
-			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/Terrain",
-					color_texture: "Textures/Grass_01",
-					specular_texture: "Textures/wavy_specular",
-					specular_value: 0.000000,
-				},
-				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true,
-					dynamic: false,
-					jph_body_id: 16777216,
-				},
-				@Type("$JoltPhysics/Components/BoxCollisionComponent") {
-				},
-			},
-		},
 		"BigBox": {
-			position: { 3.381161, -0.000564, 16.046049 },
-			rotation: { 0.000000, 0.000000, 32.000000 },
-			scale: { 3.000000, 3.000000, 3.000000 },
+			position: { 3.680930, -0.503266, 17.591450 },
+			rotation: { 32.549999, 41.250000, 0.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
@@ -32,113 +12,41 @@ data: {
 					specular_texture: "",
 					specular_value: 0.000000,
 				},
-				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true,
-					dynamic: false,
-					jph_body_id: 16777216,
+				@Type("$FGPhysics/Components/FGBoxCollisionComponent") {
+					test: 1,
 				},
-				@Type("$JoltPhysics/Components/BoxCollisionComponent") {
-				},
-			},
-		},
-		"Box1": {
-			position: { 3.467139, 0.068096, 24.308788 },
-			rotation: { 0.000000, 0.000000, 45.000000 },
-			scale: { 2.000000, 2.000000, 2.000000 },
-			components: {
-				@Type("$Scene/Components/BoxComponent") {
-				},
-				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/Monkey",
-					color_texture: "Textures/cockdragon",
-					specular_texture: "Textures/wavy_specular",
-					specular_value: 1.000000,
-				},
-				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true,
-					dynamic: true,
-					jph_body_id: 16777217,
+				@Type("$FGPhysics/Components/FGPhysicsComponent") {
+					test: 1,
 				},
 			},
 		},
 		"Box2": {
-			position: { 2.884499, 1.492581, 21.948772 },
-			rotation: { 5.000000, 22.000000, 0.000000 },
-			scale: { 2.000000, 2.000000, 2.000000 },
+			position: { 3.402698, -0.299436, 18.277855 },
+			rotation: { 0.000000, -53.600002, 45.600002 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
-				@Type("$Scene/Components/BoxComponent") {
-				},
 				@Type("$Scene/Components/MeshComponent") {
 					mesh: "Meshes/UnitBox",
 					color_texture: "Textures/cockdragon",
 					specular_texture: "",
 					specular_value: 1.000000,
 				},
-				@Type("$JoltPhysics/Components/PhysicsComponent") {
-					enabled: true,
-					dynamic: true,
-					jph_body_id: 16777218,
+				@Type("$FGPhysics/Components/FGBoxCollisionComponent") {
+					test: 1,
 				},
-			},
-		},
-		"DirectionalLight": {
-			position: { -4.863818, 0.000000, 25.734104 },
-			rotation: { -37.200005, 0.000000, 144.550003 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/DirectionalLightComponent") {
-					emission: { 1.000000, 1.000000, 1.000000 },
-				},
-			},
-		},
-		"PointLight1": {
-			position: { 5.738784, 1.899364, 13.248459 },
-			rotation: { 36.000000, 0.000000, 153.200012 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/PointLightComponent") {
-					emission: { 0.000000, 16.750000, 9.000000 },
-				},
-			},
-		},
-		"PointLight2": {
-			position: { -13.338329, -16.139349, 17.156223 },
-			rotation: { 36.000000, 0.000000, 83.700005 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/PointLightComponent") {
-					emission: { 100.000000, 0.000000, 0.000000 },
-				},
-			},
-		},
-		"SpotLight1": {
-			position: { 15.778486, -6.641587, 17.031715 },
-			rotation: { 93.500000, 0.000000, 190.599991 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/SpotLightComponent") {
-					emission: { 100.000000, 0.000000, 0.000000 },
-				},
-			},
-		},
-		"SpotLight2": {
-			position: { 19.935335, -1.915128, 16.388561 },
-			rotation: { -76.550003, 10.850000, 20.649992 },
-			scale: { 1.000000, 1.000000, 1.000000 },
-			components: {
-				@Type("$Scene/Components/SpotLightComponent") {
-					emission: { 75.599998, 105.300003, 0.000000 },
+				@Type("$FGPhysics/Components/FGPhysicsComponent") {
+					test: 1,
 				},
 			},
 		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { -2.360707, -16.853268, 27.206268 },
-			pitch: 6.503594,
-			yaw: -17.705616,
-			fov: 70,
-			orthographic: 1,
+			position: { 6.568200, -0.864531, 18.890816 },
+			pitch: 6.621076,
+			yaw: -15.797219,
+			fov: 70.000000,
+			orthographic: 0,
 		},
 	},
 }
