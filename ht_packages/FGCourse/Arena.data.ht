@@ -21,7 +21,7 @@ data: {
 			},
 		},
 		"Box2": {
-			position: { 3.257906, -0.416076, 18.048491 },
+			position: { 3.257963, 0.203579, 18.062492 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -42,9 +42,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 1.591529, -0.253830, 18.888859 },
-			pitch: 6.485065,
-			yaw: -18.694212,
+			position: { 1.101959, 1.499431, 19.674696 },
+			pitch: 6.696054,
+			yaw: -19.502201,
 			fov: 70.000000,
 			orthographic: 0,
 		},

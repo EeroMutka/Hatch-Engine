@@ -156,19 +156,11 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 	b_planes[5].xyz = b_local_to_world.row[2].xyz * -1.f; // -Z plane
 	b_planes[5].w = -M_Dot3(b_planes[5].xyz, b_corners[0]); // solve d
 
-	float b_corner_min_dist[8];
-	float b_corner_max_dist[8];
-	float a_corner_min_dist[8];
-	float a_corner_max_dist[8];
-	int b_corner_max_dist_plane[8];
-	int a_corner_max_dist_plane[8];
-	for (int i = 0; i < 8; i++) b_corner_min_dist[i] = +1000000.f;
-	for (int i = 0; i < 8; i++) b_corner_max_dist[i] = -1000000.f;
-	for (int i = 0; i < 8; i++) a_corner_min_dist[i] = +1000000.f;
-	for (int i = 0; i < 8; i++) a_corner_max_dist[i] = -1000000.f;
-
 	bool a_has_separating_plane = false;
 	bool b_has_separating_plane = false;
+
+	float max_neg_d = -100000000.f;
+	vec3 max_neg_d_dir = {};
 
 	for (int i = 0; i < 6; i++)
 	{
@@ -179,15 +171,15 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 		{
 			vec3 b_point = b_corners[j];
 			float d = M_Dot3(a_plane.xyz, b_point) + a_plane.w;
-			if (d > b_corner_max_dist[j]) {
-				b_corner_max_dist[j] = d;
-				b_corner_max_dist_plane[j] = i;
-			}
-			if (d < b_corner_min_dist[j])
-				b_corner_min_dist[j] = d;
-
 			if (d < 0)
+			{
+				if (d > max_neg_d)
+				{
+					max_neg_d = d;
+					max_neg_d_dir = a_plane.xyz;
+				}
 				all_points_are_outside = false;
+			}
 		}
 
 		if (all_points_are_outside)
@@ -206,15 +198,15 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 		{
 			vec3 a_point = a_corners[j];
 			float d = M_Dot3(b_plane.xyz, a_point) + b_plane.w;
-			if (d > a_corner_max_dist[j]) {
-				a_corner_max_dist[j] = d;
-				a_corner_max_dist_plane[j] = i;
-			}
-			if (d < a_corner_min_dist[j])
-				a_corner_min_dist[j] = d;
-
 			if (d < 0)
+			{
+				if (d > max_neg_d)
+				{
+					max_neg_d = d;
+					max_neg_d_dir = b_plane.xyz * -1.f;
+				}
 				all_points_are_outside = false;
+			}
 		}
 
 		if (all_points_are_outside)
@@ -226,26 +218,8 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 
 	if (!a_has_separating_plane && !b_has_separating_plane)
 	{
-		vec3 max_dist_plane_n = {};
-		float max_dist = -1000000.f;
-		for (int i = 0; i < 8; i++)
-		{
-			if (b_corner_max_dist[i] < 0.f && b_corner_max_dist[i] > max_dist)
-			{
-				max_dist = b_corner_max_dist[i];
-				max_dist_plane_n = a_planes[b_corner_max_dist_plane[i]].xyz;
-			}
-		}
-		for (int i = 0; i < 8; i++)
-		{
-			if (a_corner_max_dist[i] < 0.f && a_corner_max_dist[i] > max_dist)
-			{
-				max_dist = a_corner_max_dist[i];
-				max_dist_plane_n = b_planes[a_corner_max_dist_plane[i]].xyz * -1.f;
-			}
-		}
-
-		a.entity->position += max_dist_plane_n * max_dist;
+		a.entity->position += max_neg_d_dir * max_neg_d * 0.5f;
+		b.entity->position += max_neg_d_dir * max_neg_d * -0.5f;
 		//a.position.z += 0.01f;
 	}
 }
