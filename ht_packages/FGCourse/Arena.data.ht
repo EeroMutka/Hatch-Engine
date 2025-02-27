@@ -1,16 +1,54 @@
 type: "$Scene/types/Scene"
 data: {
 	entities: {
-		"BigBox": {
-			position: { 3.636320, 0.558968, 18.081854 },
+		"A": {
+			position: { 4.724066, 0.216472, 18.362677 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/MeshComponent") {
-					mesh: "Meshes/UnitBox",
+					mesh: "Meshes/UnitSphere",
 					color_texture: "Textures/Grass_01",
 					specular_texture: "",
 					specular_value: 0.000000,
+				},
+				@Type("$FGPhysics/Components/FGSphereCollisionComponent") {
+					test: 1,
+				},
+				@Type("$FGPhysics/Components/FGPhysicsComponent") {
+					test: 1,
+				},
+			},
+		},
+		"B": {
+			position: { 3.703328, 0.216455, 18.436651 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/MeshComponent") {
+					mesh: "Meshes/UnitSphere",
+					color_texture: "Textures/Grass_01",
+					specular_texture: "",
+					specular_value: 0.000000,
+				},
+				@Type("$FGPhysics/Components/FGSphereCollisionComponent") {
+					test: 1,
+				},
+				@Type("$FGPhysics/Components/FGPhysicsComponent") {
+					test: 1,
+				},
+			},
+		},
+		"C": {
+			position: { 3.504079, 0.235095, 17.561201 },
+			rotation: { 0.000000, 24.500000, 45.700001 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/MeshComponent") {
+					mesh: "Meshes/UnitBox",
+					color_texture: "Textures/cockdragon",
+					specular_texture: "",
+					specular_value: 1.000000,
 				},
 				@Type("$FGPhysics/Components/FGBoxCollisionComponent") {
 					test: 1,
@@ -20,8 +58,8 @@ data: {
 				},
 			},
 		},
-		"Box2": {
-			position: { 3.257963, 0.203579, 18.062492 },
+		"D": {
+			position: { 2.631746, 0.203571, 17.427488 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -42,9 +80,9 @@ data: {
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 1.101959, 1.499431, 19.674696 },
-			pitch: 6.696054,
-			yaw: -19.502201,
+			position: { 4.236605, -2.483544, 18.463291 },
+			pitch: 6.536022,
+			yaw: -23.257185,
 			fov: 70.000000,
 			orthographic: 0,
 		},

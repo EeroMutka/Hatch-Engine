@@ -79,6 +79,7 @@ HT_EXPORT void HT_UnloadPlugin(HT_API* ht) {
 struct PhysicsBody
 {
 	Scene__SceneEntity* entity;
+	bool is_sphere;
 };
 
 static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
@@ -87,14 +88,130 @@ static void StartSimulation(HT_API* ht, Scene__Scene* scene) {
 static void EndSimulation(HT_API* ht, Scene__Scene* scene) {
 }
 
-static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
+static const vec4 CUBE_CORNERS[8] = {
+	{-0.5f, -0.5f, -0.5f, 1.f},
+	{+0.5f, -0.5f, -0.5f, 1.f},
+	{-0.5f, +0.5f, -0.5f, 1.f},
+	{+0.5f, +0.5f, -0.5f, 1.f},
+	{-0.5f, -0.5f, +0.5f, 1.f},
+	{+0.5f, -0.5f, +0.5f, 1.f},
+	{-0.5f, +0.5f, +0.5f, 1.f},
+	{+0.5f, +0.5f, +0.5f, 1.f},
+};
+
+static const float SPHERE_RADIUS = 0.5f;
+
+static void ResolveCollisionSphereAndSphere(PhysicsBody& a, PhysicsBody& b)
+{
+	vec3 a_to_b = b.entity->position - a.entity->position;
+	float fix_dist = M_Len3(a_to_b) - SPHERE_RADIUS*2.f;
+	if (fix_dist < 0.f)
+	{
+		b.entity->position -= 0.5f * M_Norm3(a_to_b) * fix_dist;
+		a.entity->position += 0.5f * M_Norm3(a_to_b) * fix_dist;
+	}
+}
+
+static void ResolveCollisionBoxAndSphere(PhysicsBody& a, PhysicsBody& b)
+{
+	mat4 a_local_to_world =
+		M_MatRotateX(a.entity->rotation.x * M_DegToRad) *
+		M_MatRotateY(a.entity->rotation.y * M_DegToRad) *
+		M_MatRotateZ(a.entity->rotation.z * M_DegToRad) *
+		M_MatTranslate(a.entity->position);
+
+	mat4 a_world_to_local =
+		M_MatTranslate(a.entity->position * -1.f) *
+		M_MatRotateZ(a.entity->rotation.z * -M_DegToRad) *
+		M_MatRotateY(a.entity->rotation.y * -M_DegToRad) *
+		M_MatRotateX(a.entity->rotation.x * -M_DegToRad);
+
+	vec3 p = (vec4{b.entity->position, 1.f} * a_world_to_local).xyz;
+	
+	float dx[2] = { p.x - 0.5f, -p.x - 0.5f }; // 0 is +X plane, 1 is -X plane
+	float dy[2] = { p.y - 0.5f, -p.y - 0.5f };
+	float dz[2] = { p.z - 0.5f, -p.z - 0.5f };
+	
+	vec3 surf_to_p = {};
+	bool is_corner = true;
+	/**/ if (dx[0] > 0.f && dy[0] > 0.f && dz[0] > 0.f)  surf_to_p = p - vec3{+0.5f, +0.5f, +0.5f};
+	else if (dx[1] > 0.f && dy[0] > 0.f && dz[0] > 0.f)  surf_to_p = p - vec3{-0.5f, +0.5f, +0.5f};
+	else if (dx[0] > 0.f && dy[1] > 0.f && dz[0] > 0.f)  surf_to_p = p - vec3{+0.5f, -0.5f, +0.5f};
+	else if (dx[1] > 0.f && dy[1] > 0.f && dz[0] > 0.f)  surf_to_p = p - vec3{-0.5f, -0.5f, +0.5f};
+	else if (dx[0] > 0.f && dy[0] > 0.f && dz[1] > 0.f)  surf_to_p = p - vec3{+0.5f, +0.5f, -0.5f};
+	else if (dx[1] > 0.f && dy[0] > 0.f && dz[1] > 0.f)  surf_to_p = p - vec3{-0.5f, +0.5f, -0.5f};
+	else if (dx[0] > 0.f && dy[1] > 0.f && dz[1] > 0.f)  surf_to_p = p - vec3{+0.5f, -0.5f, -0.5f};
+	else if (dx[1] > 0.f && dy[1] > 0.f && dz[1] > 0.f)  surf_to_p = p - vec3{-0.5f, -0.5f, -0.5f};
+	else is_corner = false;
+
+	bool is_inside = false;
+	bool is_face = false;
+	if (!is_corner)
+	{
+		if (dy[0] < 0.f && dy[1] < 0.f && dz[0] < 0.f && dz[1] < 0.f)
+		{
+			/**/ if (dx[0] > 0.f) surf_to_p = vec3{p.x - 0.5f, 0.f, 0.f};
+			else if (dx[1] > 0.f) surf_to_p = vec3{p.x + 0.5f, 0.f, 0.f};
+			else { surf_to_p = vec3{p.x - 0.5f, 0.f, 0.f}; is_inside = true; }
+			is_face = true;
+		}
+		else if (dz[0] < 0.f && dz[1] < 0.f && dx[0] < 0.f && dx[1] < 0.f)
+		{
+			/**/ if (dy[0] > 0.f) surf_to_p = vec3{0.f, p.y - 0.5f, 0.f};
+			else if (dy[1] > 0.f) surf_to_p = vec3{0.f, p.y + 0.5f, 0.f};
+			else { surf_to_p = vec3{0.f, p.y - 0.5f, 0.f}; is_inside = true; }
+			is_face = true;
+		}
+		else if (dx[0] < 0.f && dx[1] < 0.f && dy[0] < 0.f && dy[1] < 0.f)
+		{
+			/**/ if (dz[0] > 0.f) surf_to_p = vec3{0.f, 0.f, p.z - 0.5f};
+			else if (dz[1] > 0.f) surf_to_p = vec3{0.f, 0.f, p.z + 0.5f};
+			else { surf_to_p = vec3{0.f, 0.f, p.z - 0.5f}; is_inside = true; }
+			is_face = true;
+		}
+	}
+
+	if (!is_corner && !is_face)
+	{
+		// xy
+		/**/ if (dx[0] > 0.f && dy[0] > 0.f)  surf_to_p = vec3{p.x - 0.5f, p.y - 0.5f, 0.f};
+		else if (dx[1] > 0.f && dy[0] > 0.f)  surf_to_p = vec3{p.x + 0.5f, p.y - 0.5f, 0.f};
+		else if (dx[0] > 0.f && dy[1] > 0.f)  surf_to_p = vec3{p.x - 0.5f, p.y + 0.5f, 0.f};
+		else if (dx[1] > 0.f && dy[1] > 0.f)  surf_to_p = vec3{p.x + 0.5f, p.y + 0.5f, 0.f};
+		// yz
+		else if (dy[0] > 0.f && dz[0] > 0.f)  surf_to_p = vec3{0.f, p.y - 0.5f, p.z - 0.5f};
+		else if (dy[1] > 0.f && dz[0] > 0.f)  surf_to_p = vec3{0.f, p.y + 0.5f, p.z - 0.5f};
+		else if (dy[0] > 0.f && dz[1] > 0.f)  surf_to_p = vec3{0.f, p.y - 0.5f, p.z + 0.5f};
+		else if (dy[1] > 0.f && dz[1] > 0.f)  surf_to_p = vec3{0.f, p.y + 0.5f, p.z + 0.5f};
+		// zx
+		else if (dz[0] > 0.f && dx[0] > 0.f)  surf_to_p = vec3{p.x - 0.5f, 0.f, p.z - 0.5f};
+		else if (dz[1] > 0.f && dx[0] > 0.f)  surf_to_p = vec3{p.x - 0.5f, 0.f, p.z + 0.5f};
+		else if (dz[0] > 0.f && dx[1] > 0.f)  surf_to_p = vec3{p.x + 0.5f, 0.f, p.z - 0.5f};
+		else if (dz[1] > 0.f && dx[1] > 0.f)  surf_to_p = vec3{p.x + 0.5f, 0.f, p.z + 0.5f};
+		else HT_ASSERT(0);
+	}
+
+	surf_to_p = (vec4{surf_to_p, 0.f} * a_local_to_world).xyz;
+	vec3 towards_outside_dir = M_Norm3(surf_to_p);
+	
+	float signed_dist = M_Len3(surf_to_p);
+	if (is_inside) {
+		signed_dist *= -1.f;
+		towards_outside_dir *= -1.f;
+	}
+
+	float fix_dist = signed_dist - SPHERE_RADIUS;
+	
+	if (fix_dist < 0.f) {
+		b.entity->position -= 0.5f * towards_outside_dir * fix_dist;
+		a.entity->position += 0.5f * towards_outside_dir * fix_dist;
+	}
+}
+
+static void ResolveCollisionBoxAndBox(PhysicsBody& a, PhysicsBody& b)
 {
 	// Loop through each plane of mesh A to see if it's a separating plane, then vice versa
 	// if there is a separating plane, there is NO collision.
-	// What if we find the plane which is the NEAEREST to being a separating plane? and then that distance.
-
-	// so that is box-box.
-	// Can we do box sphere easily? Yeah! that's just SDF collision.
 
 	// A plane is stored as the a, c, b, d coefficients to the plane equation (ax + bx + cx + d = 0)
 	vec4 a_planes[6];
@@ -111,24 +228,13 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 		M_MatRotateZ(b.entity->rotation.z * M_DegToRad) *
 		M_MatTranslate(b.entity->position);
 	
-	static const vec4 cube_corners[8] = {
-		{-0.5f, -0.5f, -0.5f, 1.f},
-		{+0.5f, -0.5f, -0.5f, 1.f},
-		{-0.5f, +0.5f, -0.5f, 1.f},
-		{+0.5f, +0.5f, -0.5f, 1.f},
-		{-0.5f, -0.5f, +0.5f, 1.f},
-		{+0.5f, -0.5f, +0.5f, 1.f},
-		{-0.5f, +0.5f, +0.5f, 1.f},
-		{+0.5f, +0.5f, +0.5f, 1.f},
-	};
-	
 	vec3 a_corners[8];
 	for (int i = 0; i < 8; i++)
-		a_corners[i] = (cube_corners[i] * a_local_to_world).xyz;
+		a_corners[i] = (CUBE_CORNERS[i] * a_local_to_world).xyz;
 
 	vec3 b_corners[8];
 	for (int i = 0; i < 8; i++)
-		b_corners[i] = (cube_corners[i] * b_local_to_world).xyz;
+		b_corners[i] = (CUBE_CORNERS[i] * b_local_to_world).xyz;
 
 	a_planes[0].xyz = a_local_to_world.row[0].xyz; // +X plane
 	a_planes[0].w = -M_Dot3(a_planes[0].xyz, a_corners[7]); // solve d from the positive X,Y,Z corner point (dot(plane_abc, corner_point) + d = 0)
@@ -167,19 +273,22 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 		vec4 a_plane = a_planes[i];
 
 		bool all_points_are_outside = true;
+		float min_d = 1000000.f;
 		for (int j = 0; j < 8; j++)
 		{
 			vec3 b_point = b_corners[j];
 			float d = M_Dot3(a_plane.xyz, b_point) + a_plane.w;
 			if (d < 0)
 			{
-				if (d > max_neg_d)
-				{
-					max_neg_d = d;
-					max_neg_d_dir = a_plane.xyz;
-				}
+				if (d < min_d)
+					min_d = d;
 				all_points_are_outside = false;
 			}
+		}
+		if (min_d > max_neg_d)
+		{
+			max_neg_d = min_d;
+			max_neg_d_dir = a_plane.xyz;
 		}
 
 		if (all_points_are_outside)
@@ -194,19 +303,23 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 		vec4 b_plane = b_planes[i];
 
 		bool all_points_are_outside = true;
+		float min_d = 1000000.f;
 		for (int j = 0; j < 8; j++)
 		{
 			vec3 a_point = a_corners[j];
 			float d = M_Dot3(b_plane.xyz, a_point) + b_plane.w;
 			if (d < 0)
 			{
-				if (d > max_neg_d)
-				{
-					max_neg_d = d;
-					max_neg_d_dir = b_plane.xyz * -1.f;
-				}
+				if (d < min_d)
+					min_d = d;
+
 				all_points_are_outside = false;
 			}
+		}
+		if (min_d > max_neg_d)
+		{
+			max_neg_d = min_d;
+			max_neg_d_dir = b_plane.xyz * -1.f;
 		}
 
 		if (all_points_are_outside)
@@ -218,9 +331,8 @@ static void ResolveCollision(PhysicsBody& a, PhysicsBody& b)
 
 	if (!a_has_separating_plane && !b_has_separating_plane)
 	{
-		a.entity->position += max_neg_d_dir * max_neg_d * 0.5f;
-		b.entity->position += max_neg_d_dir * max_neg_d * -0.5f;
-		//a.position.z += 0.01f;
+		b.entity->position -= 0.5f * max_neg_d_dir * max_neg_d;
+		a.entity->position += 0.5f * max_neg_d_dir * max_neg_d;
 	}
 }
 
@@ -232,25 +344,40 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene)
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, entity_i);
 		Scene__MeshComponent* mesh_component = FIND_COMPONENT(ht, entity, Scene__MeshComponent);
 		FGPhysics__FGPhysicsComponent* body_component = FIND_COMPONENT(ht, entity, FGPhysics__FGPhysicsComponent);
-		FGPhysics__FGBoxCollisionComponent* box_collision_component = FIND_COMPONENT(ht, entity, FGPhysics__FGBoxCollisionComponent);
 
-		if (body_component && box_collision_component) {
-			PhysicsBody body;
-			body.entity = entity;
-			//body.position = entity->position;
-			//body.rotation = EulerAnglesXYZToQuat(entity->rotation);
-			bodies.push_back(body);
+		if (body_component)
+		{
+			FGPhysics__FGBoxCollisionComponent* box_collision_component = FIND_COMPONENT(ht, entity, FGPhysics__FGBoxCollisionComponent);
+			FGPhysics__FGSphereCollisionComponent* sphere_collision_component = FIND_COMPONENT(ht, entity, FGPhysics__FGSphereCollisionComponent);
+			if (sphere_collision_component || box_collision_component)
+			{
+				PhysicsBody body;
+				body.entity = entity;
+				body.is_sphere = sphere_collision_component != NULL;
+				//body.position = entity->position;
+				//body.rotation = EulerAnglesXYZToQuat(entity->rotation);
+				bodies.push_back(body);
+			}
 		}
 	}
 	
+	// Iterate through all body pairs
 	for (int i = 0; i < bodies.size(); i++)
 	{
 		PhysicsBody& a = bodies[i];
 		
-		for (int j = i + 1; i < bodies.size(); i++)
+		for (int j = i + 1; j < bodies.size(); j++)
 		{
 			PhysicsBody& b = bodies[j];
-			ResolveCollision(a, b);
+
+			if (!a.is_sphere && !b.is_sphere)
+				ResolveCollisionBoxAndBox(a, b);
+			else if (a.is_sphere && !b.is_sphere)
+				ResolveCollisionBoxAndSphere(b, a);
+			else if (!a.is_sphere && b.is_sphere)
+				ResolveCollisionBoxAndSphere(a, b);
+			else
+				ResolveCollisionSphereAndSphere(a, b);
 		}
 	}
 	

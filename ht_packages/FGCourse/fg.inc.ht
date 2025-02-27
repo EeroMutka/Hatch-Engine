@@ -16,6 +16,7 @@ typedef struct HT_GeneratedTypeTable {
 	HT_Asset SceneEdit__SceneEditParams;
 	HT_Asset FGPhysics__FGBoxCollisionComponent;
 	HT_Asset FGPhysics__FGPhysicsComponent;
+	HT_Asset FGPhysics__FGSphereCollisionComponent;
 	HT_Asset FGCourse__fg_params_type;
 	int _unused;
 } HT_GeneratedTypeTable;
@@ -73,5 +74,8 @@ typedef struct FGPhysics__FGBoxCollisionComponent {
 typedef struct FGPhysics__FGPhysicsComponent {
 	int test;
 } FGPhysics__FGPhysicsComponent;
+typedef struct FGPhysics__FGSphereCollisionComponent {
+	int test;
+} FGPhysics__FGSphereCollisionComponent;
 typedef struct FGCourse__fg_params_type {
 } FGCourse__fg_params_type;
