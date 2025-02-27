@@ -336,9 +336,45 @@ static void ResolveCollisionBoxAndBox(PhysicsBody& a, PhysicsBody& b)
 	}
 }
 
+static bool SphereRaycast(PhysicsBody& s, vec3 ray_pos, vec3 ray_dir, float* out_t, vec3* out_p)
+{
+	float r = SPHERE_RADIUS;
+	vec3 ro = ray_pos - s.entity->position; // make the ray relative to the sphere position so that we can say that the sphere is at the origin
+	vec3 rd = ray_dir;
+
+	// sphere equation
+	// sqrt((px - sx)^2 + (py - sy)^2 + (pz - sz)^2) = r
+	
+	// ray equation
+	// p = ro + rd*t
+	
+	// (ro.x + rd.x*t)^2 + (ro.y + rd.y*t)^2 + (ro.z + rd.z*t)^2 = r^2
+	// ro.x^2 + 2*ro.x*rd.x*t + rd.x^2*t^2  +  ...  = r^2
+	// (ro.x^2 + ro.y^2 + ro.z^2) + 2*(ro.x*rd.x + ro.y*rd.y + ro.z*rd.z)*t + (rd.x^2 + rd.y^2 + rd.z^2)*t^2 = r^2
+
+	//float T = 0.13732338f;
+	//float TEST = (ro.x*ro.x + ro.y*ro.y + ro.z*ro.z) + (ro.x*rd.x + ro.y*rd.y + ro.z*rd.z)*T + (rd.x*rd.x + rd.y*rd.y + rd.z*rd.z)*T*T - r*r;
+	//vec3 test_p = ro + rd*T;
+
+	// use the quadratic formula
+	float a = rd.x*rd.x + rd.y*rd.y + rd.z*rd.z;
+	float b = 2.f * (ro.x*rd.x + ro.y*rd.y + ro.z*rd.z);
+	float c = ro.x*ro.x + ro.y*ro.y + ro.z*ro.z - r*r;
+	float discriminant = b*b - 4*a*c;
+	if (discriminant < 0)
+		return false;
+
+	float t = (-b - sqrtf(discriminant)) / (2.f*a);
+	*out_t = t;
+	*out_p = ray_pos + ray_dir*t;
+	return true;
+}
+
 static void SimulateScene(HT_API* ht, Scene__Scene* scene)
 {
 	std::vector<PhysicsBody> bodies;
+
+	Scene__SceneEntity* viz_entity = NULL; // for debugging
 
 	for (HT_ItemGroupEach(&scene->entities, entity_i)) {
 		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, entity_i);
@@ -354,13 +390,52 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene)
 				PhysicsBody body;
 				body.entity = entity;
 				body.is_sphere = sphere_collision_component != NULL;
-				//body.position = entity->position;
-				//body.rotation = EulerAnglesXYZToQuat(entity->rotation);
 				bodies.push_back(body);
 			}
+			else
+				viz_entity = entity;
 		}
 	}
 	
+	vec3 camera_pos = {};
+	vec3 camera_dir = {};
+	SceneEdit__EditorCamera* camera = NULL;
+	for (int i = 0; i < scene->extended_data.count; i++) {
+		HT_Any any = ((HT_Any*)scene->extended_data.data)[i];
+		if (any.type.handle == ht->types->SceneEdit__EditorCamera) {
+			camera = (SceneEdit__EditorCamera*)any.data;
+			camera_pos = camera->position;
+			camera_dir = (vec4{1.f, 0.f, 0.f, 0.f} * M_MatRotateY(camera->pitch) * M_MatRotateZ(camera->yaw)).xyz;
+		}
+	}
+
+	//if (ht->input_frame->key_is_down[HT_InputKey_0]) // cast ray!
+	{
+		float min_ray_t = 100000000.f;
+		vec3 min_ray_p = {};
+
+		// Iterate through all body pairs
+		for (int i = 0; i < bodies.size(); i++)
+		{
+			PhysicsBody& a = bodies[i];
+			if (a.is_sphere)
+			{
+				vec3 p; float t;
+				if (SphereRaycast(a, camera_pos, camera_dir, &t, &p) && t < min_ray_t)
+				{
+					min_ray_t = t;
+					min_ray_p = p;
+				}
+			}
+			else
+			{
+			}
+		}
+		
+		viz_entity->position = min_ray_p;
+		//printf("Casting ray: (%f, %f, %f)\n"
+	}
+
 	// Iterate through all body pairs
 	for (int i = 0; i < bodies.size(); i++)
 	{
@@ -380,12 +455,6 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene)
 				ResolveCollisionSphereAndSphere(a, b);
 		}
 	}
-	
-	// write back the results
-	//for (int i = 0; i < bodies.size(); i++)
-	//{
-	//	bodies[i].entity->position = bodies[i].position;
-	//}
 }
 
 HT_EXPORT void HT_UpdatePlugin(HT_API* ht) {

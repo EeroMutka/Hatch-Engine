@@ -1,8 +1,24 @@
 type: "$Scene/types/Scene"
 data: {
 	entities: {
+		"VizEntity": {
+			position: { 2.910704, 0.216472, 19.159880 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 0.100000, 0.100000, 0.100000 },
+			components: {
+				@Type("$Scene/Components/MeshComponent") {
+					mesh: "Meshes/UnitSphere",
+					color_texture: "Textures/Grass_01",
+					specular_texture: "",
+					specular_value: 0.000000,
+				},
+				@Type("$FGPhysics/Components/FGPhysicsComponent") {
+					test: 1,
+				},
+			},
+		},
 		"A": {
-			position: { 4.724066, 0.216472, 18.362677 },
+			position: { 0.000000, 0.000000, 18.362677 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
@@ -77,12 +93,22 @@ data: {
 				},
 			},
 		},
+		"DirLight": {
+			position: { 1.449171, 0.203571, 18.987753 },
+			rotation: { 8.550000, 0.000000, 64.650002 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/DirectionalLightComponent") {
+					emission: { 3.000000, 3.000000, 3.000000 },
+				},
+			},
+		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 4.236605, -2.483544, 18.463291 },
-			pitch: 6.536022,
-			yaw: -23.257185,
+			position: { 4.440040, 1.979615, 18.938398 },
+			pitch: 6.598022,
+			yaw: -27.128164,
 			fov: 70.000000,
 			orthographic: 0,
 		},
