@@ -336,6 +336,60 @@ static void ResolveCollisionBoxAndBox(PhysicsBody& a, PhysicsBody& b)
 	}
 }
 
+static bool BoxRaycast(PhysicsBody& b, vec3 ray_pos, vec3 ray_dir, float* out_t, vec3* out_p)
+{
+	mat4 local_to_world =
+		M_MatRotateX(b.entity->rotation.x * M_DegToRad) *
+		M_MatRotateY(b.entity->rotation.y * M_DegToRad) *
+		M_MatRotateZ(b.entity->rotation.z * M_DegToRad) *
+		M_MatTranslate(b.entity->position);
+
+	vec4 planes[6];
+	vec3 corners[8];
+	for (int i = 0; i < 8; i++)
+		corners[i] = (CUBE_CORNERS[i] * local_to_world).xyz;
+
+	planes[0].xyz = local_to_world.row[0].xyz; // +X plane
+	planes[0].w = -M_Dot3(planes[0].xyz, corners[7]); // solve d from the positive X,Y,Z corner point (dot(plane_abc, corner_point) + d = 0)
+	planes[1].xyz = local_to_world.row[1].xyz; // +Y plane
+	planes[1].w = -M_Dot3(planes[1].xyz, corners[7]); // solve d
+	planes[2].xyz = local_to_world.row[2].xyz; // +Z plane
+	planes[2].w = -M_Dot3(planes[2].xyz, corners[7]); // solve d
+	planes[3].xyz = local_to_world.row[0].xyz * -1.f; // -X plane
+	planes[3].w = -M_Dot3(planes[3].xyz, corners[0]); // solve d
+	planes[4].xyz = local_to_world.row[1].xyz * -1.f; // -Y plane
+	planes[4].w = -M_Dot3(planes[4].xyz, corners[0]); // solve d
+	planes[5].xyz = local_to_world.row[2].xyz * -1.f; // -Z plane
+	planes[5].w = -M_Dot3(planes[5].xyz, corners[0]); // solve d
+
+	float min_t = 1000000.f;
+	int hit_count = 0;
+	bool result = false;
+	for (int i = 0; i < 6; i++)
+	{
+		float t; vec3 p;
+		if (M_RayPlaneIntersect(ray_pos, ray_dir, planes[i], &t, &p))
+		{
+			// is point behind all other planes?
+			bool is_in_box = true;
+			for (int j = 0; j < 6; j++)
+			{
+				if (j != i && M_Dot3(planes[j].xyz, p) + planes[j].w > 0.f)
+					is_in_box = false;
+			}
+			if (t < min_t && is_in_box)
+			{
+				*out_p = p;
+				min_t = t;
+				result = true;
+			}
+			hit_count++;
+		}
+	}
+	*out_t = min_t;
+	return result;
+}
+
 static bool SphereRaycast(PhysicsBody& s, vec3 ray_pos, vec3 ray_dir, float* out_t, vec3* out_p)
 {
 	float r = SPHERE_RADIUS;
@@ -367,7 +421,7 @@ static bool SphereRaycast(PhysicsBody& s, vec3 ray_pos, vec3 ray_dir, float* out
 	float t = (-b - sqrtf(discriminant)) / (2.f*a);
 	*out_t = t;
 	*out_p = ray_pos + ray_dir*t;
-	return true;
+	return t >= 0.f;
 }
 
 static void SimulateScene(HT_API* ht, Scene__Scene* scene)
@@ -429,11 +483,17 @@ static void SimulateScene(HT_API* ht, Scene__Scene* scene)
 			}
 			else
 			{
+				vec3 p; float t;
+				if (BoxRaycast(a, camera_pos, camera_dir, &t, &p) && t < min_ray_t)
+				{
+					min_ray_t = t;
+					min_ray_p = p;
+				}
 			}
 		}
 		
-		viz_entity->position = min_ray_p;
-		//printf("Casting ray: (%f, %f, %f)\n"
+		if (viz_entity)
+			viz_entity->position = min_ray_p;
 	}
 
 	// Iterate through all body pairs

@@ -205,5 +205,5 @@ static bool M_RayPlaneIntersect(vec3 ro, vec3 rd, vec4 plane, float* out_t, vec3
 	float t = t_num / t_denom;
 	if (out_t) *out_t = t;
 	if (out_p) *out_p = ro + rd * t;
-	return t > 0.f;
+	return t >= 0.f;
 }
