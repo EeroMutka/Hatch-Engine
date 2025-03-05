@@ -128,9 +128,10 @@ typedef struct DS_Arena {
 #ifndef DS_NO_MALLOC
 static void* DS_HeapAllocatorProc(DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	if (size == 0) {
-		_aligned_free(ptr);
+		if (old_size != 0) _aligned_free(ptr);
 		return NULL;
 	} else {
+		if (size == 0) return NULL;
 		return _aligned_realloc(ptr, size, align);
 	}
 }

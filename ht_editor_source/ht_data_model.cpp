@@ -225,12 +225,16 @@ EXPORT void GetTypeSizeAndAlignment(AssetTree* tree, HT_Type* type, i32* out_siz
 	case HT_TypeKind_ItemGroup:  { *out_size = sizeof(HT_ItemGroup); *out_alignment = alignof(HT_ItemGroup); } return;
 	case HT_TypeKind_String:     { *out_size = sizeof(HT_String); *out_alignment = alignof(HT_String); } return;
 	case HT_TypeKind_Struct:     {
+		*out_size = 0;
+		*out_alignment = 1;
+
 		Asset* struct_asset = GetAsset(tree, type->handle);
 		Asset_StructType* struct_type = &struct_asset->struct_type;
-		ASSERT(struct_asset != NULL && struct_asset->kind == AssetKind_StructType);
-
-		*out_size = struct_type->size;
-		*out_alignment = struct_type->alignment;
+		if (struct_asset != NULL && struct_asset->kind == AssetKind_StructType)
+		{
+			*out_size = struct_type->size;
+			*out_alignment = struct_type->alignment;
+		}
 	} return;
 	case HT_TypeKind_Type:       { *out_size = sizeof(HT_Type); *out_alignment = alignof(HT_Type); } return;
 	case HT_TypeKind_COUNT: break;
@@ -371,6 +375,7 @@ EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group) {
 		item = GetItemFromIndex(group, index);
 		group->last_bucket_end += 1;
 	}
+	memset(item, 0, group->item_full_size);
 	StringInit(&item->name, "");
 	item->prev = 0;
 	item->next = 0;
@@ -385,7 +390,7 @@ EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item) {
 	return (HT_ItemHeader*)(bucket + group->item_full_size * HT_ItemIndexElem(item));
 }
 
-EXPORT void ItemGroupRemove(HT_ItemGroup* group, void* elem, i32 item_client_size) {
+EXPORT void ItemGroupRemove(HT_ItemGroup* group, HT_ItemIndex item) {
 	TODO();
 }
 
@@ -524,9 +529,12 @@ EXPORT void Construct(AssetTree* tree, void* data, HT_Type* type) {
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
 		Asset* struct_asset = GetAsset(tree, type->handle);
-		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
-			StructMember* member = &struct_asset->struct_type.members[i];
-			Construct(tree, (char*)data + member->offset, &member->type);
+		if (struct_asset)
+		{
+			for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
+				StructMember* member = &struct_asset->struct_type.members[i];
+				Construct(tree, (char*)data + member->offset, &member->type);
+			}
 		}
 	}
 }
@@ -542,9 +550,12 @@ EXPORT void Destruct(AssetTree* tree, void* data, HT_Type* type) {
 	}
 	else if (type->kind == HT_TypeKind_Struct) {
 		Asset* struct_asset = GetAsset(tree, type->handle);
-		for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
-			StructMember* member = &struct_asset->struct_type.members[i];
-			Destruct(tree, (char*)data + member->offset, &member->type);
+		if (struct_asset)
+		{
+			for (int i = 0; i < struct_asset->struct_type.members.count; i++) {
+				StructMember* member = &struct_asset->struct_type.members[i];
+				Destruct(tree, (char*)data + member->offset, &member->type);
+			}
 		}
 	}
 }

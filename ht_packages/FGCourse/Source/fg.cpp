@@ -20,12 +20,6 @@ static SceneEditState scene_edit_state;
 
 // -----------------------------------------------------
 
-//static void* TempAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align){
-//	void* data = ((Allocator*)allocator)->ht->TempArenaPush(size, align);
-//	if (ptr) memcpy(data, ptr, old_size);
-//	return data;
-//}
-
 static void* HeapAllocatorProc(struct DS_AllocatorBase* allocator, void* ptr, size_t old_size, size_t size, size_t align) {
 	void* data = FG::ht->AllocatorProc(ptr, size);
 	return data;
@@ -48,6 +42,15 @@ static T* FindComponent(Scene__SceneEntity* entity, HT_Asset struct_type) {
 
 static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* update_info) {
 	Scene__Scene* scene = HT_GetAssetData(Scene__Scene, ht, update_info->data_asset);
+
+	if (update_info->drag_n_dropped_asset)
+	{
+		//HT_ItemGroup
+		HT_ItemIndex new_index = ht->ItemGroupAdd(&scene->entities);
+		ht->MoveItemToAfter(&scene->entities, new_index, 0);
+		Scene__SceneEntity* entity = HT_GetItem(Scene__SceneEntity, &scene->entities, new_index);
+		*entity = {};
+	}
 
 	vec2 mouse_pos = ht->input_frame->mouse_position;
 	vec2 rect_size = update_info->rect.max - update_info->rect.min;

@@ -1,6 +1,13 @@
 type: "$Scene/types/Scene"
 data: {
 	entities: {
+		"Test": {
+			position: { 2.910704, 0.216472, 19.159880 },
+			rotation: { 0.000000, 0.000000, 0.000000 },
+			scale: { 0.100000, 0.100000, 0.100000 },
+			components: {
+			},
+		},
 		"VizEntity": {
 			position: { 2.910704, 0.216472, 19.159880 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
@@ -103,12 +110,22 @@ data: {
 				},
 			},
 		},
+		"SpotLight": {
+			position: { 1.748919, -0.134354, 18.769676 },
+			rotation: { 58.500000, 0.000000, 64.650002 },
+			scale: { 1.000000, 1.000000, 1.000000 },
+			components: {
+				@Type("$Scene/Components/SpotLightComponent") {
+					emission: { 51.000000, 3.000000, 3.000000 },
+				},
+			},
+		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 2.986923, 2.853076, 19.189140 },
-			pitch: 6.804022,
-			yaw: -26.822166,
+			position: { 3.381104, 2.570817, 18.553278 },
+			pitch: 6.598027,
+			yaw: -27.033176,
 			fov: 70.000000,
 			orthographic: 0,
 		},

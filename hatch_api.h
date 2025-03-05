@@ -260,6 +260,9 @@ typedef struct HT_Rect {
 typedef struct HT_AssetViewerTabUpdate {
 	HT_Asset data_asset;
 	HT_Rect rect;
+
+	// drag-n-drop
+	HT_Asset drag_n_dropped_asset; // NULL if none
 } HT_AssetViewerTabUpdate;
 
 typedef void (*TabUpdateProc)(struct HT_API* ht, const HT_AssetViewerTabUpdate* update_info);
@@ -497,6 +500,11 @@ struct HT_API {
 	// For folders, the modtime is always the maximum modtime of any asset inside it (applies recursively).
 	// Returns 0 if the asset ref is invalid.
 	u64 (*AssetGetModtime)(HT_Asset asset);
+
+	// Item group utilities
+	HT_ItemIndex (*ItemGroupAdd)(HT_ItemGroup* group);
+	void (*ItemGroupRemove)(HT_ItemGroup* group, HT_ItemIndex item);
+	void (*MoveItemToAfter)(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this);
 	
 	// -- Plugins -------------------------------------
 	

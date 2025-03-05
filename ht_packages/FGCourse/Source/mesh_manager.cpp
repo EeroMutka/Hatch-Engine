@@ -309,11 +309,12 @@ static RenderMesh* ImportMesh(HT_API* ht, DS_Allocator* allocator, HT_StringView
 #endif
 
 RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
+	if (mesh_asset == NULL) return NULL;
+
 	RenderMesh** cached = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&instance.meshes, mesh_asset, &cached);
 	if (added_new) {
 		Scene__Mesh* mesh_data = HT_GetAssetData(Scene__Mesh, FG::ht, mesh_asset);
-		HT_ASSERT(mesh_data);
 		
 		HT_StringView mesh_source_file = FG::ht->AssetGetFilepath(mesh_data->mesh_source);
 		
@@ -345,11 +346,12 @@ RenderMesh* MeshManager::GetMeshFromMeshAsset(HT_Asset mesh_asset) {
 }
 
 RenderTexture* MeshManager::GetTextureFromTextureAsset(HT_Asset texture_asset, RenderTextureFormat format) {
+	if (texture_asset == NULL) return NULL;
+
 	RenderTexture** cached = NULL;
 	bool added_new = DS_MapGetOrAddPtr(&instance.textures, texture_asset, &cached);
 	if (added_new) {
 		Scene__Texture* color_texture_data = HT_GetAssetData(Scene__Texture, FG::ht, texture_asset);
-		HT_ASSERT(color_texture_data);
 		HT_StringView file_path = FG::ht->AssetGetFilepath(color_texture_data->texture_source);
 		
 		const char* file_path_cstr = TempCString(file_path);

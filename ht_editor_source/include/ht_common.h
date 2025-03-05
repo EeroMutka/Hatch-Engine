@@ -288,10 +288,10 @@ EXPORT void ItemGroupDeinit(HT_ItemGroup* group);
 EXPORT HT_ItemIndex ItemGroupAdd(HT_ItemGroup* group); // does not insert the asset into the list yet, you must call MoveItemToAfter
 EXPORT void ItemGroupRemove(HT_ItemGroup* group, HT_ItemIndex item);
 
-// `item` may be HT_ITEM_INDEX_INVALID, in which case NULL is returned. Otherwise the index must be valid.
+// `item` may be 0, in which case NULL is returned. Otherwise the index must be valid.
 EXPORT HT_ItemHeader* GetItemFromIndex(HT_ItemGroup* group, HT_ItemIndex item);
 
-// if `move_after_this` is HT_ITEM_INDEX_INVALID, the item is moved to the beginning of the list.
+// if `move_after_this` is 0, the item is moved to the beginning of the list.
 EXPORT void MoveItemToAfter(HT_ItemGroup* group, HT_ItemIndex item, HT_ItemIndex move_after_this);
 
 EXPORT void StructMemberInit(StructMember* x); // value must be zero-initialized already

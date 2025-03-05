@@ -482,7 +482,12 @@ static void UIAddStructDataNode(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 		}break;
 		case HT_TypeKind_Struct: {}break;
 		case HT_TypeKind_ItemGroup: {
-			// UI_AddLabel(UI_KBOX(key), UI_SizeFlex(1.f), UI_SizeFit(), 0, "(ItemGroup: TODO)");
+			UI_Box* add_button = UI_KBOX(key);
+			UI_AddButton(add_button, UI_SizeFlex(1.f), UI_SizeFit(), 0, "add");
+			if (UI_Clicked(add_button)) {
+				HT_ItemIndex new_index = ItemGroupAdd((HT_ItemGroup*)member_val->data);
+				MoveItemToAfter((HT_ItemGroup*)member_val->data, new_index, 0);
+			}
 		}break;
 		case HT_TypeKind_Array: {
 			UI_Box* add_button = UI_KBOX(key);
@@ -518,7 +523,17 @@ static void UIAddStructDataNode(UI_DataTree* tree, UI_Box* parent, UI_DataTreeNo
 		} break;
 		case HT_TypeKind_Any: {
 			HT_Any* val = (HT_Any*)member_val->data;
-			UIAddValType(s, UI_KKEY(key), &val->type); // TODO: if editing type...
+
+			HT_Type type_bef = val->type;
+			UIAddValType(s, UI_KKEY(key), &val->type);
+			
+			if (val->type.kind != type_bef.kind || val->type.subkind != type_bef.subkind || val->type.handle != type_bef.handle)
+			{
+				HT_Type new_type = val->type;
+				AnyChangeType(&s->asset_tree, val, &new_type);
+				int _ = 0;
+			}
+			int _ = 0;
 		} break;
 		case HT_TypeKind_COUNT: break;
 		case HT_TypeKind_INVALID: break;
@@ -558,21 +573,24 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 	}
 	else if (type->kind == HT_TypeKind_Any) {
 		HT_Any* any = (HT_Any*)data;
-		if (any->type.kind == HT_TypeKind_Struct) {
-			BuildStructMemberValNodes(s, parent, any->data, &any->type);
-		} else {
-			StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
-			node->name_ro = "data";
-			node->type = any->type;
-			node->data = any->data;
-			node->base.key = UI_KKEY(parent->base.key);
+		if (any->data) // this is bad
+		{
+			if (any->type.kind == HT_TypeKind_Struct) {
+				BuildStructMemberValNodes(s, parent, any->data, &any->type);
+			} else {
+				StructMemberValNode* node = DS_New(StructMemberValNode, UI_TEMP);
+				node->name_ro = "data";
+				node->type = any->type;
+				node->data = any->data;
+				node->base.key = UI_KKEY(parent->base.key);
 			
-			bool* is_open = NULL;
-			UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
-			node->base.is_open_ptr = is_open;
+				bool* is_open = NULL;
+				UI_BoxGetRetainedVar(UI_KBOX(node->base.key), UI_KEY(), &is_open);
+				node->base.is_open_ptr = is_open;
 			
-			AddDataTreeNode(&parent->base, &node->base);
-			BuildStructMemberValNodes(s, node, node->data, &node->type);
+				AddDataTreeNode(&parent->base, &node->base);
+				BuildStructMemberValNodes(s, node, node->data, &node->type);
+			}
 		}
 	}
 	else if (type->kind == HT_TypeKind_Array) {
@@ -608,7 +626,7 @@ static void BuildStructMemberValNodes(EditorState* s, StructMemberValNode* paren
 		HT_ItemIndex i = group->first;
 		while (i) {
 			HT_ItemHeader* item = GetItemFromIndex(group, i);
-			
+
 			// This is for GetSelectedItemHandle, which is experimental.
 			HT_ItemHandleDecoded item_handle_decoded = {};
 			item_handle_decoded.index = i;
@@ -1275,6 +1293,14 @@ EXPORT void UpdateAndDrawTab(UI_PanelTree* tree, UI_Tab* tab, UI_Key key, UI_Rec
 				HT_AssetViewerTabUpdate update = {};
 				update.data_asset = selected_asset;
 				update.rect = {area_rect.min, area_rect.max};
+
+				// Drag n drop assets to an asset viewer update
+				update.drag_n_dropped_asset = NULL;
+				if (s->assets_tree_ui_state.drag_n_dropping != 0) {
+					if (!UI_InputIsDown(UI_Input_MouseLeft) && UI_PointIsInRect(area_rect, UI_STATE.mouse_pos)) {
+						update.drag_n_dropped_asset = (HT_Asset)s->assets_tree_ui_state.drag_n_dropping;
+					}
+				}
 				
 				UI_Rect parent_rect = UI_GetActiveScissorRect();
 				UI_SetActiveScissorRect(area_rect);
@@ -1427,6 +1453,10 @@ EXPORT void InitAPI(EditorState* s) {
 	*(void**)&api.CreateTabClass = HT_CreateTabClass;
 	api.DestroyTabClass = HT_DestroyTabClass;
 	api.input_frame = &s->input_frame;
+
+	api.ItemGroupAdd = ItemGroupAdd;
+	api.MoveItemToAfter = MoveItemToAfter;
+	api.ItemGroupRemove = ItemGroupRemove;
 
 	api.GetOSWindowHandle = HT_GetOSWindowHandle;
 	s->api = &api;
