@@ -1,11 +1,17 @@
 type: "$Scene/types/Scene"
 data: {
 	entities: {
-		"Test": {
-			position: { 2.910704, 0.216472, 19.159880 },
+		"Terrain": {
+			position: { -0.000669, 0.000265, 19.754326 },
 			rotation: { 0.000000, 0.000000, 0.000000 },
-			scale: { 0.100000, 0.100000, 0.100000 },
+			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
+				@Type("$Scene/Components/MeshComponent") {
+					mesh: "Meshes/Terrain",
+					color_texture: "Textures/Grass_01",
+					specular_texture: "",
+					specular_value: 0.000000,
+				},
 			},
 		},
 		"VizEntity": {
@@ -106,26 +112,29 @@ data: {
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/DirectionalLightComponent") {
-					emission: { 3.000000, 3.000000, 3.000000 },
+					emission: { 0.200000, 0.200000, 0.200000 },
 				},
 			},
 		},
 		"SpotLight": {
-			position: { 1.748919, -0.134354, 18.769676 },
+			position: { 14.555044, 0.068164, 20.854855 },
 			rotation: { 58.500000, 0.000000, 64.650002 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/SpotLightComponent") {
-					emission: { 51.000000, 3.000000, 3.000000 },
+					emission: { 200.000000, 0.000000, 0.000000 },
+					inner_angle: 20.000000,
+					outer_angle: 90.000000,
+					radius: 5,
 				},
 			},
 		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 3.381104, 2.570817, 18.553278 },
-			pitch: 6.598027,
-			yaw: -27.033176,
+			position: { 15.074706, 2.972865, 22.473185 },
+			pitch: 6.836010,
+			yaw: -27.036152,
 			fov: 70.000000,
 			orthographic: 0,
 		},

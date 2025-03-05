@@ -133,6 +133,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 			AddPointLightMessage msg = {};
 			msg.position = entity->position;
 			msg.emission = point_light_component->emission;
+			msg.radius = point_light_component->radius;
 			MessageManager::SendNewMessage(msg);
 		}
 		
@@ -150,6 +151,9 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 			msg.position = entity->position;
 			msg.direction = local_to_world.row[2].xyz * -1.f;
 			msg.emission = spot_light_component->emission;
+			msg.inner_angle = spot_light_component->inner_angle;
+			msg.outer_angle = spot_light_component->outer_angle;
+			msg.radius = spot_light_component->radius;
 			MessageManager::SendNewMessage(msg);
 		}
 	}

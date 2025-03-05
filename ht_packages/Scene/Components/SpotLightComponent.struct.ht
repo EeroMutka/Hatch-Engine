@@ -1,3 +1,6 @@
 struct: {
 	emission: Vec3,
+	inner_angle: Float,
+	outer_angle: Float,
+	radius: Float,
 }

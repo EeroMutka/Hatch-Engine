@@ -27,6 +27,7 @@ struct RenderTexture {
 struct AddPointLightMessage : Message {
 	vec3 position;
 	vec3 emission;
+	float radius;
 };
 
 struct AddDirectionalLightMessage : Message {
@@ -38,6 +39,9 @@ struct AddSpotLightMessage : Message {
 	vec3 position;
 	vec3 direction;
 	vec3 emission;
+	float inner_angle;
+	float outer_angle;
+	float radius;
 };
 
 struct RenderParamsMessage : Message {

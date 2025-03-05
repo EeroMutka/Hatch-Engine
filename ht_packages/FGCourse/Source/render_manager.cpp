@@ -46,9 +46,9 @@ struct ShaderConstants {
 	vec4 point_lights_position[16];
 	vec4 point_lights_emission[16];
 
-	vec4 spot_lights_direction[16];
-	vec4 spot_lights_position[16];
-	vec4 spot_lights_emission[16];
+	vec4 spot_lights_direction[16]; // cos(inner angle) is in w
+	vec4 spot_lights_position[16];  // cos(outer angle) is in w
+	vec4 spot_lights_emission[16];  // radius is in w
 };
 
 struct VertexShader {
@@ -319,6 +319,7 @@ static void Render(HT_API* ht) {
 			int i = constants.point_light_count;
 			constants.point_lights_position[i].xyz = msg.position;
 			constants.point_lights_emission[i].xyz = msg.emission;
+			constants.point_lights_emission[i].w = msg.radius;
 			constants.point_light_count++;
 		}
 	}
@@ -329,10 +330,18 @@ static void Render(HT_API* ht) {
 
 		AddSpotLightMessage msg;
 		while (MessageManager::PopNextMessage(&msg)) {
+			if (msg.outer_angle > 180.f)
+				msg.outer_angle = 180.f;
+			if (msg.inner_angle > msg.outer_angle - 1.f)
+				msg.inner_angle = msg.outer_angle - 1.f;
+
 			int i = constants.spot_light_count;
-			constants.spot_lights_position[i].xyz = msg.position;
 			constants.spot_lights_direction[i].xyz = msg.direction;
+			constants.spot_lights_position[i].xyz = msg.position;
 			constants.spot_lights_emission[i].xyz = msg.emission;
+			constants.spot_lights_direction[i].w = cosf(M_DegToRad*msg.inner_angle*0.5f);
+			constants.spot_lights_position[i].w = cosf(M_DegToRad*msg.outer_angle*0.5f);
+			constants.spot_lights_emission[i].w = msg.radius;
 			constants.spot_light_count++;
 		}
 	}

@@ -71,6 +71,10 @@ float3 FilmicToneMapping(float3 color)
     return color;
 }
 
+float InverseLerp(float a, float b, float x) {
+    return (x - a) / (b - a);
+}
+
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     float3 normal = normalize(pixel.normal);
     
@@ -100,7 +104,8 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         
         light_contribution *= point_lights_emission[i].xyz / (dist * dist);
         
-        light += light_contribution;
+        if (dist < point_lights_emission[i].w) // is in radius?
+            light += light_contribution;
     }
     
     for (int i2 = 0; i2 < spot_light_count; i2++)
@@ -110,15 +115,21 @@ float4 pixel_shader(PixelInput pixel) : SV_TARGET {
         float3 R = reflect(-L, normal);
         float dist = length(point_to_light);
         
+        float cos_inner_angle = spot_lights_direction[i2].w;
+        float cos_outer_angle = spot_lights_position[i2].w;
+        float directional_factor = InverseLerp(cos_outer_angle, cos_inner_angle, max(dot(L, -spot_lights_direction[i2].xyz), 0));
+        directional_factor = clamp(directional_factor, 0.f, 1.f);
+        
         // diffuse
         float3 light_contribution = (1.0 - specular_diffuse_drop*specular) * max(dot(normal, L), 0);
         
         // specular
         light_contribution += specular_intensity * specular * pow(max(dot(V, R), 0.), 32.);
         
-        light_contribution *= spot_lights_emission[i2].xyz * max(dot(L, -spot_lights_direction[i2].xyz), 0) / (dist * dist);
+        light_contribution *= spot_lights_emission[i2].xyz * directional_factor / (dist * dist);
         
-        light += light_contribution;
+        if (dist < spot_lights_emission[i2].w) // is in radius?
+            light += light_contribution;
     }
     
     {

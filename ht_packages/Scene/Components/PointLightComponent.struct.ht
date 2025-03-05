@@ -1,3 +1,4 @@
 struct: {
 	emission: Vec3,
+	radius: Float,
 }
