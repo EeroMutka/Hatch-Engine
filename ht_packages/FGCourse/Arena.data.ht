@@ -11,6 +11,7 @@ data: {
 					color_texture: "Textures/Grass_01",
 					specular_texture: "",
 					specular_value: 0.000000,
+					enable_mipmaps: 1,
 				},
 			},
 		},
@@ -24,6 +25,7 @@ data: {
 					color_texture: "Textures/Grass_01",
 					specular_texture: "",
 					specular_value: 0.000000,
+					enable_mipmaps: 1,
 				},
 				@Type("$FGPhysics/Components/FGPhysicsComponent") {
 					test: 1,
@@ -40,6 +42,7 @@ data: {
 					color_texture: "Textures/Grass_01",
 					specular_texture: "",
 					specular_value: 0.000000,
+					enable_mipmaps: 1,
 				},
 				@Type("$FGPhysics/Components/FGSphereCollisionComponent") {
 					test: 1,
@@ -59,6 +62,7 @@ data: {
 					color_texture: "Textures/Grass_01",
 					specular_texture: "",
 					specular_value: 0.000000,
+					enable_mipmaps: 1,
 				},
 				@Type("$FGPhysics/Components/FGSphereCollisionComponent") {
 					test: 1,
@@ -78,6 +82,7 @@ data: {
 					color_texture: "Textures/cockdragon",
 					specular_texture: "",
 					specular_value: 1.000000,
+					enable_mipmaps: 1,
 				},
 				@Type("$FGPhysics/Components/FGBoxCollisionComponent") {
 					test: 1,
@@ -97,6 +102,7 @@ data: {
 					color_texture: "Textures/cockdragon",
 					specular_texture: "",
 					specular_value: 1.000000,
+					enable_mipmaps: 1,
 				},
 				@Type("$FGPhysics/Components/FGBoxCollisionComponent") {
 					test: 1,
@@ -108,11 +114,11 @@ data: {
 		},
 		"DirLight": {
 			position: { 1.449171, 0.203571, 18.987753 },
-			rotation: { 8.550000, 0.000000, 64.650002 },
+			rotation: { -39.700001, 0.000000, 64.650002 },
 			scale: { 1.000000, 1.000000, 1.000000 },
 			components: {
 				@Type("$Scene/Components/DirectionalLightComponent") {
-					emission: { 0.200000, 0.200000, 0.200000 },
+					emission: { 1.000000, 1.000000, 1.000000 },
 				},
 			},
 		},
@@ -125,16 +131,16 @@ data: {
 					emission: { 200.000000, 0.000000, 0.000000 },
 					inner_angle: 20.000000,
 					outer_angle: 90.000000,
-					radius: 5,
+					radius: 5.000000,
 				},
 			},
 		},
 	},
 	extended_data: {
 		@Type("$SceneEdit/EditorCamera") {
-			position: { 15.074706, 2.972865, 22.473185 },
-			pitch: 6.836010,
-			yaw: -27.036152,
+			position: { -1.052520, 5.400506, 21.794617 },
+			pitch: 6.760008,
+			yaw: -26.097162,
 			fov: 70.000000,
 			orthographic: 0,
 		},

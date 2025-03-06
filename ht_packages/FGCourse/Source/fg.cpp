@@ -124,6 +124,7 @@ static void AssetViewerTabUpdate(HT_API* ht, const HT_AssetViewerTabUpdate* upda
 				msg.specular_texture = specular_texture;
 				msg.specular_value = mesh_component->specular_value;
 				msg.local_to_world = local_to_world;
+				msg.enable_mipmaps = mesh_component->enable_mipmaps != 0;
 				MessageManager::SendNewMessage(msg);
 			}
 		}

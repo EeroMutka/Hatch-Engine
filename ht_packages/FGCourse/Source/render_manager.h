@@ -60,6 +60,7 @@ struct RenderObjectMessage : Message {
 	const RenderTexture* color_texture;
 	const RenderTexture* specular_texture; // may be null
 	float specular_value; // used if specular_texture is null
+	bool enable_mipmaps;
 };
 
 enum class RenderTextureFormat {

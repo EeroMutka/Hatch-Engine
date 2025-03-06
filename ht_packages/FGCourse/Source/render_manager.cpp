@@ -31,7 +31,7 @@ struct ShaderConstants {
 	mat4 world_to_dir_shadow; // world to directional light space for shadow map
 	
 	vec3 view_position;
-	int _pad1;
+	int enable_mipmaps;
 	
 	int point_light_count;
 	int spot_light_count;
@@ -441,6 +441,7 @@ static void Render(HT_API* ht) {
 		constants.local_to_clip = render_object->local_to_world * render_params.world_to_clip;
 		constants.local_to_world = render_object->local_to_world;
 		constants.use_specular_value = render_object->specular_texture ? -1.f : render_object->specular_value;
+		constants.enable_mipmaps = (int)render_object->enable_mipmaps;
 		UpdateShaderConstants(dc, constants);
 
 		const RenderMesh* mesh_data = render_object->mesh;

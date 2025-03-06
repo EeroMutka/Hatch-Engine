@@ -3,4 +3,5 @@ struct: {
 	color_texture: Asset,
 	specular_texture: Asset,
 	specular_value: Float,
+	enable_mipmaps: Int,
 }

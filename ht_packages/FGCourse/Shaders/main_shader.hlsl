@@ -8,7 +8,7 @@ cbuffer constants : register(b0) {
     float4x4 world_to_dir_shadow;
     
     float3 view_position;
-    int _pad1;
+    int enable_mipmaps;
     
     int point_light_count;
     int spot_light_count;
@@ -78,8 +78,11 @@ float InverseLerp(float a, float b, float x) {
 float4 pixel_shader(PixelInput pixel) : SV_TARGET {
     float3 normal = normalize(pixel.normal);
     
-    float3 base_color = pow(t_base_color.Sample(s_linear_wrap, pixel.uv).rgb, 2.2); // convert srgb to linear
-    float specular = use_specular_value < 0.0 ? t_specular.Sample(s_linear_wrap, pixel.uv).r : use_specular_value;
+    float3 base_color = enable_mipmaps ? t_base_color.Sample(s_linear_wrap, pixel.uv).rgb : t_base_color.SampleLevel(s_linear_wrap, pixel.uv, 0.0).rgb;
+    float specular    = enable_mipmaps ? t_specular.Sample(s_linear_wrap, pixel.uv).r     : t_specular.SampleLevel(s_linear_wrap, pixel.uv, 0.0).r;
+    
+    base_color = pow(base_color, 2.2); // convert srgb to linear
+    specular = use_specular_value < 0.0 ? specular : use_specular_value;
     
     float3 point_to_view = view_position - pixel.position_ws;
     float3 V = normalize(point_to_view);
